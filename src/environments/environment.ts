@@ -3,9 +3,8 @@
 
 export const environment = {
   production: false,
-  // Base URL of the PHP API served by XAMPP.
-  // For a physical device, replace `localhost` with your computer's LAN IP
-  // (e.g. http://192.168.1.10/konek/backend/api) since `localhost` on the
-  // device points at the device itself.
-  apiUrl: "http://localhost/konek/backend/api",
+  // Public HTTPS tunnel to the local XAMPP API (works from any network).
+  // Quick tunnels get a new hostname every restart, so update this line and
+  // rebuild when the tunnel is recreated.
+  apiUrl: "https://aerospace-truck-gen-paragraph.trycloudflare.com/konek/backend/api",
 };

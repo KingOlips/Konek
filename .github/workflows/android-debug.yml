@@ -1,0 +1,107 @@
+name: Android APK
+
+# Builds a debug APK and publishes it to the rolling "apk-latest" release.
+# Download on the phone from:
+#   https://github.com/KingOlips/Konek/releases/tag/apk-latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "API base URL to bake into the app (leave empty to use src/environments/environment.ts)"
+        required: false
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "android/**"
+      - "capacitor.config.ts"
+      - "angular.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-debug.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Android SDK packages
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Point the app at the requested API URL
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.api_url != ''
+        env:
+          API_URL: ${{ github.event.inputs.api_url }}
+        run: |
+          node -e "const fs=require('fs');const p='src/environments/environment.ts';const u=process.env.API_URL;fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/apiUrl:\s*\"[^\"]*\"/,'apiUrl: \"'+u+'\"'));"
+          grep -n "apiUrl" src/environments/environment.ts
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npx ng build --configuration development
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Collect APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "Konek-debug-${GITHUB_SHA::7}.apk"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: konek-debug-apk
+          path: Konek-debug-*.apk
+          retention-days: 14
+
+      - name: Publish to rolling release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view apk-latest > /dev/null 2>&1 || \
+            gh release create apk-latest \
+              --title "Konek test build" \
+              --notes "Rolling debug APK built from \`main\`. Download \`Konek-debug-*.apk\` on the phone and tap to install. Built by CI, so uninstall any locally built debug APK first (different signing key)."
+
+          # Keep only the newest APK on the rolling release.
+          gh release view apk-latest --json assets --jq '.assets[].name' \
+            | grep -E '^Konek-debug-[0-9a-f]+\.apk$' \
+            | while read -r name; do gh release delete-asset apk-latest "$name" --yes; done || true
+
+          gh release upload apk-latest Konek-debug-*.apk --clobber
+
+          echo "### APK published" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/apk-latest" >> "$GITHUB_STEP_SUMMARY"
