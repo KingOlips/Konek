@@ -1,6 +1,6 @@
 ﻿# Konek - Real-time Location Sharing App
 
-A cross-platform mobile application for real-time location sharing with squad members, built with Ionic Framework, Angular, Capacitor, and a PHP/MySQL backend.
+An Android mobile application for real-time location sharing with squad members, built with Ionic Framework, Angular, Capacitor, and a PHP/MySQL backend.
 
 ## Features
 
@@ -19,6 +19,7 @@ A cross-platform mobile application for real-time location sharing with squad me
 ### Frontend
 - **Ionic Framework 9** with **Angular 22** (Standalone Components only)
 - **Capacitor 8** for native device access
+- **Android** target (iOS not included yet)
 - **Leaflet 1.9** + OpenStreetMap for interactive maps
 - **RxJS** for reactive state management
 
@@ -41,7 +42,7 @@ A cross-platform mobile application for real-time location sharing with squad me
 - Node.js 18+
 - npm 9+
 - XAMPP (Apache + MySQL)
-- Android Studio / Xcode for native builds
+- Android Studio (Android SDK + emulator or physical device)
 - Ionic CLI: `npm install -g @ionic/cli`
 
 ## Quick Start
@@ -86,23 +87,23 @@ export const environment = {
 };
 ```
 
-For a physical Android/iOS device, `localhost` points at the phone. Change
+For a physical Android device, `localhost` points at the phone. Change
 `apiUrl` to your computer's LAN IP (for example
 `http://192.168.1.10/konek/backend/api`), make sure Apache accepts connections
 on the LAN, and keep both devices on the same network.
 
-### 4. Native Builds
+### 4. Android Build
 
-The `android/` and `ios/` projects are already generated.
+The `android/` project is already generated. iOS is not included yet; this
+version targets Android only.
 
 ```bash
-# Build the web app and copy it into the native projects
+# Build the web app and copy it into the Android project
 npm run build
-npx cap sync
+npx cap sync android
 
-# Open in IDE
+# Open in Android Studio
 npx cap open android
-npx cap open ios
 ```
 
 #### Device and emulator networking
@@ -111,11 +112,6 @@ npx cap open ios
   `http://10.0.2.2/konek/backend/api` in `src/environments/environment.ts`.
 - **Physical device** - use your computer's LAN IP (e.g.
   `http://192.168.1.10/konek/backend/api`) and allow Apache through the firewall.
-- **iOS simulator** - `http://localhost/...` works because it shares the host network.
-- **iOS builds** - the `ios/` project uses **CocoaPods** because
-  `capacitor-native-biometric` does not ship a `Package.swift`. Run
-  `npx cap sync ios` after installing CocoaPods on macOS; Xcode opens
-  `ios/App/App.xcworkspace`.
 
 ## Project Structure
 
@@ -144,6 +140,7 @@ Konek/
 │       └── cors.php
 ├── database/
 │   └── schema.sql
+├── android/                  # Native Android project
 ├── src/
 │   ├── app/
 │   │   ├── core/
@@ -227,8 +224,7 @@ answers `OPTIONS` preflight requests.
   async handler or the UI will not refresh.
 - The accelerometer drives the upload/poll cadence: **5 s while moving** and
   **30 s while stationary** (map marker still updates on every GPS fix).
-- Compass heading comes from `DeviceOrientationEvent`, including the iOS
-  `webkitCompassHeading` field.
+- Compass heading comes from `DeviceOrientationEvent`.
 - Leaflet marker/popup styles live in `src/global.scss` because Leaflet creates
   that DOM outside Angular's component style encapsulation.
 
@@ -243,7 +239,7 @@ The following was tested end-to-end against XAMPP (Apache + MariaDB):
 - Update location and retrieve latest location per squad member
 - Create/list geofences
 - CORS preflight (`OPTIONS`) responded with the correct allow headers
-- `npm run build` and `npx cap sync` complete successfully
+- `npm run build` and `npx cap sync android` complete successfully
 - Headless Edge smoke test: login page renders, authenticated session loads
   `/map` with "Live" status, live GPS fix uploaded to MySQL, two squad markers
   shown, and `/squads` + `/settings` render without console errors
@@ -254,11 +250,10 @@ The following was tested end-to-end against XAMPP (Apache + MariaDB):
 - Opaque, cryptographically random API tokens (`random_bytes`)
 - Prepared statements prevent SQL injection
 - Bearer tokens invalidated on logout
-- Biometric credentials stored in the OS keystore / secure enclave
+- Biometric credentials stored in Android Keystore-backed secure storage
 - CORS restricted to local development origins by default
-- Native dev builds allow cleartext HTTP (`usesCleartextTraffic` on Android,
-  `NSAllowsLocalNetworking` on iOS) so the XAMPP API works; use HTTPS and remove
-  those allowances for production
+- Native dev builds allow cleartext HTTP (`usesCleartextTraffic` on Android)
+  so the XAMPP API works; use HTTPS and remove that allowance for production
 
 ## License
 
