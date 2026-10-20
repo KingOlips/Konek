@@ -1,101 +1,170 @@
-<ion-content class="ion-padding login-content">
-  <div class="login-container">
-    <!-- Logo/Brand Section -->
-    <div class="brand-section">
-      <div class="logo">
-        <ion-icon name="location-outline" class="logo-icon"></ion-icon>
+<ion-content class="auth-content">
+  <div class="auth-shell">
+    <!-- Brand panel -->
+    <section class="brand-panel">
+      <div class="brand-content">
+        <div class="brand-lockup">
+          <div class="brand-mark">
+            <ion-icon name="location-outline" aria-hidden="true"></ion-icon>
+          </div>
+          <span class="brand-name">Konek</span>
+        </div>
+
+        <div class="brand-message">
+          <span class="brand-eyebrow">Squad tracking</span>
+          <h1>Stay close.<br /><span>Stay connected.</span></h1>
+          <p>Live location sharing for squads that move together — no group chats, no guesswork.</p>
+        </div>
+
+        <ul class="brand-points">
+          <li>
+            <span class="brand-point-icon"><ion-icon name="radio-outline" aria-hidden="true"></ion-icon></span>
+            <span>Live GPS updates</span>
+          </li>
+          <li>
+            <span class="brand-point-icon"><ion-icon name="people-outline" aria-hidden="true"></ion-icon></span>
+            <span>Private squad channels</span>
+          </li>
+          <li>
+            <span class="brand-point-icon"><ion-icon name="shield-checkmark-outline" aria-hidden="true"></ion-icon></span>
+            <span>Geofence safety alerts</span>
+          </li>
+        </ul>
       </div>
-      <h1 class="app-name">Konek</h1>
-      <p class="tagline">Stay connected with your squad</p>
-    </div>
 
-    <!-- Login Form -->
-    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="login-form">
-      <!-- Username Field -->
-      <ion-item class="input-item" lines="full">
-        <ion-label position="floating">Username</ion-label>
-        <ion-input
-          formControlName="username"
-          type="text"
-          autocomplete="username"
-          [class.invalid]="username?.invalid && (username?.dirty || username?.touched)"
-          placeholder="Enter your username"
-        ></ion-input>
-        @if (username?.invalid && (username?.dirty || username?.touched)) {
-          <ion-icon name="alert-circle-outline" slot="end" class="error-icon"></ion-icon>
-        }
-      </ion-item>
-      @if (username?.hasError("required") && (username?.dirty || username?.touched)) {
-        <ion-text color="danger" class="error-text">Username is required</ion-text>
-      }
-      @if (username?.hasError("minlength") && (username?.dirty || username?.touched)) {
-        <ion-text color="danger" class="error-text">Username must be at least 3 characters</ion-text>
-      }
-
-      <!-- Password Field -->
-      <ion-item class="input-item" lines="full">
-        <ion-label position="floating">Password</ion-label>
-        <ion-input
-          formControlName="password"
-          [type]="showPassword ? 'text' : 'password'"
-          autocomplete="current-password"
-          [class.invalid]="password?.invalid && (password?.dirty || password?.touched)"
-          placeholder="Enter your password"
-        ></ion-input>
-        <ion-icon
-          [name]="showPassword ? 'eye-off-outline' : 'eye-outline'"
-          slot="end"
-          class="toggle-password"
-          (click)="togglePasswordVisibility()"
-        ></ion-icon>
-        @if (password?.invalid && (password?.dirty || password?.touched)) {
-          <ion-icon name="alert-circle-outline" slot="end" class="error-icon"></ion-icon>
-        }
-      </ion-item>
-      @if (password?.hasError("required") && (password?.dirty || password?.touched)) {
-        <ion-text color="danger" class="error-text">Password is required</ion-text>
-      }
-      @if (password?.hasError("minlength") && (password?.dirty || password?.touched)) {
-        <ion-text color="danger" class="error-text">Password must be at least 6 characters</ion-text>
-      }
-
-      <!-- Submit Button -->
-      <ion-button
-        expand="block"
-        type="submit"
-        class="login-button"
-        [disabled]="loginForm.invalid || isLoading"
-      >
-        @if (isLoading) {
-          <ion-spinner name="crescent" slot="start"></ion-spinner>
-          <span>Signing in...</span>
-        } @else {
-          <ion-icon name="log-in-outline" slot="start"></ion-icon>
-          <span>Sign In</span>
-        }
-      </ion-button>
-    </form>
-
-    <!-- Biometric Login -->
-    @if (biometricAvailable) {
-      <div class="biometric-section">
-        <ion-button
-          expand="block"
-          fill="outline"
-          class="biometric-button"
-          (click)="onBiometricLogin()"
-          [disabled]="isLoading"
-        >
-          <ion-icon name="finger-print-outline" slot="start"></ion-icon>
-          <span>Sign in with Biometrics</span>
-        </ion-button>
+      <div class="radar" aria-hidden="true">
+        <span class="radar-ring ring-1"></span>
+        <span class="radar-ring ring-2"></span>
+        <span class="radar-ring ring-3"></span>
+        <span class="radar-core"></span>
+        <span class="radar-dot dot-1"></span>
+        <span class="radar-dot dot-2"></span>
+        <span class="radar-dot dot-3"></span>
       </div>
-    }
+    </section>
 
-    <!-- Register Link -->
-    <div class="register-link">
-      <p>Don&apos;t have an account?</p>
-      <a routerLink="/register" class="register-button">Sign Up</a>
-    </div>
+    <!-- Sign-in form -->
+    <section class="form-panel">
+      <div class="form-inner">
+        <header class="form-header">
+          <p class="form-eyebrow">Welcome back</p>
+          <h2>Sign in to Konek</h2>
+          <p>Enter your credentials to see your squad on the live map.</p>
+        </header>
+
+        <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="auth-form" novalidate>
+          <!-- Username -->
+          <div
+            class="field"
+            [class.field-invalid]="username?.invalid && (username?.dirty || username?.touched)"
+          >
+            <span class="field-label">Username</span>
+            <div class="field-control">
+              <ion-icon name="person-outline" class="field-icon" aria-hidden="true"></ion-icon>
+              <ion-input
+                formControlName="username"
+                type="text"
+                autocomplete="username"
+                autocapitalize="off"
+                spellcheck="false"
+                aria-label="Username"
+                placeholder="Enter your username"
+              ></ion-input>
+            </div>
+            @if (username?.invalid && (username?.dirty || username?.touched)) {
+              <p class="field-error" role="alert">
+                <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+                <span>
+                  @if (username?.hasError("required")) {
+                    Username is required
+                  } @else if (username?.hasError("minlength")) {
+                    Username must be at least 3 characters
+                  }
+                </span>
+              </p>
+            }
+          </div>
+
+          <!-- Password -->
+          <div
+            class="field"
+            [class.field-invalid]="password?.invalid && (password?.dirty || password?.touched)"
+          >
+            <span class="field-label">Password</span>
+            <div class="field-control">
+              <ion-icon name="lock-closed-outline" class="field-icon" aria-hidden="true"></ion-icon>
+              <ion-input
+                formControlName="password"
+                [type]="showPassword ? 'text' : 'password'"
+                autocomplete="current-password"
+                aria-label="Password"
+                placeholder="Enter your password"
+              ></ion-input>
+              <button
+                type="button"
+                class="field-action"
+                (click)="togglePasswordVisibility()"
+                [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'"
+                [attr.aria-pressed]="showPassword"
+              >
+                <ion-icon
+                  [name]="showPassword ? 'eye-off-outline' : 'eye-outline'"
+                  aria-hidden="true"
+                ></ion-icon>
+              </button>
+            </div>
+            @if (password?.invalid && (password?.dirty || password?.touched)) {
+              <p class="field-error" role="alert">
+                <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+                <span>
+                  @if (password?.hasError("required")) {
+                    Password is required
+                  } @else if (password?.hasError("minlength")) {
+                    Password must be at least 6 characters
+                  }
+                </span>
+              </p>
+            }
+          </div>
+
+          <ion-button
+            expand="block"
+            type="submit"
+            class="submit-button"
+            [disabled]="loginForm.invalid || isLoading"
+          >
+            @if (isLoading) {
+              <ion-spinner name="crescent" aria-hidden="true"></ion-spinner>
+              <span>Signing in...</span>
+            } @else {
+              <span>Sign in</span>
+              <ion-icon name="arrow-forward-outline" slot="end" aria-hidden="true"></ion-icon>
+            }
+          </ion-button>
+        </form>
+
+        @if (biometricAvailable) {
+          <div class="auth-divider"><span>or continue with</span></div>
+          <button
+            type="button"
+            class="biometric-button"
+            (click)="onBiometricLogin()"
+            [disabled]="isLoading"
+          >
+            <span class="bio-icon">
+              <ion-icon name="finger-print-outline" aria-hidden="true"></ion-icon>
+            </span>
+            <span>Use biometrics</span>
+          </button>
+        }
+
+        <p class="auth-switch">New to Konek? <a routerLink="/register">Create an account</a></p>
+
+        <p class="auth-note">
+          <ion-icon name="shield-checkmark-outline" aria-hidden="true"></ion-icon>
+          <span>Your location is only visible to your squad.</span>
+        </p>
+      </div>
+    </section>
   </div>
 </ion-content>

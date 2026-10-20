@@ -10,15 +10,9 @@ import { Router, RouterLink } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import {
   IonContent,
-  IonHeader,
-  IonTitle,
-  IonToolbar,
-  IonItem,
   IonInput,
   IonButton,
   IonIcon,
-  IonLabel,
-  IonText,
   IonSpinner,
   AlertController,
   LoadingController,
@@ -26,10 +20,15 @@ import {
 import { addIcons } from "ionicons";
 import {
   alertCircleOutline,
+  arrowForwardOutline,
   eyeOutline,
   eyeOffOutline,
   locationOutline,
-  personAddOutline,
+  lockClosedOutline,
+  peopleOutline,
+  personOutline,
+  radioOutline,
+  shieldCheckmarkOutline,
 } from "ionicons/icons";
 import { AuthService } from "../../../core/services/auth.service";
 
@@ -42,15 +41,9 @@ import { AuthService } from "../../../core/services/auth.service";
     ReactiveFormsModule,
     RouterLink,
     IonContent,
-    IonHeader,
-    IonTitle,
-    IonToolbar,
-    IonItem,
     IonInput,
     IonButton,
     IonIcon,
-  IonLabel,
-    IonText,
     IonSpinner,
   ],
 })
@@ -70,10 +63,15 @@ export class RegisterPage {
   constructor() {
     addIcons({
       alertCircleOutline,
+      arrowForwardOutline,
       eyeOutline,
       eyeOffOutline,
       locationOutline,
-      personAddOutline,
+      lockClosedOutline,
+      peopleOutline,
+      personOutline,
+      radioOutline,
+      shieldCheckmarkOutline,
     });
 
     this.registerForm = this.fb.group(

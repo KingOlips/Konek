@@ -9,12 +9,9 @@ import { Router, RouterLink } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import {
   IonContent,
-  IonItem,
   IonInput,
   IonButton,
   IonIcon,
-  IonLabel,
-  IonText,
   IonSpinner,
   AlertController,
   LoadingController,
@@ -22,11 +19,16 @@ import {
 import { addIcons } from "ionicons";
 import {
   alertCircleOutline,
+  arrowForwardOutline,
   eyeOutline,
   eyeOffOutline,
   fingerPrintOutline,
   locationOutline,
-  logInOutline,
+  lockClosedOutline,
+  peopleOutline,
+  personOutline,
+  radioOutline,
+  shieldCheckmarkOutline,
 } from "ionicons/icons";
 import { AuthService } from "../../../core/services/auth.service";
 import { BiometricService } from "../../../core/services/biometric.service";
@@ -40,12 +42,9 @@ import { BiometricService } from "../../../core/services/biometric.service";
     ReactiveFormsModule,
     RouterLink,
     IonContent,
-    IonItem,
     IonInput,
     IonButton,
     IonIcon,
-  IonLabel,
-    IonText,
     IonSpinner,
   ],
 })
@@ -66,11 +65,16 @@ export class LoginPage implements OnInit {
   constructor() {
     addIcons({
       alertCircleOutline,
+      arrowForwardOutline,
       eyeOutline,
       eyeOffOutline,
       fingerPrintOutline,
       locationOutline,
-      logInOutline,
+      lockClosedOutline,
+      peopleOutline,
+      personOutline,
+      radioOutline,
+      shieldCheckmarkOutline,
     });
   }
 
