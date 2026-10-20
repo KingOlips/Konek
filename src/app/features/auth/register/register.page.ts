@@ -6,7 +6,7 @@ import {
   ValidationErrors,
   Validators,
 } from "@angular/forms";
-import { Router, RouterLink } from "@angular/router";
+import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import {
   IonContent,
@@ -16,6 +16,7 @@ import {
   IonSpinner,
   AlertController,
   LoadingController,
+  NavController,
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
 import {
@@ -39,7 +40,6 @@ import { AuthService } from "../../../core/services/auth.service";
   standalone: true,
   imports: [
     ReactiveFormsModule,
-    RouterLink,
     IonContent,
     IonInput,
     IonButton,
@@ -50,6 +50,7 @@ import { AuthService } from "../../../core/services/auth.service";
 export class RegisterPage {
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
+  private readonly navCtrl = inject(NavController);
   private readonly authService = inject(AuthService);
   private readonly alertCtrl = inject(AlertController);
   private readonly loadingCtrl = inject(LoadingController);
@@ -59,6 +60,7 @@ export class RegisterPage {
   isLoading = false;
   showPassword = false;
   showConfirmPassword = false;
+  submitted = false;
 
   constructor() {
     addIcons({
@@ -106,7 +108,13 @@ export class RegisterPage {
     return null;
   }
 
+  goToLogin(): void {
+    void this.navCtrl.navigateRoot("/login", { animated: false, replaceUrl: true });
+  }
+
   async onSubmit(): Promise<void> {
+    this.submitted = true;
+
     if (this.registerForm.invalid) {
       this.registerForm.markAllAsTouched();
       return;

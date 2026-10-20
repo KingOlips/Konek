@@ -3,11 +3,13 @@
     <!-- Brand panel -->
     <section class="brand-panel">
       <div class="brand-content">
-        <div class="brand-lockup">
-          <div class="brand-mark">
-            <ion-icon name="location-outline" aria-hidden="true"></ion-icon>
+        <div class="brand-top">
+          <div class="brand-lockup">
+            <div class="brand-mark">
+              <ion-icon name="location-outline" aria-hidden="true"></ion-icon>
+            </div>
+            <span class="brand-name">Konek</span>
           </div>
-          <span class="brand-name">Konek</span>
         </div>
 
         <div class="brand-message">
@@ -56,7 +58,7 @@
           <!-- Username -->
           <div
             class="field"
-            [class.field-invalid]="username?.invalid && (username?.dirty || username?.touched)"
+            [class.field-invalid]="username?.invalid && submitted"
           >
             <span class="field-label">Username</span>
             <div class="field-control">
@@ -71,7 +73,7 @@
                 placeholder="Choose a username"
               ></ion-input>
             </div>
-            @if (username?.invalid && (username?.dirty || username?.touched)) {
+            @if (username?.invalid && submitted) {
               <p class="field-error" role="alert">
                 <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
                 <span>
@@ -90,7 +92,7 @@
           <!-- Password -->
           <div
             class="field"
-            [class.field-invalid]="password?.invalid && (password?.dirty || password?.touched)"
+            [class.field-invalid]="password?.invalid && submitted"
           >
             <span class="field-label">Password</span>
             <div class="field-control">
@@ -115,7 +117,7 @@
                 ></ion-icon>
               </button>
             </div>
-            @if (password?.invalid && (password?.dirty || password?.touched)) {
+            @if (password?.invalid && submitted) {
               <p class="field-error" role="alert">
                 <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
                 <span>
@@ -132,7 +134,7 @@
           <!-- Confirm password -->
           <div
             class="field"
-            [class.field-invalid]="confirmPassword?.invalid && (confirmPassword?.dirty || confirmPassword?.touched)"
+            [class.field-invalid]="confirmPassword?.invalid && submitted"
           >
             <span class="field-label">Confirm password</span>
             <div class="field-control">
@@ -157,7 +159,7 @@
                 ></ion-icon>
               </button>
             </div>
-            @if (confirmPassword?.invalid && (confirmPassword?.dirty || confirmPassword?.touched)) {
+            @if (confirmPassword?.invalid && submitted) {
               <p class="field-error" role="alert">
                 <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
                 <span>
@@ -175,7 +177,7 @@
             expand="block"
             type="submit"
             class="submit-button"
-            [disabled]="registerForm.invalid || isLoading"
+            [disabled]="isLoading"
           >
             @if (isLoading) {
               <ion-spinner name="crescent" aria-hidden="true"></ion-spinner>
@@ -187,7 +189,16 @@
           </ion-button>
         </form>
 
-        <p class="auth-switch">Already have an account? <a routerLink="/login">Sign in</a></p>
+        <p class="auth-switch">
+          Already have an account?
+          <button type="button" class="auth-link" (click)="goToLogin()">Sign in</button>
+        </p>
+
+        <div class="mobile-features" aria-hidden="true">
+          <span><ion-icon name="radio-outline"></ion-icon>Live GPS</span>
+          <span><ion-icon name="people-outline"></ion-icon>Private squads</span>
+          <span><ion-icon name="shield-checkmark-outline"></ion-icon>Safety alerts</span>
+        </div>
 
         <p class="auth-note">
           <ion-icon name="shield-checkmark-outline" aria-hidden="true"></ion-icon>

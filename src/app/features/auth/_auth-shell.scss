@@ -96,6 +96,17 @@
   gap: 12px;
 }
 
+.brand-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mobile-features {
+  display: none;
+}
+
 .brand-mark {
   display: grid;
   place-items: center;
@@ -586,12 +597,19 @@
   font-size: 13.5px;
   text-align: center;
 
-  a {
+  a,
+  .auth-link {
+    display: inline;
     margin-left: 3px;
+    padding: 0;
+    border: 0;
     border-bottom: 1px solid transparent;
+    background: none;
     color: var(--auth-primary);
+    font: inherit;
     font-weight: 700;
     text-decoration: none;
+    cursor: pointer;
 
     &:hover {
       border-bottom-color: currentColor;
@@ -630,20 +648,18 @@
 @media (min-width: 900px) {
   .auth-content::part(scroll) {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 36px;
+    align-items: stretch;
   }
 
   .auth-shell {
     display: grid;
     grid-template-columns: 1.08fr 0.92fr;
-    width: min(1040px, 100%);
-    min-height: 660px;
-    margin: 0 auto;
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
     overflow: hidden;
-    border-radius: 30px;
-    box-shadow: 0 40px 100px -30px rgba(2, 6, 23, 0.5);
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .brand-panel {
@@ -682,13 +698,118 @@
   .form-inner {
     max-width: 360px;
   }
+
+  .form-header h2 {
+    font-size: 30px;
+  }
+}
+
+/* Mobile app layout: full-bleed gradient behind a single auth card. */
+@media (max-width: 899px) {
+  .brand-panel {
+    display: none;
+  }
+
+  .form-panel {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    border-radius: 0;
+    background:
+      radial-gradient(120% 120% at 84% 6%, rgba(34, 211, 238, 0.32) 0%, transparent 52%),
+      radial-gradient(100% 100% at 6% 100%, rgba(37, 99, 235, 0.58) 0%, transparent 62%),
+      linear-gradient(150deg, #08162f 0%, #0b2b4f 55%, #064b57 100%);
+    box-shadow: none;
+  }
+
+  .form-inner {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    max-width: none;
+    padding: 22px 20px;
+    border-radius: 0;
+    background: var(--auth-surface);
+    box-shadow: none;
+  }
+
+  .form-header {
+    margin-bottom: 18px;
+  }
+
+  .form-eyebrow {
+    margin-bottom: 6px;
+  }
+
+  .form-header h2 {
+    font-size: 24px;
+  }
+
+  .form-header p:last-child {
+    display: none;
+  }
+
+  .auth-form {
+    gap: 12px;
+  }
+
+  .field-control {
+    min-height: 50px;
+  }
+
+  .submit-button {
+    height: 50px;
+  }
+
+  .auth-switch {
+    margin: 14px 0 0;
+    font-size: 13px;
+  }
+
+  .auth-note {
+    margin-top: 10px;
+    padding-top: 0;
+    font-size: 11px;
+  }
+
+  .mobile-features {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--auth-line);
+    color: var(--auth-muted);
+    font-size: 10.5px;
+    font-weight: 500;
+
+    span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    ion-icon {
+      color: var(--auth-primary);
+      font-size: 14px;
+    }
+  }
+}
+
+@media (max-width: 899px) and (max-height: 700px) {
+  .mobile-features {
+    display: none;
+  }
+
+  .auth-note {
+    margin-top: auto;
+  }
 }
 
 @media (min-width: 1200px) {
-  .auth-shell {
-    min-height: 680px;
-  }
-
   .form-inner {
     max-width: 380px;
   }
@@ -700,9 +821,9 @@
     padding-left: 18px;
   }
 
-  .form-panel {
-    padding-right: 18px;
-    padding-left: 18px;
+  .form-inner {
+    padding-right: 16px;
+    padding-left: 16px;
   }
 
   .form-header h2 {
@@ -714,22 +835,12 @@
  * Dark mode
  * ------------------------------------------------------------------------- */
 
-:host-context(.dark) .form-panel {
-  box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.45);
-}
-
 :host-context(.dark) .field-control:focus-within {
   background: #0b1322;
 }
 
 :host-context(.dark) .biometric-button:hover {
   background: rgba(96, 165, 250, 0.08);
-}
-
-@media (min-width: 900px) {
-  :host-context(.dark) .form-panel {
-    box-shadow: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
