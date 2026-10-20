@@ -1,0 +1,197 @@
+/* Login Page Styles */
+.login-content {
+  --background: var(--ion-color-light, #f4f5f8);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-container {
+  width: 100%;
+  max-width: 400px;
+  padding: 24px;
+}
+
+.brand-section {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.logo {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 16px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--ion-color-primary) 0%, var(--ion-color-secondary) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(var(--ion-color-primary-rgb), 0.3);
+}
+
+.logo-icon {
+  font-size: 36px;
+  color: white;
+}
+
+.app-name {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ion-color-dark, #1a1a2e);
+  margin: 0 0 8px;
+  letter-spacing: -0.5px;
+}
+
+.tagline {
+  font-size: 15px;
+  color: var(--ion-color-medium, #6c757d);
+  margin: 0;
+}
+
+/* Form Styles */
+.login-form {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.input-item {
+  --background: transparent;
+  --border-color: var(--ion-color-light, #e9ecef);
+  --border-radius: 12px;
+  margin-bottom: 16px;
+  --padding-start: 16px;
+  --padding-end: 16px;
+  height: 56px;
+
+  &.invalid {
+    --border-color: var(--ion-color-danger, #dc3545);
+  }
+}
+
+.input-item ion-label {
+  --color: var(--ion-color-medium, #6c757d);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.input-item ion-input {
+  --placeholder-color: var(--ion-color-medium, #adb5bd);
+  font-size: 16px;
+}
+
+.error-icon {
+  color: var(--ion-color-danger, #dc3545);
+}
+
+.toggle-password {
+  color: var(--ion-color-medium, #6c757d);
+}
+
+.error-text {
+  display: block;
+  margin: -12px 0 12px 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.login-button {
+  --border-radius: 12px;
+  height: 52px;
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 8px;
+  --background: linear-gradient(135deg, var(--ion-color-primary) 0%, var(--ion-color-secondary) 100%);
+  --background-activated: linear-gradient(135deg, var(--ion-color-primary-shade) 0%, var(--ion-color-secondary-shade) 100%);
+  box-shadow: 0 4px 16px rgba(var(--ion-color-primary-rgb), 0.3);
+
+  ion-icon {
+    font-size: 20px;
+  }
+
+  &:disabled {
+    opacity: 0.7;
+  }
+}
+
+/* Biometric Section */
+.biometric-section {
+  margin-top: 20px;
+}
+
+.biometric-button {
+  --border-radius: 12px;
+  height: 52px;
+  font-size: 16px;
+  font-weight: 500;
+  --border-color: var(--ion-color-primary);
+  --color: var(--ion-color-primary);
+
+  ion-icon {
+    font-size: 22px;
+  }
+}
+
+/* Register Link */
+.register-link {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.register-link p {
+  color: var(--ion-color-medium, #6c757d);
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.register-button {
+  color: var(--ion-color-primary);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* Error Alert Customization */
+.error-alert {
+  --border-radius: 12px;
+  
+  .alert-button {
+    font-weight: 600;
+  }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 16px;
+  }
+
+  .login-form {
+    padding: 20px 16px;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .login-content {
+    --background: var(--ion-color-dark, #121212);
+  }
+
+  .app-name {
+    color: var(--ion-color-light, #ffffff);
+  }
+
+  .login-form {
+    background: var(--ion-color-dark-shade, #1e1e1e);
+  }
+
+  .input-item {
+    --border-color: var(--ion-color-medium, #333);
+  }
+}

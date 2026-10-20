@@ -1,16 +1,11 @@
-// This file can be replaced during build by using the `fileReplacements` array.
-// `ng build` replaces `environment.ts` with `environment.prod.ts`.
-// The list of file replacements can be found in `angular.json`.
+// Development environment
+// `ng build` replaces this file with environment.prod.ts during production builds.
 
 export const environment = {
-  production: false
+  production: false,
+  // Base URL of the PHP API served by XAMPP.
+  // For a physical device, replace `localhost` with your computer's LAN IP
+  // (e.g. http://192.168.1.10/konek/backend/api) since `localhost` on the
+  // device points at the device itself.
+  apiUrl: "http://localhost/konek/backend/api",
 };
-
-/*
- * For easier debugging in development mode, you can import the following file
- * to ignore zone related error stack frames such as `zone.run`, `zoneDelegate.invokeTask`.
- *
- * This import should be commented out in production mode because it will have a negative impact
- * on performance if an error is thrown.
- */
-// import 'zone.js/plugins/zone-error';  // Included with Angular CLI.

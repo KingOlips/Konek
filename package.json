@@ -1,5 +1,5 @@
 {
-  "name": "Konek",
+  "name": "konek",
   "version": "0.0.1",
   "author": "Ionic Framework",
   "homepage": "https://ionicframework.com/",
@@ -19,13 +19,21 @@
     "@angular/forms": "22.1.7",
     "@angular/platform-browser": "22.1.7",
     "@angular/router": "22.1.7",
+    "@capacitor/android": "^8.5.3",
     "@capacitor/app": "8.1.2",
     "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/geolocation": "8.2.4",
     "@capacitor/haptics": "8.0.2",
+    "@capacitor/ios": "^8.5.3",
     "@capacitor/keyboard": "8.0.6",
+    "@capacitor/motion": "8.0.1",
+    "@capacitor/preferences": "8.0.1",
     "@capacitor/status-bar": "8.0.4",
     "@ionic/angular": "^9.0.0",
+    "capacitor-native-biometric": "4.2.2",
     "ionicons": "^8.1.0",
+    "leaflet": "^1.9.4",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
@@ -36,6 +44,7 @@
     "@angular/language-service": "22.1.7",
     "@capacitor/cli": "8.5.3",
     "@ionic/angular-toolkit": "^13.0.0",
+    "@types/leaflet": "^1.9.12",
     "angular-eslint": "22.5.0",
     "eslint": "^10.10.0",
     "jsdom": "^30.1.1",
@@ -43,5 +52,5 @@
     "typescript-eslint": "^8.61.0",
     "vitest": "~4.0.18"
   },
-  "description": "An Ionic project"
+  "description": "Konek - real-time squad location sharing"
 }

@@ -1,0 +1,121 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>Create Account</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding login-content">
+  <div class="login-container">
+    <!-- Logo/Brand Section -->
+    <div class="brand-section">
+      <div class="logo">
+        <ion-icon name="location-outline" class="logo-icon"></ion-icon>
+      </div>
+      <h1 class="app-name">Konek</h1>
+      <p class="tagline">Create your account to get started</p>
+    </div>
+
+    <!-- Register Form -->
+    <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="login-form">
+      <!-- Username Field -->
+      <ion-item class="input-item" lines="full">
+        <ion-label position="floating">Username</ion-label>
+        <ion-input
+          formControlName="username"
+          type="text"
+          autocomplete="username"
+          [class.invalid]="username?.invalid && (username?.dirty || username?.touched)"
+          placeholder="Choose a username"
+        ></ion-input>
+        @if (username?.invalid && (username?.dirty || username?.touched)) {
+          <ion-icon name="alert-circle-outline" slot="end" class="error-icon"></ion-icon>
+        }
+      </ion-item>
+      @if (username?.hasError("required") && (username?.dirty || username?.touched)) {
+        <ion-text color="danger" class="error-text">Username is required</ion-text>
+      }
+      @if (username?.hasError("minlength") && (username?.dirty || username?.touched)) {
+        <ion-text color="danger" class="error-text">Username must be at least 3 characters</ion-text>
+      }
+      @if (username?.hasError("pattern") && (username?.dirty || username?.touched)) {
+        <ion-text color="danger" class="error-text">Only letters, numbers, and underscores allowed</ion-text>
+      }
+
+      <!-- Password Field -->
+      <ion-item class="input-item" lines="full">
+        <ion-label position="floating">Password</ion-label>
+        <ion-input
+          formControlName="password"
+          [type]="showPassword ? 'text' : 'password'"
+          autocomplete="new-password"
+          [class.invalid]="password?.invalid && (password?.dirty || password?.touched)"
+          placeholder="Create a password"
+        ></ion-input>
+        <ion-icon
+          [name]="showPassword ? 'eye-off-outline' : 'eye-outline'"
+          slot="end"
+          class="toggle-password"
+          (click)="togglePasswordVisibility()"
+        ></ion-icon>
+        @if (password?.invalid && (password?.dirty || password?.touched)) {
+          <ion-icon name="alert-circle-outline" slot="end" class="error-icon"></ion-icon>
+        }
+      </ion-item>
+      @if (password?.hasError("required") && (password?.dirty || password?.touched)) {
+        <ion-text color="danger" class="error-text">Password is required</ion-text>
+      }
+      @if (password?.hasError("minlength") && (password?.dirty || password?.touched)) {
+        <ion-text color="danger" class="error-text">Password must be at least 6 characters</ion-text>
+      }
+
+      <!-- Confirm Password Field -->
+      <ion-item class="input-item" lines="full">
+        <ion-label position="floating">Confirm Password</ion-label>
+        <ion-input
+          formControlName="confirmPassword"
+          [type]="showConfirmPassword ? 'text' : 'password'"
+          autocomplete="new-password"
+          [class.invalid]="confirmPassword?.invalid && (confirmPassword?.dirty || confirmPassword?.touched)"
+          placeholder="Confirm your password"
+        ></ion-input>
+        <ion-icon
+          [name]="showConfirmPassword ? 'eye-off-outline' : 'eye-outline'"
+          slot="end"
+          class="toggle-password"
+          (click)="toggleConfirmPasswordVisibility()"
+        ></ion-icon>
+        @if (confirmPassword?.invalid && (confirmPassword?.dirty || confirmPassword?.touched)) {
+          <ion-icon name="alert-circle-outline" slot="end" class="error-icon"></ion-icon>
+        }
+      </ion-item>
+      @if (confirmPassword?.hasError("required") && (confirmPassword?.dirty || confirmPassword?.touched)) {
+        <ion-text color="danger" class="error-text">Please confirm your password</ion-text>
+      }
+      @if (confirmPassword?.hasError("mismatch") && (confirmPassword?.dirty || confirmPassword?.touched)) {
+        <ion-text color="danger" class="error-text">Passwords do not match</ion-text>
+      }
+
+      <!-- Submit Button -->
+      <ion-button
+        expand="block"
+        type="submit"
+        class="login-button"
+        [disabled]="registerForm.invalid || isLoading"
+      >
+        @if (isLoading) {
+          <ion-spinner name="crescent" slot="start"></ion-spinner>
+          <span>Creating Account...</span>
+        } @else {
+          <ion-icon name="person-add-outline" slot="start"></ion-icon>
+          <span>Create Account</span>
+        }
+      </ion-button>
+    </form>
+
+    <!-- Login Link -->
+    <div class="register-link">
+      <p>Already have an account?</p>
+      <a routerLink="/login" class="register-button">Sign In</a>
+    </div>
+  </div>
+</ion-content>

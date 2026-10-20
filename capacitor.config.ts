@@ -1,9 +1,14 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: 'io.ionic.starter',
-  appName: 'Konek',
-  webDir: 'www'
+  appId: "com.konek.app",
+  appName: "Konek",
+  webDir: "www",
+  server: {
+    // Allows calling the local XAMPP API over plain HTTP during development.
+    androidScheme: "https",
+    cleartext: true,
+  },
 };
 
 export default config;

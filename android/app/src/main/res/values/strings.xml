@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Konek</string>
+    <string name="title_activity_main">Konek</string>
+    <string name="package_name">com.konek.app</string>
+    <string name="custom_url_scheme">com.konek.app</string>
+</resources>

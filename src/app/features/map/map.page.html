@@ -1,0 +1,163 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Konek Map</ion-title>
+    <ion-buttons slot="end">
+      <ion-badge
+        class="status-badge"
+        [color]="
+          connectionStatus === 'connected'
+            ? 'success'
+            : connectionStatus === 'connecting'
+              ? 'warning'
+              : 'danger'
+        "
+      >
+        <ion-icon
+          [name]="
+            connectionStatus === 'connected'
+              ? 'checkmark-circle-outline'
+              : connectionStatus === 'connecting'
+                ? 'time-outline'
+                : 'warning-outline'
+          "
+          size="small"
+        ></ion-icon>
+        {{
+          connectionStatus === "connected"
+            ? "Live"
+            : connectionStatus === "connecting"
+              ? "Connecting"
+              : "Offline"
+        }}
+      </ion-badge>
+
+      <ion-button fill="clear" aria-label="Map style" (click)="presentMapStyleSheet()">
+        <ion-icon name="layers-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+
+      <ion-button fill="clear" aria-label="Squad members" (click)="toggleSquadList()">
+        <ion-icon name="people-outline" slot="icon-only"></ion-icon>
+        @if (squadMembers.length > 0) {
+          <ion-badge color="danger" class="squad-count">{{ squadMembers.length }}</ion-badge>
+        }
+      </ion-button>
+
+      <ion-button fill="clear" aria-label="More options" (click)="presentMoreSheet()">
+        <ion-icon name="settings-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="map-content" [fullscreen]="true">
+  <div #mapContainer class="map-container"></div>
+
+  <!-- Recenter FAB -->
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+    <ion-fab-button [color]="isTracking ? 'primary' : 'medium'" (click)="centerOnUser()">
+      <ion-icon name="locate-outline"></ion-icon>
+    </ion-fab-button>
+    <ion-fab-list side="start">
+      <ion-fab-button (click)="refreshSquadLocations()" [disabled]="isLoadingSquad">
+        <ion-icon name="refresh-outline"></ion-icon>
+        <ion-label>Refresh squad</ion-label>
+      </ion-fab-button>
+      <ion-fab-button (click)="centerOnUser()">
+        <ion-icon name="compass-outline"></ion-icon>
+        <ion-label>Center on me</ion-label>
+      </ion-fab-button>
+    </ion-fab-list>
+  </ion-fab>
+
+  @if (lastUpdate) {
+    <div class="last-update" [class.stale]="isStaleUpdate()">
+      <ion-icon name="time-outline" size="small"></ion-icon>
+      <span>Updated {{ getTimeAgo(lastUpdate) }}</span>
+    </div>
+  }
+
+  @if (showSquadList) {
+    <div class="squad-panel open">
+      <div class="panel-handle" (click)="toggleSquadList()"></div>
+      <div class="panel-header">
+        <h3>Squad members ({{ squadMembers.length }})</h3>
+        <ion-button
+          fill="clear"
+          size="small"
+          (click)="refreshSquadLocations()"
+          [disabled]="isLoadingSquad"
+        >
+          <ion-icon
+            name="refresh-outline"
+            slot="start"
+            [class.spinning]="isLoadingSquad"
+          ></ion-icon>
+          Refresh
+        </ion-button>
+      </div>
+
+      <div class="panel-content">
+        @if (isLoadingSquad) {
+          <div class="loading-squad">
+            <ion-spinner name="crescent"></ion-spinner>
+            <p>Loading squad members...</p>
+          </div>
+        } @else if (squadMembers.length === 0) {
+          <div class="empty-squad">
+            <ion-icon name="people-outline" size="large"></ion-icon>
+            <p>No squad members sharing yet</p>
+            <ion-button fill="outline" size="small" routerLink="/squads">
+              Join a squad
+            </ion-button>
+          </div>
+        } @else {
+          <ion-list lines="inset">
+            @for (member of squadMembers; track member.user_id) {
+              <ion-item
+                class="member-item"
+                button
+                detail="false"
+                (click)="centerOnMember(member)"
+              >
+                <ion-avatar slot="start">
+                  <ion-icon name="person-circle-outline" size="large"></ion-icon>
+                </ion-avatar>
+                <ion-label>
+                  <h4>
+                    {{ member.username }}
+                    @if (member.user_id === currentUser?.id) {
+                      <span class="you-tag">(you)</span>
+                    }
+                  </h4>
+                  <p>
+                    <ion-badge
+                      [color]="member.role === 'admin' ? 'warning' : 'medium'"
+                      size="small"
+                    >
+                      {{ member.role }}
+                    </ion-badge>
+                    <span class="member-status" [class.online]="isMemberOnline(member)">
+                      {{ isMemberOnline(member) ? "online" : "offline" }}
+                    </span>
+                  </p>
+                  <small>Last seen {{ getTimeAgo(member.timestamp) }}</small>
+                </ion-label>
+                <ion-icon name="locate-outline" slot="end" color="primary"></ion-icon>
+              </ion-item>
+            }
+          </ion-list>
+        }
+      </div>
+    </div>
+  }
+
+  @if (!mapReady) {
+    <div class="map-loading-overlay">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading map...</p>
+    </div>
+  }
+</ion-content>

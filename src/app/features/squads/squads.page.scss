@@ -1,0 +1,212 @@
+/* Squads Page Styles */
+.squads-content {
+  --background: var(--ion-color-light, #f4f5f8);
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 24px;
+  text-align: center;
+  gap: 16px;
+}
+
+.empty-state ion-icon {
+  font-size: 80px;
+  color: var(--ion-color-medium, #adb5bd);
+  opacity: 0.5;
+}
+
+.empty-state h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--ion-color-dark, #1a1a2e);
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ion-color-medium, #6c757d);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.empty-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 280px;
+  margin-top: 8px;
+}
+
+.empty-actions ion-button {
+  --border-radius: 12px;
+  height: 48px;
+  font-weight: 600;
+}
+
+/* Squads List */
+.squads-list {
+  --background: transparent;
+}
+
+.squad-item {
+  --background: white;
+  --border-radius: 16px;
+  margin-bottom: 12px;
+  --padding-start: 16px;
+  --padding-end: 16px;
+  height: auto;
+  min-height: 72px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.squad-item:hover,
+.squad-item.ion-activated {
+  --background: var(--ion-color-light, #f8f9fa);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.squad-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--ion-color-primary) 0%, var(--ion-color-secondary) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.squad-avatar ion-icon {
+  font-size: 24px;
+  color: white;
+}
+
+.squad-item ion-label h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ion-color-dark, #1a1a2e);
+}
+
+.squad-item ion-label p {
+  margin: 0;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.member-count {
+  color: var(--ion-color-medium, #6c757d);
+  font-weight: 500;
+}
+
+.squad-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.squad-actions ion-badge {
+  --background: var(--ion-color-light, #f4f5f8);
+  --color: var(--ion-color-dark, #1a1a2e);
+  --border-radius: 8px;
+  --padding-start: 10px;
+  --padding-end: 10px;
+  --padding-top: 4px;
+  --padding-bottom: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.squad-actions ion-badge:hover {
+  --background: var(--ion-color-primary);
+  --color: white;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  gap: 16px;
+  color: var(--ion-color-medium, #6c757d);
+}
+
+.loading-state p {
+  margin: 0;
+  font-size: 15px;
+}
+
+/* FAB */
+ion-fab-button {
+  --background: var(--ion-color-primary);
+  --color: white;
+  --box-shadow: 0 4px 16px rgba(var(--ion-color-primary-rgb), 0.4);
+}
+
+ion-fab-list ion-fab-button {
+  --background: white;
+  --color: var(--ion-color-dark, #1a1a2e);
+  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Toast */
+.custom-toast {
+  --border-radius: 12px;
+  --background: var(--ion-color-dark, #1a1a2e);
+  --color: white;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  .squads-content {
+    --background: var(--ion-color-dark, #121212);
+  }
+
+  .empty-state ion-icon {
+    color: var(--ion-color-medium, #6c757d);
+  }
+
+  .empty-state h2 {
+    color: var(--ion-color-light, #ffffff);
+  }
+
+  .squad-item {
+    --background: var(--ion-color-dark-shade, #1e1e1e);
+  }
+
+  .squad-item:hover,
+  .squad-item.ion-activated {
+    --background: var(--ion-color-medium, #2d2d2d);
+  }
+
+  .squad-item ion-label h3 {
+    color: var(--ion-color-light, #ffffff);
+  }
+
+  .squad-actions ion-badge {
+    --background: var(--ion-color-medium, #333);
+    --color: var(--ion-color-light, #ffffff);
+  }
+
+  ion-fab-list ion-fab-button {
+    --background: var(--ion-color-dark-shade, #1e1e1e);
+    --color: var(--ion-color-light, #ffffff);
+  }
+}
