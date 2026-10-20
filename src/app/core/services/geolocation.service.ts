@@ -5,13 +5,6 @@ import type { PluginListenerHandle } from "@capacitor/core";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
 
-export interface CompassData {
-  /** Heading in degrees, 0 = North, clockwise. */
-  heading: number;
-  /** Approximate accuracy in degrees (0 when unknown). */
-  accuracy: number;
-}
-
 /**
  * Wraps Capacitor Geolocation + Motion sensors.
  *
@@ -52,17 +45,6 @@ export class GeolocationService {
     } catch (error) {
       console.error("Permission request failed:", error);
       return false;
-    }
-  }
-
-  async checkPermissions(): Promise<"granted" | "denied" | "prompt"> {
-    try {
-      const permissions = await Geolocation.checkPermissions();
-      const state = permissions.location;
-      if (state === "granted" || state === "denied") return state;
-      return "prompt";
-    } catch {
-      return "prompt";
     }
   }
 
@@ -192,36 +174,12 @@ export class GeolocationService {
     return (deg * Math.PI) / 180;
   }
 
-  getMovementState(): boolean {
-    return this.isMoving;
-  }
-
   getPollInterval(): number {
     return this.pollInterval;
   }
 
   setAdaptivePolling(enabled: boolean): void {
     this.adaptivePolling = enabled;
-  }
-
-  getLastKnownPosition(): GeolocationPosition | null {
-    return this.lastKnownPosition;
-  }
-
-  async getCompassHeading(): Promise<CompassData | null> {
-    if (!this.lastHeading && this.lastHeading !== 0) return null;
-    return { heading: this.lastHeading, accuracy: 0 };
-  }
-
-  /** Bearing from point A to point B in degrees (0-360). */
-  calculateBearing(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const dLon = this.toRad(lon2 - lon1);
-    const y = Math.sin(dLon) * Math.cos(this.toRad(lat2));
-    const x =
-      Math.cos(this.toRad(lat1)) * Math.sin(this.toRad(lat2)) -
-      Math.sin(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) * Math.cos(dLon);
-    const bearing = (Math.atan2(y, x) * 180) / Math.PI;
-    return (bearing + 360) % 360;
   }
 
   /** Write an export payload to the device Documents folder. */

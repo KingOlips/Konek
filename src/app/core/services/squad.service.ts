@@ -2,38 +2,14 @@ import { Injectable, inject } from "@angular/core";
 import { HttpClient, HttpHeaders } from "@angular/common/http";
 import { Observable, catchError, from, map, switchMap, throwError } from "rxjs";
 import { AuthService } from "./auth.service";
-import { ApiEnvelope, SquadMemberLocation } from "../models/location.models";
+import { ApiEnvelope, Geofence, SquadMemberLocation } from "../models/location.models";
+import {
+  CreateSquadRequest,
+  JoinSquadRequest,
+  Squad,
+  SquadMember,
+} from "../models/squad.models";
 import { environment } from "../../../environments/environment";
-
-export interface Squad {
-  id: number;
-  squad_name: string;
-  join_code: string;
-  created_at?: string;
-  member_count?: number;
-  user_role?: "member" | "admin";
-}
-
-export interface SquadMember {
-  user_id: number;
-  username: string;
-  role: "member" | "admin";
-  joined_at: string;
-  last_location?: {
-    latitude: number;
-    longitude: number;
-    accuracy: number | null;
-    timestamp: string;
-  } | null;
-}
-
-export interface CreateSquadRequest {
-  squad_name: string;
-}
-
-export interface JoinSquadRequest {
-  join_code: string;
-}
 
 @Injectable({
   providedIn: "root",
@@ -96,12 +72,12 @@ export class SquadService {
     latitude: number;
     longitude: number;
     radius_meters: number;
-  }): Observable<unknown> {
-    return this.request<unknown>("POST", "api_create_geofence.php", data);
+  }): Observable<Geofence> {
+    return this.request<Geofence>("POST", "api_create_geofence.php", data);
   }
 
-  getGeofences(squadId: number): Observable<unknown[]> {
-    return this.request<unknown[]>("GET", `api_get_geofences.php?squad_id=${squadId}`);
+  getGeofences(squadId: number): Observable<Geofence[]> {
+    return this.request<Geofence[]>("GET", `api_get_geofences.php?squad_id=${squadId}`);
   }
 
   deleteGeofence(geofenceId: number): Observable<void> {

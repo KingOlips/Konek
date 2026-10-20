@@ -465,9 +465,9 @@ export class MapPage implements OnInit, OnDestroy {
 
   private async loadGeofences(squadId: number): Promise<void> {
     try {
-      this.geofences = (await firstValueFrom(
+      this.geofences = await firstValueFrom(
         this.squadService.getGeofences(squadId)
-      )) as Geofence[];
+      );
       this.renderGeofences();
       this.checkGeofenceTransitions(this.squadMembers);
     } catch (error) {

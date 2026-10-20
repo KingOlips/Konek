@@ -49,17 +49,6 @@ export interface Geofence {
   created_at: string;
 }
 
-export interface GeofenceEvent {
-  geofence_id: number;
-  geofence_name: string;
-  user_id: number;
-  username: string;
-  event_type: "enter" | "exit";
-  timestamp: string;
-  latitude: number;
-  longitude: number;
-}
-
 export interface LocationExportData {
   user_id: number;
   username: string;
@@ -70,17 +59,4 @@ export interface LocationExportData {
     start: string;
     end: string;
   };
-}
-
-export interface MapBounds {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
-}
-
-export interface MapViewState {
-  center: [number, number];
-  zoom: number;
-  bounds?: MapBounds;
 }

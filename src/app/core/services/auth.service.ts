@@ -12,13 +12,7 @@ import {
 } from "rxjs";
 import { Preferences } from "@capacitor/preferences";
 import { environment } from "../../../environments/environment";
-
-export interface Squad {
-  id: number;
-  squad_name: string;
-  join_code: string;
-  role: "member" | "admin";
-}
+import { Squad } from "../models/squad.models";
 
 export interface User {
   id: number;

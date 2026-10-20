@@ -26,7 +26,8 @@ import {
   LoadingController,
   ToastController,
 } from "@ionic/angular";
-import { SquadService, Squad } from "../../core/services/squad.service";
+import { SquadService } from "../../core/services/squad.service";
+import { Squad } from "../../core/models/squad.models";
 import { AuthService } from "../../core/services/auth.service";
 import { addIcons } from "ionicons";
 import {
