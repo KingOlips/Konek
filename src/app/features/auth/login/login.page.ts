@@ -130,8 +130,12 @@ export class LoginPage implements OnInit {
     } catch (error: any) {
       await loading.dismiss();
       console.error("Login error:", error);
-      const message =
-        error?.error?.message ?? "Unable to reach the server. Check that XAMPP is running.";
+      // Status 0 / "Failed to fetch" means the request never reached the API.
+      const offline =
+        !error?.status || error?.status === 0 || error?.message === "Failed to fetch";
+      const message = offline
+        ? "Can't reach the Konek server. Check your internet connection and try again in a moment."
+        : (error?.error?.message ?? "Login failed. Please try again.");
       await this.showError(message);
     } finally {
       this.isLoading = false;

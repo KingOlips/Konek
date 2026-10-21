@@ -151,8 +151,13 @@ export class RegisterPage {
     } catch (error: any) {
       await loading.dismiss();
       console.error("Registration error:", error);
+      // Status 0 / "Failed to fetch" means the request never reached the API.
+      const offline =
+        !error?.status || error?.status === 0 || error?.message === "Failed to fetch";
       await this.showError(
-        error?.error?.message ?? "Unable to reach the server. Check that XAMPP is running."
+        offline
+          ? "Can't reach the Konek server. Check your internet connection and try again in a moment."
+          : (error?.error?.message ?? "Registration failed. Please try again.")
       );
     } finally {
       this.isLoading = false;
