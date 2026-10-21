@@ -9,18 +9,9 @@ import {
   IonTitle,
   IonToolbar,
   IonButtons,
-  IonButton,
   IonIcon,
   IonMenuButton,
-  IonItem,
-  IonLabel,
   IonToggle,
-  IonAvatar,
-  IonList,
-  IonListHeader,
-  IonAlert,
-  IonInput,
-  IonText,
   AlertController,
   LoadingController,
   ToastController,
@@ -32,9 +23,6 @@ import { LocationService } from "../../core/services/location.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
 import { addIcons } from "ionicons";
 import {
-  personOutline,
-  personCircleOutline,
-  settingsOutline,
   fingerPrintOutline,
   closeOutline,
   locationOutline,
@@ -44,6 +32,8 @@ import {
   moonOutline,
   sunnyOutline,
   shieldOutline,
+  keyOutline,
+  speedometerOutline,
   informationCircleOutline,
   chevronForwardOutline,
 } from "ionicons/icons";
@@ -61,17 +51,9 @@ import {
     IonTitle,
     IonToolbar,
     IonButtons,
-    IonButton,
     IonIcon,
     IonMenuButton,
-    IonItem,
-    IonLabel,
     IonToggle,
-    IonAvatar,
-    IonList,
-    IonListHeader,
-    IonInput,
-    IonText,
   ],
 })
 export class SettingsPage implements OnInit {
@@ -96,9 +78,6 @@ export class SettingsPage implements OnInit {
 
   constructor() {
     addIcons({
-      personOutline,
-      personCircleOutline,
-      settingsOutline,
       fingerPrintOutline,
       closeOutline,
       locationOutline,
@@ -108,9 +87,19 @@ export class SettingsPage implements OnInit {
       moonOutline,
       sunnyOutline,
       shieldOutline,
+      keyOutline,
+      speedometerOutline,
       informationCircleOutline,
       chevronForwardOutline,
     });
+  }
+
+  /** Up to two initials for the profile avatar. */
+  get initials(): string {
+    const name = (this.currentUser?.username ?? "").trim();
+    if (!name) return "?";
+    const parts = name.split(/[\s._-]+/).filter(Boolean);
+    return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)).toUpperCase();
   }
 
   async ngOnInit(): Promise<void> {
@@ -229,12 +218,12 @@ export class SettingsPage implements OnInit {
   async toggleDarkMode(): Promise<void> {
     this.darkMode = !this.darkMode;
     localStorage.setItem("konek_dark_mode", this.darkMode.toString());
-    
-    if (this.darkMode) {
-      document.body.classList.add("dark");
-    } else {
-      document.body.classList.remove("dark");
-    }
+
+    // `dark` drives the app's own styles, `ion-palette-dark` is what Ionic's
+    // dark palette (toolbars, lists, alerts) listens for. It must go on <html>,
+    // because Ionic puts its `md`/`ios` class there too.
+    document.body.classList.toggle("dark", this.darkMode);
+    document.documentElement.classList.toggle("ion-palette-dark", this.darkMode);
   }
 
   async toggleLocationTracking(): Promise<void> {

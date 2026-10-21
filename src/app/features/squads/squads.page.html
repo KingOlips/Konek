@@ -1,89 +1,136 @@
-<ion-header [translucent]="true">
+<ion-header>
   <ion-toolbar>
     <ion-buttons slot="start">
       <ion-menu-button></ion-menu-button>
     </ion-buttons>
     <ion-title>My Squads</ion-title>
-    <ion-buttons slot="end">
-      <ion-button fill="clear" (click)="createSquad()">
-        <ion-icon name="add-outline" slot="icon-only"></ion-icon>
-      </ion-button>
-    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
-<ion-content class="ion-padding squads-content">
-  <!-- Empty State -->
-  @if (!isLoading && squads.length === 0) {
-    <div class="empty-state">
-      <ion-icon name="people-outline" size="large"></ion-icon>
-      <h2>No Squads Yet</h2>
-      <p>Create a new squad or join an existing one to start sharing locations</p>
-      <div class="empty-actions">
-        <ion-button fill="outline" (click)="joinSquad()">
-          <ion-icon name="key-outline" slot="start"></ion-icon>
-          Join Squad
-        </ion-button>
-        <ion-button (click)="createSquad()">
-          <ion-icon name="add-outline" slot="start"></ion-icon>
-          Create Squad
+<ion-content class="squads-content">
+  <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)">
+    <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
+  </ion-refresher>
+
+  <div class="squads-wrap">
+    <!-- Loading State -->
+    @if (isLoading) {
+      <div class="loading-state">
+        <ion-spinner name="crescent"></ion-spinner>
+        <p>Loading squads...</p>
+      </div>
+    }
+
+    <!-- Load Error -->
+    @if (!isLoading && loadError && squads.length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon error" aria-hidden="true">
+          <ion-icon name="cloud-offline-outline"></ion-icon>
+        </div>
+        <h2>Couldn't load squads</h2>
+        <p>Check your connection and try again.</p>
+        <ion-button class="empty-cta" (click)="loadSquads()">
+          <ion-icon name="refresh-outline" slot="start" aria-hidden="true"></ion-icon>
+          Try again
         </ion-button>
       </div>
-    </div>
-  }
+    }
 
-  <!-- Squads List -->
-  @if (!isLoading && squads.length > 0) {
-    <ion-list lines="inset" class="squads-list">
-      @for (squad of squads; track squad.id) {
-        <ion-item class="squad-item" (click)="viewSquad(squad)" button detail>
-          <ion-avatar slot="start">
-            <div class="squad-avatar">
-              <ion-icon name="people-outline"></ion-icon>
-            </div>
-          </ion-avatar>
-          <ion-label>
-            <h3>{{ squad.squad_name }}</h3>
-            <p>
-              <ion-badge [color]="squad.user_role === 'admin' ? 'warning' : 'medium'" size="small">
-                {{ squad.user_role }}
-              </ion-badge>
-              <span class="member-count">{{ squad.member_count || 1 }} members</span>
-            </p>
-          </ion-label>
-          <div class="squad-actions" slot="end">
-            <ion-badge color="medium" (click)="copyJoinCode(squad.join_code); $event.stopPropagation()">
-              {{ squad.join_code }}
-            </ion-badge>
-            <ion-icon name="chevron-forward-outline" color="medium"></ion-icon>
-          </div>
-        </ion-item>
-      }
-    </ion-list>
-  }
+    <!-- Empty State -->
+    @if (!isLoading && !loadError && squads.length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon" aria-hidden="true">
+          <ion-icon name="people-outline"></ion-icon>
+        </div>
+        <h2>No squads yet</h2>
+        <p>Create a squad or join one with a code to start sharing locations with your group.</p>
+        <ion-button class="empty-cta" (click)="presentAddOptions()">
+          <ion-icon name="add-outline" slot="start" aria-hidden="true"></ion-icon>
+          Create or join a squad
+        </ion-button>
+      </div>
+    }
 
-  <!-- Loading State -->
-  @if (isLoading) {
-    <div class="loading-state">
-      <ion-spinner name="crescent"></ion-spinner>
-      <p>Loading squads...</p>
-    </div>
-  }
+    <!-- Squads List -->
+    @if (!isLoading && squads.length > 0) {
+      <div class="section-header">
+        <h2>Your squads</h2>
+        <span>{{ squads.length }}</span>
+      </div>
 
-  <!-- FAB for quick actions -->
-  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
-    <ion-fab-button size="large">
-      <ion-icon name="add-outline"></ion-icon>
-    </ion-fab-button>
-    <ion-fab-list side="top">
-      <ion-fab-button (click)="createSquad()">
-        <ion-icon name="add-outline" slot="start"></ion-icon>
-        <ion-label>Create Squad</ion-label>
-      </ion-fab-button>
-      <ion-fab-button (click)="joinSquad()">
-        <ion-icon name="key-outline" slot="start"></ion-icon>
-        <ion-label>Join Squad</ion-label>
-      </ion-fab-button>
-    </ion-fab-list>
-  </ion-fab>
+      <ion-list lines="none" class="squads-list">
+        @for (squad of squads; track squad.id) {
+          <ion-item-sliding class="squad-slide" #slide>
+            <ion-item-options side="start">
+              <ion-item-option
+                color="primary"
+                (click)="slide.close(); viewSquad(squad)"
+              >
+                Members
+              </ion-item-option>
+            </ion-item-options>
+
+            <ion-item
+              class="squad-item"
+              button
+              detail="false"
+              (click)="viewSquad(squad)"
+            >
+              <div
+                slot="start"
+                class="squad-avatar"
+                [class.admin]="isAdmin(squad)"
+              >
+                {{ initials(squad.squad_name) }}
+              </div>
+
+              <ion-label>
+                <h3>{{ squad.squad_name }}</h3>
+                <p>
+                  <span class="role-pill" [class.admin]="isAdmin(squad)">
+                    {{ squadRole(squad) }}
+                  </span>
+                  <span class="member-count">
+                    {{ squad.member_count || 1 }}
+                    {{ (squad.member_count || 1) === 1 ? "member" : "members" }}
+                  </span>
+                </p>
+              </ion-label>
+
+              <div slot="end" class="squad-end">
+                <button
+                  type="button"
+                  class="join-code"
+                  [attr.aria-label]="'Copy join code ' + squad.join_code"
+                  (click)="copyJoinCode(squad.join_code); $event.stopPropagation()"
+                >
+                  <span>{{ squad.join_code }}</span>
+                  <ion-icon name="copy-outline" aria-hidden="true"></ion-icon>
+                </button>
+                <ion-icon
+                  class="squad-chevron"
+                  name="chevron-forward-outline"
+                  aria-hidden="true"
+                ></ion-icon>
+              </div>
+            </ion-item>
+
+            <ion-item-options side="end">
+              <ion-item-option
+                class="leave-option"
+                (click)="slide.close(); leaveSquad(squad)"
+              >
+                Leave
+              </ion-item-option>
+            </ion-item-options>
+          </ion-item-sliding>
+        }
+      </ion-list>
+
+      <ion-button class="add-squad-btn" fill="clear" (click)="presentAddOptions()">
+        <ion-icon name="add-outline" slot="start" aria-hidden="true"></ion-icon>
+        Create or join a squad
+      </ion-button>
+    }
+  </div>
 </ion-content>

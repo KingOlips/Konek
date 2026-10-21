@@ -1,4 +1,4 @@
-<ion-header [translucent]="true">
+<ion-header>
   <ion-toolbar>
     <ion-buttons slot="start">
       <ion-menu-button></ion-menu-button>
@@ -8,172 +8,165 @@
 </ion-header>
 
 <ion-content class="settings-content">
-  <!-- Profile Section -->
-  <ion-list lines="inset" class="settings-section">
-    <ion-list-header>
-      <ion-label>Profile</ion-label>
-    </ion-list-header>
+  <div class="settings-wrap">
+    <!-- Profile -->
+    <section class="profile-card">
+      <div class="profile-avatar">{{ initials }}</div>
+      <div class="profile-meta">
+        <h2>{{ currentUser?.username || "User" }}</h2>
+        <span class="profile-pill">
+          <span class="profile-dot"></span>
+          Active
+        </span>
+      </div>
+      <button
+        type="button"
+        class="profile-action"
+        (click)="changePassword()"
+        aria-label="Change password"
+      >
+        <ion-icon name="key-outline"></ion-icon>
+      </button>
+    </section>
 
-    <ion-item class="profile-item">
-      <ion-avatar slot="start">
-        <ion-icon name="person-circle-outline" size="large"></ion-icon>
-      </ion-avatar>
-      <ion-label>
-        <h3>{{ currentUser?.username || "User" }}</h3>
-        <p>Signed in</p>
-      </ion-label>
-      <ion-button fill="clear" (click)="changePassword()">
-        <ion-icon name="settings-outline" slot="icon-only"></ion-icon>
-      </ion-button>
-    </ion-item>
-  </ion-list>
+    <!-- Security -->
+    <section class="settings-group">
+      <h3 class="group-title">Security</h3>
+      <div class="group-card">
+        <div class="row">
+          <span class="row-icon"><ion-icon name="finger-print-outline"></ion-icon></span>
+          <div class="row-body">
+            <span class="row-title">Biometric login</span>
+            <span class="row-sub">
+              {{
+                biometricAvailable
+                  ? "Unlock with Face ID / fingerprint"
+                  : "Not available on this device"
+              }}
+            </span>
+          </div>
+          <ion-toggle
+            color="primary"
+            [checked]="biometricEnabled"
+            (ionChange)="toggleBiometric()"
+            [disabled]="!biometricAvailable"
+          ></ion-toggle>
+        </div>
 
-  <!-- Security Section -->
-  <ion-list lines="inset" class="settings-section">
-    <ion-list-header>
-      <ion-label>Security</ion-label>
-    </ion-list-header>
+        <button type="button" class="row row-button" (click)="changePassword()">
+          <span class="row-icon"><ion-icon name="shield-outline"></ion-icon></span>
+          <div class="row-body">
+            <span class="row-title">Change password</span>
+            <span class="row-sub">Update your account password</span>
+          </div>
+          <ion-icon class="row-chevron" name="chevron-forward-outline"></ion-icon>
+        </button>
+      </div>
+    </section>
 
-    <ion-item>
-      <ion-icon name="finger-print-outline" slot="start" color="primary"></ion-icon>
-      <ion-label>
-        <h3>Biometric Login</h3>
-        <p>Use Face ID / Fingerprint to unlock</p>
-      </ion-label>
-      <ion-toggle
-        slot="end"
-        [checked]="biometricEnabled"
-        (ionChange)="toggleBiometric()"
-        [disabled]="!biometricAvailable"
-      ></ion-toggle>
-    </ion-item>
+    <!-- Location -->
+    <section class="settings-group">
+      <h3 class="group-title">Location &amp; privacy</h3>
+      <div class="group-card">
+        <div class="row">
+          <span class="row-icon"><ion-icon name="location-outline"></ion-icon></span>
+          <div class="row-body">
+            <span class="row-title">Location tracking</span>
+            <span class="row-sub">Share your position with squad members</span>
+          </div>
+          <ion-toggle
+            color="primary"
+            [checked]="locationTrackingEnabled"
+            (ionChange)="toggleLocationTracking()"
+          ></ion-toggle>
+        </div>
 
-    @if (!biometricAvailable) {
-      <ion-item lines="none">
-        <ion-label class="ion-padding">
-          <ion-text color="medium">
-            <p>Biometric authentication is not available on this device</p>
-          </ion-text>
-        </ion-label>
-      </ion-item>
-    }
+        <div class="row">
+          <span class="row-icon"><ion-icon name="speedometer-outline"></ion-icon></span>
+          <div class="row-body">
+            <span class="row-title">Adaptive GPS</span>
+            <span class="row-sub">Slow down when you stop to save battery</span>
+          </div>
+          <ion-toggle
+            color="primary"
+            [checked]="adaptiveGps"
+            (ionChange)="toggleAdaptiveGps()"
+          ></ion-toggle>
+        </div>
 
-    <ion-item (click)="changePassword()">
-      <ion-icon name="shield-outline" slot="start" color="primary"></ion-icon>
-      <ion-label>
-        <h3>Change Password</h3>
-        <p>Update your account password</p>
-      </ion-label>
-      <ion-icon name="chevron-forward-outline" slot="end" color="medium"></ion-icon>
-    </ion-item>
-  </ion-list>
+        <button type="button" class="row row-button" (click)="exportHistory()">
+          <span class="row-icon"><ion-icon name="download-outline"></ion-icon></span>
+          <div class="row-body">
+            <span class="row-title">Export location history</span>
+            <span class="row-sub">
+              {{ historyCount }} point{{ historyCount === 1 ? "" : "s" }} saved
+            </span>
+          </div>
+          <ion-icon class="row-chevron" name="chevron-forward-outline"></ion-icon>
+        </button>
 
-  <!-- Location & Privacy Section -->
-  <ion-list lines="inset" class="settings-section">
-    <ion-list-header>
-      <ion-label>Location & Privacy</ion-label>
-    </ion-list-header>
+        <button
+          type="button"
+          class="row row-button row-danger"
+          (click)="clearHistory()"
+        >
+          <span class="row-icon row-icon-danger">
+            <ion-icon name="trash-outline"></ion-icon>
+          </span>
+          <div class="row-body">
+            <span class="row-title">Clear location history</span>
+            <span class="row-sub">Delete all locally stored location data</span>
+          </div>
+          <ion-icon class="row-chevron" name="chevron-forward-outline"></ion-icon>
+        </button>
+      </div>
+    </section>
 
-    <ion-item>
-      <ion-icon name="location-outline" slot="start" color="primary"></ion-icon>
-      <ion-label>
-        <h3>Location Tracking</h3>
-        <p>Share your location with squad members</p>
-      </ion-label>
-      <ion-toggle
-        slot="end"
-        [checked]="locationTrackingEnabled"
-        (ionChange)="toggleLocationTracking()"
-      ></ion-toggle>
-    </ion-item>
+    <!-- Appearance -->
+    <section class="settings-group">
+      <h3 class="group-title">Appearance</h3>
+      <div class="group-card">
+        <div class="row">
+          <span class="row-icon">
+            <ion-icon [name]="darkMode ? 'moon-outline' : 'sunny-outline'"></ion-icon>
+          </span>
+          <div class="row-body">
+            <span class="row-title">Dark mode</span>
+            <span class="row-sub">Use the dark theme across the app</span>
+          </div>
+          <ion-toggle
+            color="primary"
+            [checked]="darkMode"
+            (ionChange)="toggleDarkMode()"
+          ></ion-toggle>
+        </div>
+      </div>
+    </section>
 
-    <ion-item>
-      <ion-icon name="settings-outline" slot="start" color="primary"></ion-icon>
-      <ion-label>
-        <h3>Adaptive GPS</h3>
-        <p>Optimize battery by adjusting GPS frequency based on movement</p>
-      </ion-label>
-      <ion-toggle
-        slot="end"
-        [checked]="adaptiveGps"
-        (ionChange)="toggleAdaptiveGps()"
-      ></ion-toggle>
-    </ion-item>
+    <!-- About -->
+    <section class="settings-group">
+      <h3 class="group-title">About</h3>
+      <div class="group-card">
+        <button type="button" class="row row-button" (click)="showAbout()">
+          <span class="row-icon"><ion-icon name="information-circle-outline"></ion-icon></span>
+          <div class="row-body">
+            <span class="row-title">About Konek</span>
+            <span class="row-sub">Version 1.0.0</span>
+          </div>
+          <ion-icon class="row-chevron" name="chevron-forward-outline"></ion-icon>
+        </button>
+      </div>
+    </section>
 
-    <ion-item>
-      <ion-icon name="download-outline" slot="start" color="primary"></ion-icon>
-      <ion-label>
-        <h3>Export Location History</h3>
-        <p>{{ historyCount }} location points saved</p>
-      </ion-label>
-      <ion-button fill="clear" slot="end" (click)="exportHistory()">
-        <ion-icon name="download-outline" slot="start"></ion-icon>
-        Export
-      </ion-button>
-    </ion-item>
+    <!-- Account -->
+    <button type="button" class="sign-out" (click)="logout()">
+      <ion-icon name="log-out-outline"></ion-icon>
+      Sign out
+    </button>
 
-    <ion-item>
-      <ion-icon name="trash-outline" slot="start" color="danger"></ion-icon>
-      <ion-label>
-        <h3>Clear Location History</h3>
-        <p>Delete all locally stored location data</p>
-      </ion-label>
-      <ion-button fill="clear" color="danger" slot="end" (click)="clearHistory()">
-        Clear
-      </ion-button>
-    </ion-item>
-  </ion-list>
-
-  <!-- Appearance Section -->
-  <ion-list lines="inset" class="settings-section">
-    <ion-list-header>
-      <ion-label>Appearance</ion-label>
-    </ion-list-header>
-
-    <ion-item>
-      <ion-icon [name]="darkMode ? 'moon-outline' : 'sunny-outline'" slot="start" color="primary"></ion-icon>
-      <ion-label>
-        <h3>Dark Mode</h3>
-        <p>Toggle dark/light theme</p>
-      </ion-label>
-      <ion-toggle
-        slot="end"
-        [checked]="darkMode"
-        (ionChange)="toggleDarkMode()"
-      ></ion-toggle>
-    </ion-item>
-  </ion-list>
-
-  <!-- About Section -->
-  <ion-list lines="inset" class="settings-section">
-    <ion-list-header>
-      <ion-label>About</ion-label>
-    </ion-list-header>
-
-    <ion-item (click)="showAbout()">
-      <ion-icon name="information-circle-outline" slot="start" color="primary"></ion-icon>
-      <ion-label>
-        <h3>About Konek</h3>
-        <p>Version 1.0.0</p>
-      </ion-label>
-      <ion-icon name="chevron-forward-outline" slot="end" color="medium"></ion-icon>
-    </ion-item>
-  </ion-list>
-
-  <!-- Account Actions -->
-  <ion-list lines="inset" class="settings-section">
-    <ion-item color="danger" (click)="logout()">
-      <ion-icon name="log-out-outline" slot="start"></ion-icon>
-      <ion-label>
-        <h3>Sign Out</h3>
-        <p>Sign out of your account</p>
-      </ion-label>
-    </ion-item>
-  </ion-list>
-
-  <!-- Version Info -->
-  <div class="version-info">
-    <p>Konek v1.0.0</p>
-    <p>Built with Ionic, Angular & Capacitor</p>
+    <footer class="version-info">
+      <p>Konek v1.0.0</p>
+      <p>Built with Ionic, Angular &amp; Capacitor</p>
+    </footer>
   </div>
 </ion-content>

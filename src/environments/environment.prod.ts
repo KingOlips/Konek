@@ -1,5 +1,7 @@
 export const environment = {
   production: true,
-  // Change this to the URL where your production PHP API is hosted.
-  apiUrl: "https://your-server.example.com/konek/backend/api",
+  // Android builds are made with the production configuration, so this URL must
+  // be reachable from the phone. A quick Cloudflare tunnel gets a new hostname
+  // on every restart: update this line (and environment.ts) when it changes.
+  apiUrl: "https://special-roster-performed-heaven.trycloudflare.com/konek/backend/api",
 };

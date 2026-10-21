@@ -11,17 +11,16 @@ import {
   IonButton,
   IonIcon,
   IonMenuButton,
-  IonFab,
-  IonFabButton,
-  IonFabList,
   IonLabel,
   IonItem,
-  IonAvatar,
-  IonBadge,
+  IonItemSliding,
+  IonItemOptions,
+  IonItemOption,
   IonList,
-  IonInput,
-  IonAlert,
   IonSpinner,
+  IonRefresher,
+  IonRefresherContent,
+  ActionSheetController,
   AlertController,
   LoadingController,
   ToastController,
@@ -34,12 +33,10 @@ import {
   addOutline,
   peopleOutline,
   keyOutline,
-  createOutline,
-  trashOutline,
-  exitOutline,
-  shieldOutline,
-  personOutline,
+  copyOutline,
   chevronForwardOutline,
+  cloudOfflineOutline,
+  refreshOutline,
 } from "ionicons/icons";
 
 @Component({
@@ -58,21 +55,21 @@ import {
     IonButton,
     IonIcon,
     IonMenuButton,
-    IonFab,
-    IonFabButton,
-    IonFabList,
     IonLabel,
     IonItem,
-    IonAvatar,
-    IonBadge,
+    IonItemSliding,
+    IonItemOptions,
+    IonItemOption,
     IonList,
-    IonInput,
     IonSpinner,
+    IonRefresher,
+    IonRefresherContent,
   ],
 })
 export class SquadsPage implements OnInit {
   private readonly squadService = inject(SquadService);
   private readonly authService = inject(AuthService);
+  private readonly actionSheetCtrl = inject(ActionSheetController);
   private readonly alertCtrl = inject(AlertController);
   private readonly loadingCtrl = inject(LoadingController);
   private readonly toastCtrl = inject(ToastController);
@@ -80,22 +77,17 @@ export class SquadsPage implements OnInit {
 
   squads: Squad[] = [];
   isLoading = false;
-  showCreateSquad = false;
-  showJoinSquad = false;
-  newSquadName = "";
-  joinCode = "";
+  loadError = false;
 
   constructor() {
     addIcons({
       addOutline,
       peopleOutline,
       keyOutline,
-      createOutline,
-      trashOutline,
-      exitOutline,
-      shieldOutline,
-      personOutline,
+      copyOutline,
       chevronForwardOutline,
+      cloudOfflineOutline,
+      refreshOutline,
     });
   }
 
@@ -105,17 +97,71 @@ export class SquadsPage implements OnInit {
 
   async loadSquads(): Promise<void> {
     this.isLoading = true;
+    this.loadError = false;
     try {
       const squads = await firstValueFrom(this.squadService.getUserSquads());
       this.squads = squads ?? [];
       this.cdr.markForCheck();
     } catch (error) {
       console.error("Failed to load squads:", error);
-      this.showToast("Failed to load squads");
+      this.loadError = true;
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** Pull-to-refresh: reload quietly without swapping the list for a spinner. */
+  async doRefresh(event: CustomEvent): Promise<void> {
+    try {
+      const squads = await firstValueFrom(this.squadService.getUserSquads());
+      this.squads = squads ?? [];
+      this.loadError = false;
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.error("Failed to refresh squads:", error);
+      await this.showToast("Failed to refresh squads");
+    } finally {
+      (event.target as HTMLIonRefresherElement).complete();
+    }
+  }
+
+  squadRole(squad: Squad): "admin" | "member" {
+    return (squad.user_role ?? squad.role ?? "member") as "admin" | "member";
+  }
+
+  isAdmin(squad: Squad): boolean {
+    return this.squadRole(squad) === "admin";
+  }
+
+  /** "Alpha Team" -> "AT", "Alpha" -> "A". */
+  initials(name: string): string {
+    const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "?";
+    const first = parts[0].charAt(0);
+    const second = parts.length > 1 ? parts[1].charAt(0) : "";
+    return (first + second).toUpperCase();
+  }
+
+  /** Single entry point for both squad actions, used by the empty state and list footer. */
+  async presentAddOptions(): Promise<void> {
+    const sheet = await this.actionSheetCtrl.create({
+      header: "Add a squad",
+      buttons: [
+        {
+          text: "Create squad",
+          icon: "add-outline",
+          handler: () => void this.createSquad(),
+        },
+        {
+          text: "Join with a code",
+          icon: "key-outline",
+          handler: () => void this.joinSquad(),
+        },
+        { text: "Cancel", role: "cancel" },
+      ],
+    });
+    await sheet.present();
   }
 
   async createSquad(): Promise<void> {
@@ -287,12 +333,12 @@ export class SquadsPage implements OnInit {
     }
   }
 
-  copyJoinCode(code: string): void {
+  async copyJoinCode(code: string): Promise<void> {
     try {
-      void navigator.clipboard.writeText(code);
-      this.showToast("Join code copied to clipboard!");
+      await navigator.clipboard.writeText(code);
+      await this.showToast("Join code copied!");
     } catch {
-      this.showToast(`Join code: ${code}`);
+      await this.showToast(`Join code: ${code}`);
     }
   }
 

@@ -6,5 +6,5 @@ export const environment = {
   // Public HTTPS tunnel to the local XAMPP API (works from any network).
   // Quick tunnels get a new hostname every restart, so update this line and
   // rebuild when the tunnel is recreated.
-  apiUrl: "https://aerospace-truck-gen-paragraph.trycloudflare.com/konek/backend/api",
+  apiUrl: "https://special-roster-performed-heaven.trycloudflare.com/konek/backend/api",
 };

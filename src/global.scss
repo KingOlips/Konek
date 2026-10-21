@@ -47,61 +47,135 @@
   font-family: inherit;
   height: 100%;
   width: 100%;
-  background: var(--ion-color-light, #f4f5f8);
+  background: #e8eaed;
+  outline: none;
 }
 
+/* Zoom control: circular, shadowed, clear of the FAB */
 .leaflet-control-zoom {
-  margin: 16px !important;
+  margin: 12px !important;
+  border: none !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.16), 0 1px 3px rgba(15, 23, 42, 0.1) !important;
 }
 
+.leaflet-control-zoom a {
+  width: 36px;
+  height: 36px;
+  line-height: 34px;
+  font-size: 18px;
+  color: #1f2937;
+  background: #fff;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: #f4f7fb;
+  color: #1f2937;
+}
+
+.leaflet-control-zoom a:last-child {
+  border-bottom: none !important;
+}
+
+/* Scale + attribution, kept small and legible over imagery */
 .leaflet-control-scale {
-  margin: 16px !important;
+  margin: 0 0 4px 12px !important;
+}
+
+.leaflet-control-scale-line {
+  border-color: rgba(15, 23, 42, 0.45);
+  border-top: none;
+  background: rgba(255, 255, 255, 0.78);
+  color: #334155;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 0 0 4px 4px;
+  backdrop-filter: blur(6px);
+}
+
+.leaflet-control-attribution {
+  margin: 0 0 10px 12px !important;
+  padding: 2px 8px !important;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82) !important;
+  color: #475569;
+  font-size: 10px;
+  line-height: 1.5;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(6px);
+}
+
+.leaflet-control-attribution a {
+  color: #2f6fe0;
+  text-decoration: none;
+}
+
+/* Invert the light basemap in dark mode; markers/popups stay untinted. */
+.map-dark-tiles .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(1.08) contrast(0.92) saturate(0.65);
 }
 
 /* Own position marker */
 .user-marker {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
 }
 
 .marker-pulse {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: rgba(56, 128, 255, 0.4);
-  animation: konek-pulse 2s ease-out infinite;
-  z-index: -1;
+  background: rgba(56, 128, 255, 0.26);
+  animation: konek-pulse 2.4s ease-out infinite;
+  z-index: -2;
+}
+
+.marker-halo {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(15, 23, 42, 0.05);
 }
 
 .marker-core {
-  position: relative;
-  width: 40px;
-  height: 40px;
+  position: absolute;
+  inset: 4px;
   border-radius: 50%;
-  background: #fff;
-  border: 3px solid #3880ff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(180deg, #58a0ff 0%, #2f7bf0 100%);
+  color: #fff;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.35);
   z-index: 1;
+}
+
+.marker-core svg {
+  display: block;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.25));
 }
 
 .marker-heading {
   position: absolute;
-  top: -8px;
+  top: -7px;
   left: 50%;
   width: 0;
   height: 0;
   margin-left: -6px;
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
-  border-bottom: 12px solid #3880ff;
+  border-bottom: 12px solid #2f7bf0;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.3));
   transform-origin: center bottom;
   transition: transform 0.3s ease;
   z-index: 2;
@@ -110,44 +184,234 @@
 /* Squad member markers */
 .squad-marker {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
 }
 
 .squad-marker .marker-ring {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  border: 2px solid #3880ff;
+  border: 2px solid rgba(56, 128, 255, 0.45);
   background: rgba(56, 128, 255, 0.1);
   animation: konek-ring 3s ease-out infinite;
   z-index: -1;
 }
 
 .squad-marker .marker-core {
-  width: 36px;
-  height: 36px;
+  inset: 0;
   border: 2px solid #3880ff;
   background: #fff;
+  color: #2f6fe0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.22);
 }
 
-/* Popup */
-.member-popup {
-  padding: 4px 0;
-  font-size: 13px;
-  line-height: 1.5;
+.squad-marker.is-admin .marker-core {
+  border-color: #f0a020;
+  color: #b97400;
 }
 
-.member-popup strong {
-  color: #1a1a2e;
+.squad-marker.is-admin .marker-ring {
+  border-color: rgba(240, 160, 32, 0.5);
+  background: rgba(240, 160, 32, 0.12);
 }
 
-.member-popup small {
-  color: #6c757d;
+.marker-status {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #2dd36f;
+  border: 2px solid #fff;
+  z-index: 3;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+}
+
+/* Popups */
+.leaflet-popup-content-wrapper {
+  border-radius: 16px;
+  padding: 0;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+  min-width: 186px;
+  line-height: 1.3;
+}
+
+.leaflet-popup-tip {
+  box-shadow: none;
+}
+
+.leaflet-popup-close-button {
+  top: 6px !important;
+  right: 6px !important;
+  padding: 4px 4px 0 0 !important;
+  color: #94a3b8 !important;
+}
+
+.konek-popup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: inherit;
+}
+
+.popup-avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 128, 255, 0.12);
+  color: #2f6fe0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.popup-avatar.is-admin {
+  background: rgba(240, 160, 32, 0.16);
+  color: #b97400;
+}
+
+.popup-avatar.is-self {
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+
+.popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.popup-body strong {
+  font-size: 14px;
+  color: var(--ion-text-color, #1a1a2e);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popup-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ion-color-medium, #6c757d);
+}
+
+.popup-role {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #2f6fe0;
+}
+
+.popup-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #adb5bd;
+}
+
+.popup-dot.is-online {
+  background: #2dd36f;
+}
+
+.popup-sub {
+  font-size: 11px;
+  color: var(--ion-color-medium, #6c757d);
+}
+
+/* Dark mode: body.dark is toggled by Settings (or the system preference). */
+.dark {
+  .leaflet-container {
+    background: #14161a;
+  }
+
+  .squad-marker .marker-core {
+    background: #1e1e1e;
+    color: #9cc4ff;
+  }
+
+  .squad-marker.is-admin .marker-core {
+    color: #ffc76b;
+  }
+
+  .marker-status {
+    border-color: #1e1e1e;
+  }
+
+  .leaflet-control-zoom {
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .leaflet-control-zoom a {
+    background: rgba(248, 250, 252, 0.94);
+    color: #111827;
+    border-bottom-color: rgba(15, 23, 42, 0.1) !important;
+  }
+
+  .leaflet-control-zoom a:hover {
+    background: #ffffff;
+    color: #111827;
+  }
+
+  .leaflet-control-scale-line {
+    background: rgba(30, 30, 30, 0.78);
+    color: #e4e4e7;
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .leaflet-control-attribution {
+    background: rgba(30, 30, 30, 0.82) !important;
+    color: #a1a1aa;
+  }
+
+  .leaflet-control-attribution a {
+    color: #9cc4ff;
+  }
+
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    background: #1e1e1e;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #e4e4e7;
+  }
+
+  .leaflet-popup-content-wrapper {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .leaflet-popup-close-button {
+    color: #71717a !important;
+  }
+
+  .popup-body strong {
+    color: #f4f4f5;
+  }
+
+  .popup-sub {
+    color: #a1a1aa;
+  }
 }
 
 @keyframes konek-pulse {
@@ -179,3 +443,75 @@
   }
 }
 
+
+/* ---------------------------------------------------------------------------
+ * App chrome: top navigation bars
+ * ------------------------------------------------------------------------ */
+ion-header ion-toolbar {
+  --background: #ffffff;
+  --border-color: rgba(16, 24, 40, 0.08);
+  --border-width: 0 0 1px 0;
+  --color: #141a24;
+  --min-height: 60px;
+  --padding-start: 6px;
+  --padding-end: 6px;
+}
+
+ion-header ion-toolbar ion-title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+/* Hamburger as a soft icon tile */
+ion-header ion-menu-button {
+  --background: rgba(56, 128, 255, 0.1);
+  --background-hover: rgba(56, 128, 255, 0.18);
+  --background-hover-opacity: 1;
+  --border-radius: 12px;
+  --color: #2f6fe0;
+  width: 40px;
+  height: 40px;
+  font-size: 22px;
+  margin-inline-start: 6px;
+}
+
+body.dark ion-header ion-toolbar {
+  --background: #15181e;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --color: #f4f5f7;
+}
+
+body.dark ion-header ion-menu-button {
+  --background: rgba(86, 148, 255, 0.14);
+  --background-hover: rgba(86, 148, 255, 0.22);
+  --color: #8db4ff;
+}
+
+/* Transient update toast (map) */
+ion-toast.update-toast {
+  --background: #171a20;
+  --color: #f4f5f7;
+  --border-radius: 14px;
+  --box-shadow: 0 10px 30px rgba(16, 24, 40, 0.28);
+  --max-width: 320px;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+
+/* Drop the banner just below the app navbar instead of covering it. */
+ion-toast.update-toast::part(wrapper) {
+  margin-top: calc(58px + var(--ion-safe-area-top, 0px));
+}
+
+ion-toast.update-toast::part(icon) {
+  color: #4ade80;
+  margin-inline-end: 8px;
+}
+
+body.dark ion-toast.update-toast {
+  --background: #232833;
+  --color: #f4f5f7;
+  --box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}

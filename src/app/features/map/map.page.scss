@@ -1,6 +1,6 @@
 /* Map Page Styles */
 .map-content {
-  --background: var(--ion-color-light, #f4f5f8);
+  --background: #e8eaed;
   height: 100%;
   position: relative;
 }
@@ -12,189 +12,23 @@
   top: 0;
   left: 0;
   z-index: 1;
+  background: #e8eaed;
 }
 
-/* Leaflet Custom Styles */
-.leaflet-container {
-  font-family: inherit;
-  height: 100%;
-  width: 100%;
-  background: var(--ion-color-light, #f4f5f8);
-}
+/*
+ * Marker, control and popup styling lives in src/global.scss: those elements are
+ * created by Leaflet at runtime, so Angular's component encapsulation never
+ * applies to them.
+ */
 
-.leaflet-pane {
-  z-index: auto !important;
-}
 
-/* Custom Marker Styles */
-.user-marker {
-  position: relative;
-  width: 40px;
-  height: 40px;
-}
-
-.marker-pulse {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 40px;
-  height: 40px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: rgba(56, 128, 255, 0.4);
-  animation: pulse 2s ease-out infinite;
-  z-index: -1;
-}
-
-@keyframes pulse {
-  0% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.6;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(2.5);
-    opacity: 0;
-  }
-}
-
-.marker-core {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: white;
-  border: 3px solid #3880ff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  z-index: 1;
-}
-
-.marker-core ion-icon {
-  font-size: 20px;
-  color: #3880ff;
-  --ionicon-stroke-width: 40px;
-}
-
-.marker-heading {
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 12px solid #3880ff;
-  transform-origin: center bottom;
-  transition: transform 0.3s ease;
-  z-index: 2;
-}
-
-/* Squad Markers */
-.squad-marker {
-  position: relative;
-  width: 36px;
-  height: 36px;
-}
-
-.squad-marker .marker-ring {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 36px;
-  height: 36px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: 2px solid var(--ion-color-secondary, #3880ff);
-  background: rgba(var(--ion-color-secondary-rgb, 56, 128, 255), 0.1);
-  animation: ringPulse 3s ease-out infinite;
-  z-index: -1;
-}
-
-@keyframes ringPulse {
-  0% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.5;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(2);
-    opacity: 0;
-  }
-}
-
-.squad-marker .marker-core {
-  width: 36px;
-  height: 36px;
-  border: 2px solid var(--ion-color-secondary, #3880ff);
-  background: white;
-}
-
-.squad-marker .marker-core ion-icon {
-  font-size: 18px;
-  color: var(--ion-color-secondary, #3880ff);
-}
-
-/* Member Popup */
-.member-popup {
-  padding: 4px 0;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.member-popup strong {
-  color: var(--ion-color-dark, #1a1a2e);
-}
-
-.member-popup small {
-  color: var(--ion-color-medium, #6c757d);
-}
-
-/* Status Badge */
-.status-badge {
-  --padding-start: 8px;
-  --padding-end: 8px;
-  --padding-top: 4px;
-  --padding-bottom: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
+/* Squad count badge on the members button */
 .squad-count {
   --top: -4px;
   --end: -4px;
   --width: 18px;
   --height: 18px;
   --font-size: 10px;
-}
-
-/* Last Update Indicator */
-.last-update {
-  position: absolute;
-  bottom: 100px;
-  right: 16px;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-}
-
-.last-update.stale {
-  background: rgba(220, 53, 69, 0.8);
-}
-
-.last-update ion-icon {
-  font-size: 14px;
 }
 
 /* Squad Panel - Slide over from right */
@@ -380,11 +214,6 @@ ion-fab-button.ion-color-primary {
   border-color: transparent;
 }
 
-ion-fab-list ion-fab-button {
-  --background: white;
-  --color: var(--ion-color-dark, #1a1a2e);
-}
-
 /* Map Loading Overlay */
 .map-loading-overlay {
   position: absolute;
@@ -407,73 +236,91 @@ ion-fab-list ion-fab-button {
   font-size: 15px;
 }
 
-/* Zoom Control Position */
-.leaflet-control-zoom {
-  margin: 16px !important;
-}
+/* Zoom/scale control positioning is handled in src/global.scss */
 
-.leaflet-control-scale {
-  margin: 16px !important;
-}
-
-/* Dark Mode Support */
-@media (prefers-color-scheme: dark) {
+/* Dark Mode Support (body.dark is set by Settings / the system preference) */
+:host-context(.dark) {
   .map-content {
-    --background: var(--ion-color-dark, #121212);
+    --background: #14161a;
   }
 
-  .leaflet-container {
-    background: var(--ion-color-dark, #121212);
+  .map-container {
+    background: #14161a;
   }
 
-  .marker-core {
-    background: var(--ion-color-dark-shade, #1e1e1e);
-  }
-
-  .squad-marker .marker-core {
-    background: var(--ion-color-dark-shade, #1e1e1e);
+  .squad-panel {
+    background: #14171c;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
   }
 
   .panel-header {
-    background: var(--ion-color-dark-shade, #1e1e1e);
-    border-color: var(--ion-color-medium, #333);
+    background: #171a20;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .panel-header h3 {
+    color: #f4f5f7;
   }
 
   .member-item:hover,
   .member-item.ion-activated {
-    --background: var(--ion-color-dark-shade, #1e1e1e);
+    --background: #1f232b;
   }
 
   .member-item ion-avatar {
-    background: var(--ion-color-dark-shade, #1e1e1e);
+    background: #232833;
   }
 
-  .last-update {
-    background: rgba(255, 255, 255, 0.1);
+  .member-item ion-label h4 {
+    color: #f4f5f7;
+  }
+
+  .member-item ion-label small,
+  .member-status {
+    color: #98a1af;
+  }
+
+  .empty-squad,
+  .loading-squad {
+    color: #98a1af;
   }
 
   ion-fab-button {
-    --background: rgba(30, 30, 30, 0.95);
-    --color: white;
-    border-color: var(--ion-color-medium, #333);
+    --background: rgba(23, 26, 32, 0.96);
+    --color: #f4f5f7;
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
-  ion-fab-list ion-fab-button {
-    --background: var(--ion-color-dark-shade, #1e1e1e);
-    --color: white;
+  ion-fab-button.ion-color-primary {
+    --background: var(--ion-color-primary, #3880ff);
+    --color: #fff;
+    border-color: transparent;
   }
 
   .map-loading-overlay {
-    background: var(--ion-color-dark, #121212);
+    background: #14161a;
+  }
+
+  .map-loading-overlay p {
+    color: #98a1af;
   }
 
   .panel-handle {
-    background: var(--ion-color-dark-shade, #1e1e1e);
+    background: #232833;
   }
 }
 
 /* Responsive */
 @media (max-width: 480px) {
+  ion-title {
+    position: static;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
   .squad-panel {
     width: 100vw;
     right: -100vw;
@@ -482,17 +329,6 @@ ion-fab-list ion-fab-button {
 
   .panel-handle {
     display: none;
-  }
-
-  .status-badge ion-label {
-    display: none;
-  }
-
-  .last-update {
-    bottom: 90px;
-    right: 12px;
-    left: 12px;
-    justify-content: center;
   }
 }
 
@@ -511,10 +347,6 @@ ion-fab-list ion-fab-button {
   }
 
   .squad-panel {
-    transition: none;
-  }
-
-  .last-update {
     transition: none;
   }
 }

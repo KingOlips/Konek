@@ -1,105 +1,265 @@
-/* App Component Styles - Menu */
+/* App shell / side menu */
 ion-menu {
-  --width: 280px;
-  --background: var(--ion-color-light, #fafafa);
+  --width: 296px;
+  --background: #f6f8fc;
 }
 
-.menu-list {
-  --background: transparent;
-  padding: 8px 0;
+.menu-content {
+  --background: #f6f8fc;
 }
 
-.user-profile {
-  --padding-start: 16px;
-  --padding-end: 16px;
-  --padding-top: 16px;
-  --padding-bottom: 16px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--ion-color-light, #e9ecef);
+/* Let the footer sit at the bottom of the drawer */
+.menu-content::part(scroll) {
+  display: flex;
+  flex-direction: column;
 }
 
-.user-profile ion-avatar {
-  --size: 48px;
-  background: linear-gradient(135deg, var(--ion-color-primary) 0%, var(--ion-color-secondary) 100%);
+/* Signed-in profile (top of the drawer) */
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: calc(22px + env(safe-area-inset-top, 0px)) 18px 18px;
+  border-bottom: 1px solid rgba(16, 24, 40, 0.07);
 }
 
-.user-profile ion-avatar ion-icon {
-  font-size: 24px;
-  color: white;
+.profile-avatar {
+  flex: 0 0 54px;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4b93ff 0%, #2f6fe0 100%);
+  box-shadow: 0 4px 12px rgba(47, 111, 224, 0.3);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
-.user-profile ion-label h4 {
-  margin: 0 0 4px;
+.profile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.profile-meta strong {
   font-size: 16px;
   font-weight: 600;
-  color: var(--ion-color-dark, #1a1a2e);
+  color: #141a24;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.user-profile ion-label p {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ion-color-medium, #6c757d);
+.profile-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7a8494;
 }
 
-.menu-list ion-item {
-  --background: transparent;
-  --border-radius: 10px;
-  --padding-start: 16px;
-  --padding-end: 16px;
-  margin: 4px 12px;
-  --inner-padding-end: 16px;
+.profile-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
 }
 
-.menu-list ion-item:hover,
-.menu-list ion-item.ion-activated {
-  --background: var(--ion-color-primary-tint, rgba(var(--ion-color-primary-rgb), 0.1));
-  --color: var(--ion-color-primary);
+/* Section label */
+.section-label {
+  margin: 18px 22px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: #8b94a3;
 }
 
-.menu-list ion-item ion-icon[slot="start"] {
-  font-size: 22px;
-  width: 28px;
-  text-align: center;
+/* Navigation rows */
+.menu-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px;
 }
 
-.menu-list ion-label {
-  font-size: 15px;
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 10px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #25303f;
+  font-family: inherit;
+  font-size: 14.5px;
   font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
+.menu-row:hover {
+  background: rgba(47, 111, 224, 0.08);
+}
+
+.menu-row:active {
+  background: rgba(47, 111, 224, 0.13);
+}
+
+.menu-icon {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 128, 255, 0.12);
+  color: #2f6fe0;
+  font-size: 19px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* Active route */
+.menu-row.active {
+  background: #2f6fe0;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(47, 111, 224, 0.28);
+}
+
+.menu-row.active .menu-icon {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Sign out */
+.menu-danger {
+  color: #d92d20;
+}
+
+.menu-danger .menu-icon {
+  background: rgba(217, 45, 32, 0.1);
+  color: #d92d20;
+}
+
+.menu-danger:hover {
+  background: rgba(217, 45, 32, 0.07);
+}
+
+.menu-danger:active {
+  background: rgba(217, 45, 32, 0.12);
+}
+
+/* Footer */
 .menu-footer {
-  padding: 24px 16px;
+  margin-top: auto;
+  padding: 22px 22px 26px;
+  border-top: 1px solid rgba(16, 24, 40, 0.07);
   text-align: center;
-  border-top: 1px solid var(--ion-color-light, #e9ecef);
-  margin-top: 16px;
 }
 
 .menu-footer p {
-  margin: 0 0 4px;
-  font-size: 12px;
-  color: var(--ion-color-medium, #6c757d);
+  margin: 0;
 }
 
-/* Dark Mode */
-@media (prefers-color-scheme: dark) {
-  ion-menu {
-    --background: var(--ion-color-dark-shade, #1e1e1e);
+.menu-footer .version {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #7a8494;
+}
+
+.menu-footer .tagline {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: #97a0ad;
+}
+
+/* Dark theme */
+:host-context(.dark) {
+  ion-menu,
+  .menu-content {
+    --background: #0f1217;
   }
 
-  .user-profile {
-    border-color: var(--ion-color-medium, #333);
+  .profile {
+    border-color: rgba(255, 255, 255, 0.08);
   }
 
-  .user-profile ion-label h4 {
-    color: var(--ion-color-light, #ffffff);
+  .profile-meta strong {
+    color: #f4f5f7;
   }
 
-  .menu-list ion-item:hover,
-  .menu-list ion-item.ion-activated {
-    --background: var(--ion-color-primary-tint, rgba(var(--ion-color-primary-rgb), 0.2));
+  .profile-pill {
+    color: #8b94a3;
+  }
+
+  .section-label {
+    color: #7d8796;
+  }
+
+  .menu-row {
+    color: #e6e9ef;
+  }
+
+  .menu-row:hover {
+    background: rgba(86, 148, 255, 0.12);
+  }
+
+  .menu-row:active {
+    background: rgba(86, 148, 255, 0.18);
+  }
+
+  .menu-icon {
+    background: rgba(86, 148, 255, 0.16);
+    color: #8db4ff;
+  }
+
+  .menu-row.active {
+    background: #2f6fe0;
+    color: #fff;
+  }
+
+  .menu-row.active .menu-icon {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+
+  .menu-danger {
+    color: #ff8b95;
+  }
+
+  .menu-danger .menu-icon {
+    background: rgba(255, 99, 113, 0.14);
+    color: #ff8b95;
+  }
+
+  .menu-danger:hover {
+    background: rgba(255, 99, 113, 0.08);
   }
 
   .menu-footer {
-    border-color: var(--ion-color-medium, #333);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .menu-footer .version {
+    color: #8b94a3;
+  }
+
+  .menu-footer .tagline {
+    color: #6d7684;
   }
 }

@@ -1,39 +1,10 @@
-<ion-header [translucent]="true">
+<ion-header>
   <ion-toolbar>
     <ion-buttons slot="start">
       <ion-menu-button></ion-menu-button>
     </ion-buttons>
     <ion-title>Konek Map</ion-title>
     <ion-buttons slot="end">
-      <ion-badge
-        class="status-badge"
-        [color]="
-          connectionStatus === 'connected'
-            ? 'success'
-            : connectionStatus === 'connecting'
-              ? 'warning'
-              : 'danger'
-        "
-      >
-        <ion-icon
-          [name]="
-            connectionStatus === 'connected'
-              ? 'checkmark-circle-outline'
-              : connectionStatus === 'connecting'
-                ? 'time-outline'
-                : 'warning-outline'
-          "
-          size="small"
-        ></ion-icon>
-        {{
-          connectionStatus === "connected"
-            ? "Live"
-            : connectionStatus === "connecting"
-              ? "Connecting"
-              : "Offline"
-        }}
-      </ion-badge>
-
       <ion-button fill="clear" aria-label="Map style" (click)="presentMapStyleSheet()">
         <ion-icon name="layers-outline" slot="icon-only"></ion-icon>
       </ion-button>
@@ -57,27 +28,14 @@
 
   <!-- Recenter FAB -->
   <ion-fab vertical="bottom" horizontal="end" slot="fixed">
-    <ion-fab-button [color]="isTracking ? 'primary' : 'medium'" (click)="centerOnUser()">
+    <ion-fab-button
+      aria-label="Center on me"
+      [color]="isTracking ? 'primary' : 'medium'"
+      (click)="centerOnUser()"
+    >
       <ion-icon name="locate-outline"></ion-icon>
     </ion-fab-button>
-    <ion-fab-list side="start">
-      <ion-fab-button (click)="refreshSquadLocations()" [disabled]="isLoadingSquad">
-        <ion-icon name="refresh-outline"></ion-icon>
-        <ion-label>Refresh squad</ion-label>
-      </ion-fab-button>
-      <ion-fab-button (click)="centerOnUser()">
-        <ion-icon name="compass-outline"></ion-icon>
-        <ion-label>Center on me</ion-label>
-      </ion-fab-button>
-    </ion-fab-list>
   </ion-fab>
-
-  @if (lastUpdate) {
-    <div class="last-update" [class.stale]="isStaleUpdate()">
-      <ion-icon name="time-outline" size="small"></ion-icon>
-      <span>Updated {{ getTimeAgo(lastUpdate) }}</span>
-    </div>
-  }
 
   @if (showSquadList) {
     <div class="squad-panel open">

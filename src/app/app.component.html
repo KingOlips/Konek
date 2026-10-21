@@ -1,61 +1,89 @@
 <ion-app>
   <ion-menu side="start" menuId="main-menu" contentId="main-content">
-    <ion-header>
-      <ion-toolbar color="primary">
-        <ion-title>Konek</ion-title>
-      </ion-toolbar>
-    </ion-header>
-
-    <ion-content>
+    <ion-content class="menu-content">
       @if (isAuthenticated) {
-        <ion-item class="user-profile" lines="none">
-          <ion-avatar slot="start">
-            <ion-icon name="person-circle-outline"></ion-icon>
-          </ion-avatar>
-          <ion-label>
-            <h4>{{ currentUser?.username }}</h4>
-            <p>Signed in</p>
-          </ion-label>
-        </ion-item>
+        <div class="profile">
+          <div class="profile-avatar">{{ initials }}</div>
+          <div class="profile-meta">
+            <strong>{{ currentUser?.username }}</strong>
+            <span class="profile-pill"><i class="profile-dot"></i>Active</span>
+          </div>
+        </div>
+
+        <p class="section-label">Navigation</p>
+        <nav class="menu-nav">
+          <a
+            class="menu-row"
+            routerLink="/map"
+            routerDirection="root"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: true }"
+            (click)="closeMenu()"
+          >
+            <span class="menu-icon"><ion-icon name="map-outline"></ion-icon></span>
+            <span class="menu-label">Map</span>
+          </a>
+
+          <a
+            class="menu-row"
+            routerLink="/squads"
+            routerDirection="root"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: true }"
+            (click)="closeMenu()"
+          >
+            <span class="menu-icon"><ion-icon name="people-outline"></ion-icon></span>
+            <span class="menu-label">My squads</span>
+          </a>
+
+          <a
+            class="menu-row"
+            routerLink="/settings"
+            routerDirection="root"
+            routerLinkActive="active"
+            [routerLinkActiveOptions]="{ exact: true }"
+            (click)="closeMenu()"
+          >
+            <span class="menu-icon"><ion-icon name="settings-outline"></ion-icon></span>
+            <span class="menu-label">Settings</span>
+          </a>
+        </nav>
+
+        <p class="section-label">Account</p>
+        <nav class="menu-nav">
+          <button type="button" class="menu-row menu-danger" (click)="signOut()">
+            <span class="menu-icon"><ion-icon name="log-out-outline"></ion-icon></span>
+            <span class="menu-label">Sign out</span>
+          </button>
+        </nav>
+      } @else {
+        <p class="section-label">Account</p>
+        <nav class="menu-nav">
+          <a
+            class="menu-row"
+            routerLink="/login"
+            routerDirection="root"
+            (click)="closeMenu()"
+          >
+            <span class="menu-icon"><ion-icon name="log-in-outline"></ion-icon></span>
+            <span class="menu-label">Sign in</span>
+          </a>
+
+          <a
+            class="menu-row"
+            routerLink="/register"
+            routerDirection="root"
+            (click)="closeMenu()"
+          >
+            <span class="menu-icon"><ion-icon name="person-add-outline"></ion-icon></span>
+            <span class="menu-label">Create account</span>
+          </a>
+        </nav>
       }
 
-      <ion-list lines="none" class="menu-list">
-        @if (isAuthenticated) {
-          <ion-item routerLink="/map" routerDirection="root" (click)="closeMenu()">
-            <ion-icon name="map-outline" slot="start"></ion-icon>
-            <ion-label>Map</ion-label>
-          </ion-item>
-
-          <ion-item routerLink="/squads" routerDirection="root" (click)="closeMenu()">
-            <ion-icon name="people-outline" slot="start"></ion-icon>
-            <ion-label>My squads</ion-label>
-          </ion-item>
-
-          <ion-item routerLink="/settings" routerDirection="root" (click)="closeMenu()">
-            <ion-icon name="settings-outline" slot="start"></ion-icon>
-            <ion-label>Settings</ion-label>
-          </ion-item>
-
-          <ion-item button (click)="signOut()">
-            <ion-icon name="log-out-outline" slot="start" color="danger"></ion-icon>
-            <ion-label color="danger">Sign out</ion-label>
-          </ion-item>
-        } @else {
-          <ion-item routerLink="/login" routerDirection="root" (click)="closeMenu()">
-            <ion-icon name="log-in-outline" slot="start"></ion-icon>
-            <ion-label>Sign in</ion-label>
-          </ion-item>
-
-          <ion-item routerLink="/register" routerDirection="root" (click)="closeMenu()">
-            <ion-icon name="person-add-outline" slot="start"></ion-icon>
-            <ion-label>Create account</ion-label>
-          </ion-item>
-        }
-      </ion-list>
-
       <div class="menu-footer">
-        <p>Konek v1.0.0</p>
-        <p>Stay connected with your squad</p>
+        <p class="version">Konek v1.0.0</p>
+        <p class="tagline">Stay connected with your squad</p>
       </div>
     </ion-content>
   </ion-menu>

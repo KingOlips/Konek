@@ -1,6 +1,16 @@
 /* Squads Page Styles */
 .squads-content {
-  --background: var(--ion-color-light, #f4f5f8);
+  --background: #f2f4f8;
+}
+
+.squads-wrap {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 16px 16px 32px;
+}
+
+ion-refresher-content {
+  --color: var(--ion-color-primary, #3880ff);
 }
 
 /* Empty State */
@@ -12,129 +22,306 @@
   min-height: 60vh;
   padding: 24px;
   text-align: center;
-  gap: 16px;
+  gap: 14px;
 }
 
-.empty-state ion-icon {
-  font-size: 80px;
-  color: var(--ion-color-medium, #adb5bd);
-  opacity: 0.5;
+.empty-icon {
+  width: 92px;
+  height: 92px;
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #eaf1ff, #dbe7ff);
+  color: #2f6bff;
+  box-shadow: 0 10px 24px rgba(47, 107, 255, 0.12);
+  margin-bottom: 4px;
+}
+
+.empty-icon ion-icon {
+  font-size: 40px;
+}
+
+.empty-icon.error {
+  background: linear-gradient(135deg, #fff1f1, #ffe3e3);
+  color: #d64545;
+  box-shadow: 0 10px 24px rgba(214, 69, 69, 0.12);
 }
 
 .empty-state h2 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
   color: var(--ion-color-dark, #1a1a2e);
 }
 
 .empty-state p {
   margin: 0;
-  font-size: 15px;
+  font-size: 14.5px;
   color: var(--ion-color-medium, #6c757d);
-  max-width: 280px;
+  max-width: 300px;
   line-height: 1.5;
 }
 
-.empty-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.empty-cta {
+  --border-radius: 14px;
   width: 100%;
   max-width: 280px;
-  margin-top: 8px;
+  height: 48px;
+  margin-top: 4px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
-.empty-actions ion-button {
-  --border-radius: 12px;
-  height: 48px;
-  font-weight: 600;
+/* Section header */
+.section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 2px 2px 10px;
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: #7a8391;
+}
+
+.section-header span {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #e8ebf1;
+  color: #6c757d;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /* Squads List */
 .squads-list {
   --background: transparent;
+  background: transparent;
+  padding: 0;
+}
+
+.squad-slide {
+  border-radius: 18px;
+  margin-bottom: 10px;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 4px 14px rgba(16, 24, 40, 0.06);
+  transition: box-shadow 0.2s ease;
+}
+
+.squad-slide:active {
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.05),
+    0 2px 8px rgba(16, 24, 40, 0.08);
 }
 
 .squad-item {
-  --background: white;
-  --border-radius: 16px;
-  margin-bottom: 12px;
-  --padding-start: 16px;
-  --padding-end: 16px;
-  height: auto;
-  min-height: 72px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  --background: #fff;
+  --border-width: 0;
+  --inner-border-width: 0;
+  --padding-start: 14px;
+  --padding-end: 12px;
+  --inner-padding-end: 0;
+  --min-height: 78px;
+  border-radius: 18px;
+  transition: background 0.2s ease;
 }
 
 .squad-item:hover,
 .squad-item.ion-activated {
-  --background: var(--ion-color-light, #f8f9fa);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --background: #f8fafc;
 }
 
 .squad-avatar {
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  margin-inline-end: 12px;
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--ion-color-primary) 0%, var(--ion-color-secondary) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
+  background: linear-gradient(135deg, #5a95ff 0%, #2f6bff 100%);
+  box-shadow: 0 4px 10px rgba(47, 107, 255, 0.25);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
 }
 
-.squad-avatar ion-icon {
-  font-size: 24px;
-  color: white;
+.squad-avatar.admin {
+  background: linear-gradient(135deg, #ffc14d 0%, #ff9a1f 100%);
+  box-shadow: 0 4px 10px rgba(255, 154, 31, 0.28);
 }
 
 .squad-item ion-label h3 {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--ion-color-dark, #1a1a2e);
 }
 
 .squad-item ion-label p {
-  margin: 0;
-  font-size: 13px;
+  margin: 5px 0 0;
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef1f6;
+  color: #5b6472;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.role-pill.admin {
+  background: #fff1d1;
+  color: #9a6400;
 }
 
 .member-count {
-  color: var(--ion-color-medium, #6c757d);
+  font-size: 12.5px;
   font-weight: 500;
+  color: #7a8391;
+  white-space: nowrap;
 }
 
-.squad-actions {
+.squad-end {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  margin-inline-start: 8px;
 }
 
-.squad-actions ion-badge {
-  --background: var(--ion-color-light, #f4f5f8);
-  --color: var(--ion-color-dark, #1a1a2e);
-  --border-radius: 8px;
-  --padding-start: 10px;
-  --padding-end: 10px;
-  --padding-top: 4px;
-  --padding-bottom: 4px;
-  font-family: monospace;
+.join-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid #e4e8ef;
+  border-radius: 9px;
+  background: #f6f8fb;
+  color: #4b5563;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.join-code ion-icon {
+  font-size: 13px;
+  color: #8b94a3;
+}
+
+.join-code:hover {
+  background: #eef3ff;
+  border-color: #cddbfa;
+  color: #2f6bff;
+}
+
+.join-code:hover ion-icon {
+  color: #2f6bff;
+}
+
+.join-code:active {
+  transform: scale(0.97);
+}
+
+.squad-chevron {
+  font-size: 16px;
+  color: #c6ccd6;
+}
+
+/* Keep the label readable on narrow phones by dropping the decorative chevron. */
+@media (max-width: 380px) {
+  .squad-chevron {
+    display: none;
+  }
+}
+
+/* Compact the code chip and labels on very small phones so nothing overlaps. */
+@media (max-width: 340px) {
+  .join-code {
+    padding: 6px 7px;
+    font-size: 10px;
+    gap: 0;
+  }
+
+  .join-code ion-icon {
+    display: none;
+  }
+
+  .squad-end {
+    gap: 0;
+    margin-inline-start: 6px;
+  }
+
+  .squad-item ion-label p {
+    gap: 6px;
+  }
+
+  .role-pill {
+    padding: 2px 6px;
+    font-size: 9.5px;
+    letter-spacing: 0.2px;
+  }
+
+  .member-count {
+    font-size: 12px;
+  }
+}
+
+ion-item-option {
+  width: 84px;
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  transition: background 0.2s ease;
+  letter-spacing: 0.2px;
 }
 
-.squad-actions ion-badge:hover {
-  --background: var(--ion-color-primary);
-  --color: white;
+.leave-option {
+  --background: #c5001a;
+  --color: #ffffff;
+}
+
+/* Add squad */
+.add-squad-btn {
+  display: block;
+  width: 100%;
+  margin: 6px 0 0;
+  height: 52px;
+  border: 1px dashed #c9d0da;
+  border-radius: 16px;
+  --color: var(--ion-color-primary, #3880ff);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 /* Loading State */
@@ -153,19 +340,6 @@
   font-size: 15px;
 }
 
-/* FAB */
-ion-fab-button {
-  --background: var(--ion-color-primary);
-  --color: white;
-  --box-shadow: 0 4px 16px rgba(var(--ion-color-primary-rgb), 0.4);
-}
-
-ion-fab-list ion-fab-button {
-  --background: white;
-  --color: var(--ion-color-dark, #1a1a2e);
-  --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
 /* Toast */
 .custom-toast {
   --border-radius: 12px;
@@ -173,40 +347,101 @@ ion-fab-list ion-fab-button {
   --color: white;
 }
 
-/* Dark Mode */
-@media (prefers-color-scheme: dark) {
+/* Dark Mode (body.dark + ion-palette-dark are applied by app.component) */
+:host-context(.dark) {
   .squads-content {
-    --background: var(--ion-color-dark, #121212);
+    --background: #0f1116;
   }
 
-  .empty-state ion-icon {
-    color: var(--ion-color-medium, #6c757d);
+  .section-header h2 {
+    color: #8b94a3;
   }
 
-  .empty-state h2 {
-    color: var(--ion-color-light, #ffffff);
+  .section-header span {
+    background: #1c212a;
+    color: #98a1af;
+  }
+
+  .squad-slide {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   }
 
   .squad-item {
-    --background: var(--ion-color-dark-shade, #1e1e1e);
+    --background: #171a20;
   }
 
   .squad-item:hover,
   .squad-item.ion-activated {
-    --background: var(--ion-color-medium, #2d2d2d);
+    --background: #1f232b;
   }
 
   .squad-item ion-label h3 {
-    color: var(--ion-color-light, #ffffff);
+    color: #f4f5f7;
   }
 
-  .squad-actions ion-badge {
-    --background: var(--ion-color-medium, #333);
-    --color: var(--ion-color-light, #ffffff);
+  .role-pill {
+    background: #232833;
+    color: #aab3c1;
   }
 
-  ion-fab-list ion-fab-button {
-    --background: var(--ion-color-dark-shade, #1e1e1e);
-    --color: var(--ion-color-light, #ffffff);
+  .role-pill.admin {
+    background: rgba(255, 176, 32, 0.14);
+    color: #ffc453;
+  }
+
+  .member-count {
+    color: #98a1af;
+  }
+
+  .join-code {
+    background: #1d222a;
+    border-color: #2a303a;
+    color: #c7cfdb;
+  }
+
+  .join-code ion-icon {
+    color: #8b94a3;
+  }
+
+  .join-code:hover {
+    background: #243049;
+    border-color: #38507c;
+    color: #9dbcff;
+  }
+
+  .squad-chevron {
+    color: #4a515d;
+  }
+
+  .add-squad-btn {
+    border-color: #333b47;
+  }
+
+  .leave-option {
+    --background: #d92b3f;
+    --color: #ffffff;
+  }
+
+  .empty-icon {
+    background: linear-gradient(135deg, #1b2330, #161c26);
+    color: #6aa0ff;
+    box-shadow: none;
+  }
+
+  .empty-icon.error {
+    background: linear-gradient(135deg, #2a1a1c, #241618);
+    color: #ff8a8a;
+  }
+
+  .empty-state h2 {
+    color: #f4f5f7;
+  }
+
+  .empty-state p {
+    color: #98a1af;
+  }
+
+  .loading-state {
+    color: #98a1af;
   }
 }

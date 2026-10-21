@@ -20,7 +20,7 @@ An Android mobile application for real-time location sharing with squad members,
 - **Ionic Framework 9** with **Angular 22** (Standalone Components only)
 - **Capacitor 8** for native device access
 - **Android** target (iOS not included yet)
-- **Leaflet 1.9** + OpenStreetMap for interactive maps
+- **Leaflet 1.9** + Esri World Street Map tiles for interactive maps (inverted in dark mode)
 - **RxJS** for reactive state management
 
 ### Backend

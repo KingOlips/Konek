@@ -1,21 +1,14 @@
 import { ChangeDetectorRef, Component, inject } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { Router, RouterLink } from "@angular/router";
+import { Router, RouterLink, RouterLinkActive } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { App } from "@capacitor/app";
 import {
   IonApp,
   IonContent,
-  IonHeader,
   IonIcon,
-  IonItem,
-  IonLabel,
-  IonList,
   IonMenu,
   IonRouterOutlet,
-  IonTitle,
-  IonToolbar,
-  IonAvatar,
   MenuController,
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
@@ -25,7 +18,6 @@ import {
   mapOutline,
   peopleOutline,
   personAddOutline,
-  personCircleOutline,
   settingsOutline,
 } from "ionicons/icons";
 import { AuthService, User } from "./core/services/auth.service";
@@ -39,18 +31,12 @@ import { BiometricService } from "./core/services/biometric.service";
   imports: [
     CommonModule,
     RouterLink,
+    RouterLinkActive,
     IonApp,
     IonRouterOutlet,
     IonMenu,
     IonContent,
-    IonHeader,
-    IonToolbar,
-    IonTitle,
-    IonList,
-    IonItem,
     IonIcon,
-    IonLabel,
-    IonAvatar,
   ],
 })
 export class AppComponent {
@@ -71,7 +57,6 @@ export class AppComponent {
       mapOutline,
       peopleOutline,
       personAddOutline,
-      personCircleOutline,
       settingsOutline,
     });
 
@@ -85,14 +70,24 @@ export class AppComponent {
     this.applyThemePreference();
   }
 
+  /** Up to two initials for the drawer avatar. */
+  get initials(): string {
+    const name = (this.currentUser?.username ?? "").trim();
+    if (!name) return "?";
+    const parts = name.split(/[\s._-]+/).filter(Boolean);
+    return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)).toUpperCase();
+  }
+
   /** Apply the persisted (or system) dark-mode preference at startup. */
   private applyThemePreference(): void {
     try {
       const stored = localStorage.getItem("konek_dark_mode");
       const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-      if (stored === "true" || (stored === null && prefersDark)) {
-        document.body.classList.add("dark");
-      }
+      const dark = stored === "true" || (stored === null && prefersDark);
+      // `dark` drives the app's own styles; `ion-palette-dark` switches Ionic's
+      // palette (it must sit on <html>, where Ionic sets the `md`/`ios` class).
+      document.body.classList.toggle("dark", dark);
+      document.documentElement.classList.toggle("ion-palette-dark", dark);
     } catch {
       // localStorage may be unavailable in private mode.
     }

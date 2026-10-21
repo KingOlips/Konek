@@ -1,4 +1,5 @@
 import {
+  AfterViewInit,
   ChangeDetectorRef,
   Component,
   ElementRef,
@@ -20,7 +21,6 @@ import {
   IonContent,
   IonFab,
   IonFabButton,
-  IonFabList,
   IonHeader,
   IonIcon,
   IonItem,
@@ -31,11 +31,11 @@ import {
   IonTitle,
   IonToolbar,
   LoadingController,
+  ToastController,
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
 import {
   checkmarkCircleOutline,
-  compassOutline,
   downloadOutline,
   layersOutline,
   locateOutline,
@@ -48,7 +48,6 @@ import {
   settingsOutline,
   timeOutline,
   trashOutline,
-  warningOutline,
 } from "ionicons/icons";
 import * as L from "leaflet";
 import type { Position } from "@capacitor/geolocation";
@@ -79,7 +78,6 @@ type MapStyle = "street" | "satellite" | "hybrid";
     IonMenuButton,
     IonFab,
     IonFabButton,
-    IonFabList,
     IonLabel,
     IonList,
     IonItem,
@@ -88,7 +86,7 @@ type MapStyle = "street" | "satellite" | "hybrid";
     IonSpinner,
   ],
 })
-export class MapPage implements OnInit, OnDestroy {
+export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild("mapContainer", { static: true })
   mapContainer!: ElementRef<HTMLDivElement>;
 
@@ -100,6 +98,7 @@ export class MapPage implements OnInit, OnDestroy {
   private readonly alertCtrl = inject(AlertController);
   private readonly loadingCtrl = inject(LoadingController);
   private readonly actionSheetCtrl = inject(ActionSheetController);
+  private readonly toastCtrl = inject(ToastController);
   private readonly cdr = inject(ChangeDetectorRef);
 
   private map: L.Map | null = null;
@@ -111,7 +110,12 @@ export class MapPage implements OnInit, OnDestroy {
   private watchId: string | null = null;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private compassTimer: ReturnType<typeof setInterval> | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private themeObserver: MutationObserver | null = null;
+  private sizeTimers: ReturnType<typeof setTimeout>[] = [];
   private lastUploadAt = 0;
+  private lastToastAt = 0;
+  private activeToast: HTMLIonToastElement | null = null;
   private isActive = true;
   private hasCentered = false;
   private geofences: Geofence[] = [];
@@ -125,13 +129,11 @@ export class MapPage implements OnInit, OnDestroy {
   showSquadList = false;
   isLoadingSquad = false;
   mapReady = false;
-  lastUpdate: Date | null = null;
   connectionStatus: "connected" | "connecting" | "disconnected" = "connecting";
 
   constructor() {
     addIcons({
       checkmarkCircleOutline,
-      compassOutline,
       downloadOutline,
       layersOutline,
       locateOutline,
@@ -144,18 +146,27 @@ export class MapPage implements OnInit, OnDestroy {
       settingsOutline,
       timeOutline,
       trashOutline,
-      warningOutline,
     });
   }
 
   async ngOnInit(): Promise<void> {
     this.currentUser = this.authService.getCurrentUser();
-    this.initMap();
     await this.setupLocationTracking();
     await this.geolocationService.startMotionTracking();
     this.startCompassUpdates();
     await this.loadSquadMembers();
     this.scheduleSquadPoll();
+  }
+
+  /**
+   * Leaflet measures its container once when it is created. Creating the map in
+   * ngOnInit ran before the Ionic page/menu layout settled, so it cached a tiny
+   * size and only painted a single tile in the top-left corner. Create it once
+   * the view exists, then invalidate whenever the container actually resizes.
+   */
+  ngAfterViewInit(): void {
+    this.initMap();
+    this.observeMapSize();
   }
 
   /** Rotate the heading arrow as the compass changes (between GPS fixes). */
@@ -176,7 +187,7 @@ export class MapPage implements OnInit, OnDestroy {
     if (!this.isActive) return;
     const delay = this.geolocationService.getPollInterval();
     this.pollTimer = setTimeout(async () => {
-      await this.refreshSquadLocations();
+      await this.refreshSquadLocations(false);
       this.scheduleSquadPoll();
     }, delay);
   }
@@ -196,14 +207,14 @@ export class MapPage implements OnInit, OnDestroy {
       center: [14.5995, 120.9842], // Manila fallback until GPS responds
       zoom: 14,
       zoomControl: false,
-      attributionControl: false,
+      attributionControl: false, // replaced with a compact custom control below
+      zoomAnimation: true,
+      fadeAnimation: true,
+      markerZoomAnimation: true,
     });
 
     this.tileLayers = {
-      street: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
-      }),
+      street: this.createStreetLayer(),
       satellite: L.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         { maxZoom: 19, attribution: "Tiles &copy; Esri" }
@@ -216,10 +227,71 @@ export class MapPage implements OnInit, OnDestroy {
     };
 
     this.tileLayers[this.mapStyle].addTo(this.map);
-    L.control.zoom({ position: "bottomright" }).addTo(this.map);
+
+    // Keep the zoom buttons clear of the recenter FAB (bottom-right).
+    L.control.zoom({ position: "topleft" }).addTo(this.map);
     L.control.scale({ position: "bottomleft", metric: true, imperial: false }).addTo(this.map);
+    L.control.attribution({ position: "bottomleft", prefix: false }).addTo(this.map);
+
+    // Follow the app theme: Settings toggles body.dark, so watch the class.
+    this.themeObserver = new MutationObserver(() => this.applyTileTheme());
+    this.themeObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    this.applyTileTheme();
 
     this.mapReady = true;
+  }
+
+  /** Clean, retina-less but crisp street basemap. No API key required. */
+  private createStreetLayer(): L.TileLayer {
+    return L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+      {
+        maxZoom: 19,
+        attribution:
+          'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &middot; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors',
+      }
+    );
+  }
+
+  /** Invert the basemap in dark mode (tiles themselves have no dark variant). */
+  private applyTileTheme(): void {
+    const dark = document.body.classList.contains("dark");
+    this.mapContainer.nativeElement.classList.toggle(
+      "map-dark-tiles",
+      dark && this.mapStyle === "street"
+    );
+  }
+
+  /** Keep Leaflet's cached size in sync with the real container size. */
+  private observeMapSize(): void {
+    const element = this.mapContainer.nativeElement;
+
+    if (typeof ResizeObserver !== "undefined") {
+      this.resizeObserver = new ResizeObserver(() => this.refreshMapSize());
+      this.resizeObserver.observe(element);
+    }
+
+    // Ionic's route transition, toolbar settle and web-font load can all change
+    // the container size a few frames after the first measurement.
+    requestAnimationFrame(() => this.refreshMapSize());
+    this.sizeTimers.push(
+      setTimeout(() => this.refreshMapSize(), 250),
+      setTimeout(() => this.refreshMapSize(), 750)
+    );
+
+    window.addEventListener("resize", this.onWindowResize);
+    window.addEventListener("orientationchange", this.onWindowResize);
+  }
+
+  private readonly onWindowResize = (): void => this.refreshMapSize();
+
+  /** Re-measure the container; Leaflet only reflows tiles on invalidateSize(). */
+  private refreshMapSize(): void {
+    if (!this.map || !this.mapContainer.nativeElement.isConnected) return;
+    this.map.invalidateSize({ animate: false });
   }
 
   private async setupLocationTracking(): Promise<void> {
@@ -263,13 +335,19 @@ export class MapPage implements OnInit, OnDestroy {
     const { latitude, longitude, accuracy, altitude, speed, heading } = position.coords;
     const headingDeg = heading ?? this.geolocationService.getHeading();
 
-    this.lastUpdate = new Date(position.timestamp);
     this.updateUserMarker(latitude, longitude, accuracy ?? 0, headingDeg);
-    if (!this.hasCentered) {
-      this.map?.setView([latitude, longitude], 16, { animate: true });
+    if (!this.hasCentered && this.map) {
+      this.map.setView([latitude, longitude], 16, { animate: true });
       this.hasCentered = true;
     }
     this.cdr.markForCheck();
+
+    // Confirm the fix with a top toast, at most once every 30s so tracking
+    // does not turn into a notification stream.
+    if (Date.now() - this.lastToastAt > 30000) {
+      this.lastToastAt = Date.now();
+      void this.showUpdateToast("Updated just now");
+    }
 
     // Throttle uploads/history to the adaptive cadence: 5s while moving,
     // 30s while stationary. The map marker itself still updates on every fix.
@@ -325,8 +403,9 @@ export class MapPage implements OnInit, OnDestroy {
 
     const html = `
       <div class="marker-pulse"></div>
+      <div class="marker-halo"></div>
       <div class="marker-core">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="#3880ff">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
           <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>
         </svg>
       </div>
@@ -335,18 +414,21 @@ export class MapPage implements OnInit, OnDestroy {
     const icon = L.divIcon({
       className: "user-marker",
       html,
-      iconSize: [40, 40],
-      iconAnchor: [20, 20],
+      iconSize: [44, 44],
+      iconAnchor: [22, 22],
+      popupAnchor: [0, -22],
     });
 
     if (!this.userMarker) {
       this.userMarker = L.marker(latLng, { icon, zIndexOffset: 1000 })
         .addTo(this.map)
-        .bindPopup("<b>You</b><br>Current location");
+        .bindPopup(this.selfPopup(accuracy));
     } else {
       this.userMarker.setLatLng(latLng);
       this.userMarker.setIcon(icon);
+      this.userMarker.getPopup()?.setContent(this.selfPopup(accuracy));
     }
+
 
     if (accuracy > 0) {
       if (!this.accuracyCircle) {
@@ -388,15 +470,22 @@ export class MapPage implements OnInit, OnDestroy {
     }
   }
 
-  async refreshSquadLocations(): Promise<void> {
+  /**
+   * Pull the latest squad positions. The background poll passes `false` so an
+   * automatic refresh stays silent; user-initiated refreshes get a toast.
+   */
+  async refreshSquadLocations(notify = true): Promise<void> {
     this.isLoadingSquad = true;
     try {
       const members = await firstValueFrom(this.squadService.getSquadLocations());
       this.squadMembers = members;
-      this.lastUpdate = new Date();
       this.updateSquadMarkers();
       this.cdr.markForCheck();
       this.checkGeofenceTransitions(members);
+      if (notify) {
+        this.lastToastAt = Date.now();
+        void this.showUpdateToast("Squad locations refreshed");
+      }
     } catch (error) {
       console.error("Failed to refresh squad locations:", error);
     } finally {
@@ -426,36 +515,85 @@ export class MapPage implements OnInit, OnDestroy {
       const existing = this.squadMarkers.get(id);
       if (existing) {
         existing.setLatLng(latLng);
+        existing.setIcon(this.squadIcon(member));
         existing.getPopup()?.setContent(popup);
         continue;
       }
 
-      const icon = L.divIcon({
-        className: "squad-marker",
-        html: `
-          <div class="marker-ring"></div>
-          <div class="marker-core">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="#3880ff">
-              <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-3.3 0-6 1.6-6 3.5V19h12v-1.5c0-1.9-2.7-3.5-6-3.5z"/>
-            </svg>
-          </div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-      });
-
-      const marker = L.marker(latLng, { icon, zIndexOffset: 500 })
+      const marker = L.marker(latLng, {
+        icon: this.squadIcon(member),
+        zIndexOffset: 500,
+      })
         .addTo(this.map)
         .bindPopup(popup);
       this.squadMarkers.set(id, marker);
     }
   }
 
-  private memberPopup(member: SquadMemberLocation): string {
+  /** Avatar-style marker: initials, role colour and a live dot. */
+  private squadIcon(member: SquadMemberLocation): L.DivIcon {
+    const online = this.isMemberOnline(member);
+    const admin = member.role === "admin";
+    return L.divIcon({
+      className: `squad-marker${admin ? " is-admin" : ""}`,
+      html: `
+        <div class="marker-ring"></div>
+        <div class="marker-core"><span>${this.initialsOf(member.username)}</span></div>
+        ${online ? '<div class="marker-status"></div>' : ""}`,
+      iconSize: [38, 38],
+      iconAnchor: [19, 19],
+      popupAnchor: [0, -20],
+    });
+  }
+
+  private initialsOf(username: string | undefined): string {
+    const name = (username ?? "").trim();
+    if (!name) return "?";
+    return this.escapeHtml(name.charAt(0).toUpperCase());
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  private selfPopup(accuracy: number): string {
+    const accuracyText = accuracy > 0 ? ` &plusmn;${Math.round(accuracy)} m` : "";
     return `
-      <div class="member-popup">
-        <strong>${member.username}</strong><br>
-        <small>${member.role === "admin" ? "Admin" : "Member"}</small><br>
-        <small>Last seen: ${this.getTimeAgo(new Date(member.timestamp))}</small>
+      <div class="konek-popup">
+        <div class="popup-avatar is-self">You</div>
+        <div class="popup-body">
+          <strong>${this.escapeHtml(this.currentUser?.username ?? "You")}</strong>
+          <div class="popup-meta">
+            <span class="popup-dot is-online"></span>
+            <span>Sharing live</span>
+          </div>
+          <small class="popup-sub">GPS accuracy${accuracyText}</small>
+        </div>
+      </div>`;
+  }
+
+  private memberPopup(member: SquadMemberLocation): string {
+    const online = this.isMemberOnline(member);
+    const role = member.role === "admin" ? "Admin" : "Member";
+    return `
+      <div class="konek-popup">
+        <div class="popup-avatar${member.role === "admin" ? " is-admin" : ""}">
+          ${this.initialsOf(member.username)}
+        </div>
+        <div class="popup-body">
+          <strong>${this.escapeHtml(member.username)}</strong>
+          <div class="popup-meta">
+            <span class="popup-role">${role}</span>
+            <span class="popup-dot${online ? " is-online" : ""}"></span>
+            <span>${online ? "Online" : "Offline"}</span>
+          </div>
+          <small class="popup-sub">Last seen ${this.getTimeAgo(new Date(member.timestamp))}</small>
+        </div>
       </div>`;
   }
 
@@ -528,14 +666,16 @@ export class MapPage implements OnInit, OnDestroy {
 
   centerOnUser(): void {
     if (this.userMarker && this.map) {
-      this.map.setView(this.userMarker.getLatLng(), 16, { animate: true });
+      this.map.flyTo(this.userMarker.getLatLng(), Math.max(this.map.getZoom(), 16), {
+        duration: 0.6,
+      });
     } else {
       void this.getInitialPosition();
     }
   }
 
   centerOnMember(member: SquadMemberLocation): void {
-    this.map?.setView([member.latitude, member.longitude], 17, { animate: true });
+    this.map?.flyTo([member.latitude, member.longitude], 17, { duration: 0.6 });
     this.squadMarkers.get(String(member.user_id))?.openPopup();
     this.showSquadList = false;
   }
@@ -545,6 +685,7 @@ export class MapPage implements OnInit, OnDestroy {
     Object.values(this.tileLayers).forEach((layer) => this.map?.removeLayer(layer));
     this.tileLayers[style].addTo(this.map);
     this.mapStyle = style;
+    this.applyTileTheme();
   }
 
   async presentMapStyleSheet(): Promise<void> {
@@ -673,9 +814,24 @@ export class MapPage implements OnInit, OnDestroy {
   // Helpers used by the template
   // ---------------------------------------------------------------------------
 
-  isStaleUpdate(): boolean {
-    if (!this.lastUpdate) return true;
-    return Date.now() - this.lastUpdate.getTime() > 60000;
+  /** Transient top-of-screen confirmation, replacing the old map pill. */
+  private async showUpdateToast(message: string): Promise<void> {
+    try {
+      if (this.activeToast) {
+        await this.activeToast.dismiss();
+        this.activeToast = null;
+      }
+      this.activeToast = await this.toastCtrl.create({
+        message,
+        icon: "checkmark-circle-outline",
+        duration: 2200,
+        position: "top",
+        cssClass: "update-toast",
+      });
+      await this.activeToast.present();
+    } catch {
+      // Toasts are cosmetic: never let one break location tracking.
+    }
   }
 
   isMemberOnline(member: SquadMemberLocation): boolean {
@@ -715,6 +871,15 @@ export class MapPage implements OnInit, OnDestroy {
       this.compassTimer = null;
     }
     void this.geolocationService.stopMotionTracking();
+
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    this.themeObserver?.disconnect();
+    this.themeObserver = null;
+    this.sizeTimers.forEach((timer) => clearTimeout(timer));
+    this.sizeTimers = [];
+    window.removeEventListener("resize", this.onWindowResize);
+    window.removeEventListener("orientationchange", this.onWindowResize);
 
     if (this.map) {
       this.squadMarkers.forEach((marker) => this.map?.removeLayer(marker));
