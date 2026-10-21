@@ -93,13 +93,13 @@ jobs:
         run: |
           gh release view apk-latest > /dev/null 2>&1 || \
             gh release create apk-latest \
-              --title "Konek test build" \
-              --notes "Rolling debug APK built from \`main\`. Download \`Konek-debug-*.apk\` on the phone and tap to install. Built by CI, so uninstall any locally built debug APK first (different signing key)."
+              --title "Konek builds" \
+              --notes "Rolling debug APK builds from \`main\`. Every build is kept so you can download older versions; the filename includes the commit SHA. Built by CI, so uninstall any locally built debug APK first (different signing key)."
 
-          # Keep only the newest APK on the rolling release.
-          gh release view apk-latest --json assets --jq '.assets[].name' \
-            | grep -E '^Konek-debug-[0-9a-f]+\.apk$' \
-            | while read -r name; do gh release delete-asset apk-latest "$name" --yes; done || true
+          # Keep every APK asset so the release page preserves the app's build history.
+          gh release edit apk-latest \
+            --title "Konek builds" \
+            --notes "Debug APK builds from \`main\`. Every build is kept so you can download older versions; the filename includes the commit SHA. Download the newest \`Konek-debug-*.apk\` on the phone and tap to install. Built by CI, so uninstall any locally built debug APK first (different signing key)."
 
           gh release upload apk-latest Konek-debug-*.apk --clobber
 
