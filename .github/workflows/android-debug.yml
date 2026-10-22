@@ -87,21 +87,29 @@ jobs:
           path: Konek-debug-*.apk
           retention-days: 14
 
-      - name: Publish to rolling release
+      - name: Publish this build as its own release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view apk-latest > /dev/null 2>&1 || \
-            gh release create apk-latest \
-              --title "Konek builds" \
-              --notes "Rolling debug APK builds from \`main\`. Every build is kept so you can download older versions; the filename includes the commit SHA. Built by CI, so uninstall any locally built debug APK first (different signing key)."
+          TAG="build-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          TITLE="Konek build #${GITHUB_RUN_NUMBER} (${GITHUB_SHA::7})"
+          BUILT_AT="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          SUBJECT="$(git log -1 --pretty=%s)"
+          NOTES="Built from \`main\` at commit \`${GITHUB_SHA}\` on ${BUILT_AT}.
 
-          # Keep every APK asset so the release page preserves the app's build history.
-          gh release edit apk-latest \
-            --title "Konek builds" \
-            --notes "Debug APK builds from \`main\`. Every build is kept so you can download older versions; the filename includes the commit SHA. Download the newest \`Konek-debug-*.apk\` on the phone and tap to install. Built by CI, so uninstall any locally built debug APK first (different signing key)."
+          ${SUBJECT}
 
-          gh release upload apk-latest Konek-debug-*.apk --clobber
+          Debug APK — tap the \`.apk\` below on your phone to install. Built by CI, so uninstall any locally built debug APK first (different signing key)."
+
+          # Every build gets its own release; older releases are never modified or removed.
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" Konek-debug-*.apk --clobber
+          else
+            gh release create "$TAG" Konek-debug-*.apk \
+              --title "$TITLE" \
+              --notes "$NOTES" \
+              --target "$GITHUB_SHA"
+          fi
 
           echo "### APK published" >> "$GITHUB_STEP_SUMMARY"
-          echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/apk-latest" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}" >> "$GITHUB_STEP_SUMMARY"
