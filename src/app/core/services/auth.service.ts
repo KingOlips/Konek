@@ -1,4 +1,4 @@
-import { Injectable, inject } from "@angular/core";
+﻿import { Injectable, inject } from "@angular/core";
 import { HttpClient, HttpHeaders } from "@angular/common/http";
 import {
   BehaviorSubject,
@@ -25,6 +25,7 @@ export interface User {
 
 export interface Credentials {
   username: string;
+  email?: string;
   password: string;
 }
 
@@ -88,12 +89,20 @@ export class AuthService {
     return this.sessionReady;
   }
 
-  register(credentials: Credentials): Observable<AuthResponse> {
+    register(credentials: Credentials): Observable<AuthResponse> {
     return this.authenticate("api_register.php", credentials);
   }
 
-  login(credentials: Credentials): Observable<AuthResponse> {
+    login(credentials: Credentials): Observable<AuthResponse> {
     return this.authenticate("api_login.php", credentials);
+  }
+
+  forgotPassword(email: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${environment.apiUrl}/api_forgot_password.php`, { email });
+  }
+
+  resetPassword(token: string, password: string): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${environment.apiUrl}/api_reset_password.php`, { token, password });
   }
 
   private authenticate(endpoint: string, credentials: Credentials): Observable<AuthResponse> {
@@ -215,3 +224,6 @@ export class AuthService {
     }
   }
 }
+
+
+

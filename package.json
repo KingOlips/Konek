@@ -30,6 +30,7 @@
     "@capacitor/preferences": "8.0.1",
     "@capacitor/status-bar": "8.0.4",
     "@ionic/angular": "^9.0.0",
+    "capacitor-auth-manager": "^2.4.4",
     "capacitor-native-biometric": "4.2.2",
     "ionicons": "^8.1.0",
     "leaflet": "^1.9.4",

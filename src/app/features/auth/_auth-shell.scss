@@ -1,3 +1,4 @@
+﻿@use "google-button";
 /* ---------------------------------------------------------------------------
  * Shared visual language for the login and registration screens.
  * Both pages import this partial so the two flows stay in sync.
@@ -856,3 +857,5 @@
     transition: none;
   }
 }
+
+

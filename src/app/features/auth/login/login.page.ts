@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, inject, OnInit } from "@angular/core";
+﻿import { ChangeDetectorRef, Component, inject, OnInit } from "@angular/core";
 import {
   FormBuilder,
   FormGroup,
@@ -7,6 +7,8 @@ import {
 } from "@angular/forms";
 import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
+import { HttpClient } from "@angular/common/http";
+import { environment } from "../../../../environments/environment";
 import {
   IonContent,
   IonInput,
@@ -26,6 +28,7 @@ import {
   fingerPrintOutline,
   locationOutline,
   lockClosedOutline,
+  logoGoogle,
   peopleOutline,
   personOutline,
   radioOutline,
@@ -55,6 +58,7 @@ export class LoginPage implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly biometricService = inject(BiometricService);
   private readonly alertCtrl = inject(AlertController);
+  private readonly http = inject(HttpClient);
   private readonly loadingCtrl = inject(LoadingController);
   private readonly cdr = inject(ChangeDetectorRef);
 
@@ -73,6 +77,7 @@ export class LoginPage implements OnInit {
       fingerPrintOutline,
       locationOutline,
       lockClosedOutline,
+      logoGoogle,
       peopleOutline,
       personOutline,
       radioOutline,
@@ -95,6 +100,79 @@ export class LoginPage implements OnInit {
 
   goToRegister(): void {
     void this.navCtrl.navigateRoot("/register", { animated: false, replaceUrl: true });
+  }
+
+  goToForgotPassword(): void {
+    void this.navCtrl.navigateRoot("/forgot-password", { animated: false, replaceUrl: true });
+  }
+
+  async onGoogleLogin(): Promise<void> {
+    this.isLoading = true;
+    const loading = await this.loadingCtrl.create({
+      message: "Signing in with Google...",
+      spinner: "crescent",
+    });
+    await loading.present();
+
+    try {
+      // Try native Google Auth first
+      let idToken: string | null = null;
+      try {
+        const { auth } = await import("capacitor-auth-manager");
+        const result = await auth.signIn("google");
+        if (result && result.user) {
+          // Get the ID token from the signed-in user
+          idToken = await auth.getIdToken();
+        }
+      } catch (nativeError) {
+        console.log("Native Google Auth not available:", nativeError);
+      }
+
+      // If native failed, try web Google Identity Services
+      if (!idToken) {
+        // For web, we would need to implement Google Identity Services
+        // For now, show an alert that Google Sign-In needs to be configured
+        await loading.dismiss();
+        const alert = await this.alertCtrl.create({
+          header: "Google Sign-In",
+          message: "Google Sign-In requires configuration in Google Cloud Console. Please use username/password for now, or set up Google OAuth credentials.",
+          buttons: ["OK"],
+        });
+        await alert.present();
+        return;
+      }
+
+      // Send ID token to backend
+      const response: any = await firstValueFrom(
+        this.http.post(`${environment.apiUrl}/api_google_login.php`, { id_token: idToken })
+      );
+
+      await loading.dismiss();
+
+      if (!response.success) {
+        await this.showError(response.message || "Google login failed");
+        return;
+      }
+
+      if (this.biometricAvailable && !(await this.biometricService.isEnabled())) {
+        await this.offerBiometricEnrollment(response.data.username, "");
+      } else {
+        await this.navigateToMap();
+      }
+    } catch (error: any) {
+      await loading.dismiss();
+      console.error("Google login error:", error);
+      const offline =
+        !error?.status || error?.status === 0 || error?.message === "Failed to fetch";
+      await this.showError(
+        offline
+          ? "Can't reach the Konek server. Check your internet connection and try again in a moment."
+          : (error?.error?.message ?? "Google login failed. Please try again.")
+      );
+    } finally {
+      this.isLoading = false;
+      this.cdr.markForCheck();
+    }
   }
 
   async onSubmit(): Promise<void> {
@@ -239,3 +317,10 @@ export class LoginPage implements OnInit {
     return this.loginForm.get("password");
   }
 }
+
+
+
+
+
+
+

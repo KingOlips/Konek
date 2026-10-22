@@ -1,0 +1,63 @@
+﻿.google-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--auth-line);
+  border-radius: 14px;
+  background: var(--auth-surface);
+  color: var(--auth-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.15s ease;
+
+  .google-icon {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+
+    svg {
+      display: block;
+    }
+  }
+
+  &:hover {
+    border-color: var(--auth-primary);
+    background: var(--auth-surface-soft);
+  }
+
+  &:active {
+    transform: scale(0.99);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--auth-primary);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+}
+
+:host-context(.dark) .google-button {
+  background: var(--auth-field);
+  border-color: var(--auth-line);
+  color: var(--auth-ink);
+
+  &:hover {
+    background: var(--auth-surface-soft);
+    border-color: var(--auth-primary);
+  }
+}

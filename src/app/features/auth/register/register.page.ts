@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, inject } from "@angular/core";
+﻿import { ChangeDetectorRef, Component, inject } from "@angular/core";
 import {
   FormBuilder,
   FormGroup,
@@ -26,6 +26,7 @@ import {
   eyeOffOutline,
   locationOutline,
   lockClosedOutline,
+  mailOutline,
   peopleOutline,
   personOutline,
   radioOutline,
@@ -63,13 +64,14 @@ export class RegisterPage {
   submitted = false;
 
   constructor() {
-    addIcons({
+        addIcons({
       alertCircleOutline,
       arrowForwardOutline,
       eyeOutline,
       eyeOffOutline,
       locationOutline,
       lockClosedOutline,
+      mailOutline,
       peopleOutline,
       personOutline,
       radioOutline,
@@ -128,8 +130,8 @@ export class RegisterPage {
     await loading.present();
 
     try {
-      const { username, password } = this.registerForm.value;
-      const response = await firstValueFrom(this.authService.register({ username, password }));
+      const { username, email, password } = this.registerForm.value;
+      const response = await firstValueFrom(this.authService.register({ username, email, password }));
       await loading.dismiss();
 
       if (!response.success) {
@@ -191,7 +193,10 @@ export class RegisterPage {
     return this.registerForm.get("password");
   }
 
-  get confirmPassword() {
-    return this.registerForm.get("confirmPassword");
-  }
+  get confirmPassword() { return this.registerForm.get("confirmPassword"); }  get email() { return this.registerForm.get("email"); }
 }
+
+
+
+
+
