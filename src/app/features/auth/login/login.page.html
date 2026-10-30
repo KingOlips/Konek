@@ -129,6 +129,16 @@
             }
           </div>
 
+          <div class="form-aux">
+            <button
+              type="button"
+              class="auth-link"
+              (click)="goToForgotPassword()"
+            >
+              Forgot password?
+            </button>
+          </div>
+
           <ion-button
             expand="block"
             type="submit"
@@ -144,21 +154,6 @@
             }
           </ion-button>
         </form>
-
-        @if (biometricAvailable) {
-          <div class="auth-divider"><span>or continue with</span></div>
-          <button
-            type="button"
-            class="biometric-button"
-            (click)="onBiometricLogin()"
-            [disabled]="isLoading"
-          >
-            <span class="bio-icon">
-              <ion-icon name="finger-print-outline" aria-hidden="true"></ion-icon>
-            </span>
-            <span>Use biometrics</span>
-          </button>
-        }
 
         <div class="auth-divider"><span>or continue with</span></div>
         <button
@@ -181,10 +176,6 @@
         <p class="auth-switch">
           New to Konek?
           <button type="button" class="auth-link" (click)="goToRegister()">Create an account</button>
-        </p>
-
-        <p class="auth-forgot">
-          <button type="button" class="auth-link" (click)="goToForgotPassword()">Forgot password?</button>
         </p>
 
         <div class="mobile-features" aria-hidden="true">

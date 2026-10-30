@@ -1,1 +1,96 @@
 @use "../auth-shell";
+
+/* ---------------------------------------------------------------------------
+ * Login uses a single, centered card instead of the split brand layout.
+ * ------------------------------------------------------------------------- */
+
+.auth-content {
+  --background: #08162f;
+}
+
+.auth-shell {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 28px 20px;
+  background:
+    radial-gradient(120% 120% at 84% 6%, rgba(34, 211, 238, 0.32) 0%, transparent 52%),
+    radial-gradient(100% 100% at 6% 100%, rgba(37, 99, 235, 0.58) 0%, transparent 62%),
+    linear-gradient(150deg, #08162f 0%, #0b2b4f 55%, #064b57 100%);
+}
+
+.brand-panel {
+  display: none;
+}
+
+.form-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 430px;
+  margin: auto;
+  padding: 34px 30px;
+  border-radius: 24px;
+  background: var(--auth-surface);
+  box-shadow: 0 28px 70px -20px rgba(2, 6, 23, 0.55);
+}
+
+.form-inner {
+  display: block;
+  flex: initial;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mobile-features {
+  display: none;
+}
+
+/* "Forgot password?" sits directly under the password field, right-aligned. */
+.form-aux {
+  display: flex;
+  justify-content: flex-end;
+  margin: -6px 0 -2px;
+}
+
+.form-aux .auth-link {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: none;
+  color: var(--auth-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-bottom-color: currentColor;
+  }
+
+  &:focus-visible {
+    border-radius: 3px;
+    outline: 2px solid var(--auth-primary);
+    outline-offset: 3px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-shell {
+    padding: 16px 14px;
+  }
+
+  .form-panel {
+    padding: 28px 20px;
+    border-radius: 20px;
+  }
+}

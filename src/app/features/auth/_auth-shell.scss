@@ -537,61 +537,6 @@
   }
 }
 
-.biometric-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 52px;
-  padding: 8px 14px;
-  border: 1.5px solid var(--auth-line);
-  border-radius: 14px;
-  background: transparent;
-  color: var(--auth-ink);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    border-color 0.18s ease,
-    background 0.18s ease,
-    transform 0.15s ease;
-
-  .bio-icon {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 9px;
-    background: rgba(var(--auth-primary-rgb), 0.1);
-    color: var(--auth-primary);
-
-    ion-icon {
-      font-size: 17px;
-    }
-  }
-
-  &:hover {
-    border-color: var(--auth-primary);
-    background: rgba(var(--auth-primary-rgb), 0.04);
-  }
-
-  &:active {
-    transform: scale(0.99);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--auth-primary);
-    outline-offset: 2px;
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: default;
-  }
-}
-
 .auth-switch {
   margin: 26px 0 0;
   color: var(--auth-muted);
@@ -840,10 +785,6 @@
   background: #0b1322;
 }
 
-:host-context(.dark) .biometric-button:hover {
-  background: rgba(96, 165, 250, 0.08);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .radar-dot {
     animation: none;
@@ -852,8 +793,7 @@
   .field-control,
   .field-icon,
   .field-action,
-  .submit-button::part(native),
-  .biometric-button {
+  .submit-button::part(native) {
     transition: none;
   }
 }

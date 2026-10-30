@@ -25,7 +25,6 @@ import {
   arrowForwardOutline,
   eyeOutline,
   eyeOffOutline,
-  fingerPrintOutline,
   locationOutline,
   lockClosedOutline,
   logoGoogle,
@@ -65,7 +64,6 @@ export class LoginPage implements OnInit {
   loginForm!: FormGroup;
   isLoading = false;
   showPassword = false;
-  biometricAvailable = false;
   submitted = false;
 
   constructor() {
@@ -74,7 +72,6 @@ export class LoginPage implements OnInit {
       arrowForwardOutline,
       eyeOutline,
       eyeOffOutline,
-      fingerPrintOutline,
       locationOutline,
       lockClosedOutline,
       logoGoogle,
@@ -90,12 +87,54 @@ export class LoginPage implements OnInit {
       username: ["", [Validators.required, Validators.minLength(3)]],
       password: ["", [Validators.required, Validators.minLength(6)]],
     });
-    void this.checkBiometricAvailability();
+    void this.promptSavedBiometricLogin();
   }
 
-  private async checkBiometricAvailability(): Promise<void> {
-    this.biometricAvailable = await this.biometricService.isAvailable();
-    this.cdr.markForCheck();
+  /**
+   * Returning users who previously enabled biometrics get prompted right away.
+   * New / signed-out users with no saved credentials simply see the form.
+   */
+  private async promptSavedBiometricLogin(): Promise<void> {
+    try {
+      if (!(await this.biometricService.isAvailable())) return;
+      if (!(await this.biometricService.isEnabled())) return;
+
+      const credentials = await this.biometricService.getCredentials();
+      if (!credentials) return;
+
+      this.isLoading = true;
+      const loading = await this.loadingCtrl.create({
+        message: "Signing in with biometrics...",
+        spinner: "crescent",
+      });
+      await loading.present();
+
+      const authenticated = await this.biometricService.authenticate("Sign in to Konek");
+      if (!authenticated) {
+        await loading.dismiss();
+        return;
+      }
+
+      const response = await firstValueFrom(this.authService.login(credentials));
+      await loading.dismiss();
+
+      if (response.success) {
+        await this.navigateToMap();
+      } else {
+        await this.showError("Biometric login failed. Please sign in with your password.");
+      }
+    } catch (error) {
+      console.error("Biometric login error:", error);
+      // Fall back to the password form; the loading overlay is dismissed below.
+      try {
+        await this.loadingCtrl.dismiss();
+      } catch {
+        // No overlay present - ignore.
+      }
+    } finally {
+      this.isLoading = false;
+      this.cdr.markForCheck();
+    }
   }
 
   goToRegister(): void {
@@ -154,11 +193,8 @@ export class LoginPage implements OnInit {
         return;
       }
 
-      if (this.biometricAvailable && !(await this.biometricService.isEnabled())) {
-        await this.offerBiometricEnrollment(response.data.username, "");
-      } else {
-        await this.navigateToMap();
-      }
+      // Google accounts have no password to store for biometric re-login.
+      await this.navigateToMap();
     } catch (error: any) {
       await loading.dismiss();
       console.error("Google login error:", error);
@@ -200,7 +236,7 @@ export class LoginPage implements OnInit {
         return;
       }
 
-      if (this.biometricAvailable && !(await this.biometricService.isEnabled())) {
+      if (await this.shouldOfferBiometricEnrollment()) {
         await this.offerBiometricEnrollment(username, password);
       } else {
         await this.navigateToMap();
@@ -219,6 +255,13 @@ export class LoginPage implements OnInit {
       this.isLoading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  private async shouldOfferBiometricEnrollment(): Promise<boolean> {
+    return (
+      (await this.biometricService.isAvailable()) &&
+      !(await this.biometricService.isEnabled())
+    );
   }
 
   private async offerBiometricEnrollment(username: string, password: string): Promise<void> {
@@ -247,48 +290,6 @@ export class LoginPage implements OnInit {
       ],
     });
     await alert.present();
-  }
-
-  async onBiometricLogin(): Promise<void> {
-    if (!this.biometricAvailable) return;
-
-    this.isLoading = true;
-    const loading = await this.loadingCtrl.create({
-      message: "Authenticating...",
-      spinner: "crescent",
-    });
-    await loading.present();
-
-    try {
-      const authenticated = await this.biometricService.authenticate("Sign in to Konek");
-      if (!authenticated) {
-        await loading.dismiss();
-        return;
-      }
-
-      const credentials = await this.biometricService.getCredentials();
-      if (!credentials) {
-        await loading.dismiss();
-        await this.showError("No saved credentials found. Please sign in with your password.");
-        return;
-      }
-
-      const response = await firstValueFrom(this.authService.login(credentials));
-      await loading.dismiss();
-
-      if (response.success) {
-        await this.navigateToMap();
-      } else {
-        await this.showError("Biometric login failed. Please use your password.");
-      }
-    } catch (error) {
-      await loading.dismiss();
-      console.error("Biometric login error:", error);
-      await this.showError("Biometric login failed. Please use your password.");
-    } finally {
-      this.isLoading = false;
-      this.cdr.markForCheck();
-    }
   }
 
   private async navigateToMap(): Promise<void> {

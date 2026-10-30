@@ -64,7 +64,7 @@ export class RegisterPage {
   submitted = false;
 
   constructor() {
-        addIcons({
+    addIcons({
       alertCircleOutline,
       arrowForwardOutline,
       eyeOutline,
@@ -88,6 +88,7 @@ export class RegisterPage {
             Validators.pattern(/^[a-zA-Z0-9_]+$/),
           ],
         ],
+        email: ["", [Validators.required, Validators.email]],
         password: ["", [Validators.required, Validators.minLength(6)]],
         confirmPassword: ["", [Validators.required]],
       },
@@ -193,7 +194,13 @@ export class RegisterPage {
     return this.registerForm.get("password");
   }
 
-  get confirmPassword() { return this.registerForm.get("confirmPassword"); }  get email() { return this.registerForm.get("email"); }
+  get confirmPassword() {
+    return this.registerForm.get("confirmPassword");
+  }
+
+  get email() {
+    return this.registerForm.get("email");
+  }
 }
 
 
