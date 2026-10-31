@@ -3,6 +3,18 @@ import { authGuard, guestGuard } from "./core/guards/auth.guard";
 
 export const routes: Routes = [
   {
+    path: "",
+    pathMatch: "full",
+    loadComponent: () =>
+      import("./features/auth/start/start.page").then((m) => m.StartPage),
+  },
+  {
+    path: "welcome",
+    loadComponent: () =>
+      import("./features/auth/welcome/welcome.page").then((m) => m.WelcomePage),
+    canActivate: [guestGuard],
+  },
+  {
     path: "login",
     loadComponent: () =>
       import("./features/auth/login/login.page").then((m) => m.LoginPage),
@@ -45,12 +57,7 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
-    path: "",
-    redirectTo: "map",
-    pathMatch: "full",
-  },
-  {
     path: "**",
-    redirectTo: "map",
+    redirectTo: "",
   },
 ];

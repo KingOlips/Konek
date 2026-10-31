@@ -1,0 +1,97 @@
+<ion-modal
+  class="member-sheet"
+  [isOpen]="isOpen"
+  [breakpoints]="[0, 0.42, 0.7]"
+  [initialBreakpoint]="0.42"
+  handleBehavior="cycle"
+  (ionModalDidDismiss)="sheetClosed.emit()"
+>
+  <ng-template>
+    <ion-header class="sheet-header">
+      <ion-toolbar>
+        <ion-title>{{ isSelf ? "Your location" : "Squad member" }}</ion-title>
+        <ion-buttons slot="end">
+          <ion-button fill="clear" aria-label="Close" (click)="sheetClosed.emit()">
+            <ion-icon name="close-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content class="sheet-content">
+      <div class="member-hero">
+        <div
+          class="hero-avatar"
+          [class.is-self]="isSelf"
+          [class.is-admin]="!isSelf && member?.role === 'admin'"
+        >
+          {{ isSelf ? "You" : initials }}
+        </div>
+
+        <div class="hero-meta">
+          <h2>
+            {{ displayName }}
+            @if (isSelf) {
+              <span class="you-tag">(you)</span>
+            }
+          </h2>
+          <div class="hero-badges">
+            @if (!isSelf) {
+              <span class="role-badge" [class.is-admin]="member?.role === 'admin'">
+                {{ roleLabel }}
+              </span>
+            }
+            <span class="status" [class.online]="statusOnline">
+              <i class="status-dot"></i>
+              {{ statusLabel }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-card">
+        <div class="detail-row">
+          <span class="row-icon"><ion-icon name="time-outline"></ion-icon></span>
+          <span class="row-label">Last update</span>
+          <span class="row-value">{{ lastUpdateLabel }}</span>
+        </div>
+
+        @if (isSelf) {
+          <div class="detail-row">
+            <span class="row-icon"><ion-icon name="locate-outline"></ion-icon></span>
+            <span class="row-label">GPS accuracy</span>
+            <span class="row-value">{{ accuracyLabel }}</span>
+          </div>
+        } @else {
+          <div class="detail-row">
+            <span class="row-icon" [class.is-low]="hasBattery && (member?.battery_level ?? 100) < 20">
+              <ion-icon [name]="batteryIcon"></ion-icon>
+            </span>
+            <span class="row-label">Battery</span>
+            <span class="row-value" [class.is-muted]="!hasBattery">{{ batteryLabel }}</span>
+          </div>
+
+          <div class="detail-row">
+            <span class="row-icon"><ion-icon name="navigate-outline"></ion-icon></span>
+            <span class="row-label">Distance away</span>
+            <span class="row-value">{{ distanceLabel }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="sheet-actions">
+        <ion-button expand="block" shape="round" (click)="centerRequested.emit()">
+          <ion-icon name="locate-outline" slot="start"></ion-icon>
+          {{ isSelf ? "Center on me" : "Center on map" }}
+        </ion-button>
+
+        @if (!isSelf) {
+          <ion-button expand="block" shape="round" fill="outline" (click)="openDirections()">
+            <ion-icon name="navigate-outline" slot="start"></ion-icon>
+            Directions
+          </ion-button>
+        }
+      </div>
+    </ion-content>
+  </ng-template>
+</ion-modal>

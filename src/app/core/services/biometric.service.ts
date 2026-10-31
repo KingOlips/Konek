@@ -21,6 +21,9 @@ export class BiometricService {
   private readonly CREDENTIALS_KEY = "konek_biometric_credentials";
   private readonly CREDENTIAL_SERVER = "konek.app";
 
+  /** Timestamp of the last successful biometric verification (ms). */
+  private lastVerifiedAt = 0;
+
   /**
    * Check if biometric authentication is available on the device.
    */
@@ -138,10 +141,20 @@ export class BiometricService {
         subtitle: "Biometric verification required",
         description: "Use your fingerprint or Face ID to unlock the app",
       });
+      this.lastVerifiedAt = Date.now();
       return true;
     } catch (error) {
       console.error("Biometric authentication failed:", error);
       return false;
     }
+  }
+
+  /**
+   * True when the user verified very recently. Used to avoid asking for a
+   * second prompt right after a biometric sign-in (the native dialog briefly
+   * backgrounds the WebView, which can retrigger the app-resume lock).
+   */
+  hasVerifiedRecently(windowMs = 30000): boolean {
+    return this.lastVerifiedAt > 0 && Date.now() - this.lastVerifiedAt < windowMs;
   }
 }

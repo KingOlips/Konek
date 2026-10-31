@@ -1,0 +1,43 @@
+<ion-content class="welcome-content" [fullscreen]="true">
+  <div class="welcome-shell">
+    <header class="welcome-brand">
+      <div class="welcome-mark">
+        <ion-icon name="location-outline" aria-hidden="true"></ion-icon>
+      </div>
+      <span class="welcome-name">Konek</span>
+    </header>
+
+    <main class="welcome-hero">
+      <div class="welcome-copy">
+        <span class="welcome-eyebrow">Squad tracking</span>
+        <h1>Stay close.<br /><span>Stay connected.</span></h1>
+        <p>
+          See your squad on one live map, get safety alerts when someone leaves
+          the area, and keep every check-in in sync.
+        </p>
+      </div>
+
+      <ul class="welcome-points">
+        <li>
+          <span class="point-icon"><ion-icon name="radio-outline" aria-hidden="true"></ion-icon></span>
+          <span>Live GPS updates</span>
+        </li>
+        <li>
+          <span class="point-icon"><ion-icon name="people-outline" aria-hidden="true"></ion-icon></span>
+          <span>Private squad channels</span>
+        </li>
+        <li>
+          <span class="point-icon"><ion-icon name="shield-checkmark-outline" aria-hidden="true"></ion-icon></span>
+          <span>Geofence safety alerts</span>
+        </li>
+      </ul>
+    </main>
+
+    <footer class="welcome-actions">
+      <ion-button expand="block" class="get-started-button" (click)="getStarted()">
+        <span>Get started</span>
+        <ion-icon name="arrow-forward-outline" slot="end" aria-hidden="true"></ion-icon>
+      </ion-button>
+    </footer>
+  </div>
+</ion-content>

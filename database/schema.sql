@@ -51,12 +51,19 @@ CREATE TABLE `locations` (
     `altitude` DECIMAL(10, 2) DEFAULT NULL,
     `speed` DECIMAL(10, 2) DEFAULT NULL,
     `heading` DECIMAL(5, 2) DEFAULT NULL,
+    `battery_level` TINYINT UNSIGNED DEFAULT NULL,
+    `is_charging` TINYINT(1) DEFAULT NULL,
     `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     INDEX `idx_user_timestamp` (`user_id`, `timestamp`),
     INDEX `idx_timestamp` (`timestamp`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migration for existing databases created before battery reporting:
+-- ALTER TABLE `locations`
+--     ADD COLUMN `battery_level` TINYINT UNSIGNED DEFAULT NULL AFTER `heading`,
+--     ADD COLUMN `is_charging` TINYINT(1) DEFAULT NULL AFTER `battery_level`;
 
 -- Geofences table (for future geofencing features)
 CREATE TABLE `geofences` (

@@ -1,0 +1,215 @@
+:host {
+  --welcome-ink: #f8fafc;
+  --welcome-muted: rgba(226, 240, 255, 0.76);
+  --welcome-accent: #67e8f9;
+  display: block;
+  height: 100%;
+}
+
+.welcome-content {
+  --background: #08162f;
+  --color: var(--welcome-ink);
+  --padding-start: 0;
+  --padding-end: 0;
+  --padding-top: 0;
+  --padding-bottom: 0;
+}
+
+.welcome-shell {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 100%;
+  width: 100%;
+  padding: calc(30px + env(safe-area-inset-top)) clamp(24px, 6vw, 72px)
+    calc(28px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(120% 120% at 84% 6%, rgba(34, 211, 238, 0.32) 0%, transparent 52%),
+    radial-gradient(100% 100% at 6% 100%, rgba(37, 99, 235, 0.58) 0%, transparent 62%),
+    linear-gradient(150deg, #08162f 0%, #0b2b4f 55%, #064b57 100%);
+}
+
+.welcome-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.welcome-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 8px 22px rgba(2, 6, 23, 0.28);
+  backdrop-filter: blur(12px);
+
+  ion-icon {
+    font-size: 24px;
+    color: #e0f2fe;
+  }
+}
+
+.welcome-name {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.welcome-hero {
+  width: 100%;
+  max-width: 1120px;
+  margin: auto;
+  padding: 36px 0;
+}
+
+.welcome-copy {
+  max-width: 560px;
+}
+
+.welcome-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--welcome-accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+
+  &::before {
+    content: "";
+    width: 18px;
+    height: 1px;
+    background: rgba(103, 232, 249, 0.65);
+  }
+}
+
+.welcome-hero h1 {
+  margin: 14px 0 14px;
+  font-size: clamp(2.1rem, 9vw, 2.9rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+
+  span {
+    color: var(--welcome-accent);
+  }
+}
+
+.welcome-hero p {
+  max-width: 38ch;
+  margin: 0;
+  color: var(--welcome-muted);
+  font-size: 95%;
+  line-height: 1.6;
+}
+
+.welcome-points {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 30px 0 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: rgba(226, 240, 255, 0.85);
+    font-size: 14px;
+    font-weight: 500;
+  }
+}
+
+.point-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+
+  ion-icon {
+    color: var(--welcome-accent);
+    font-size: 16px;
+  }
+}
+
+.welcome-actions {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.get-started-button {
+  --border-radius: 16px;
+  --background: linear-gradient(135deg, #22d3ee 0%, #2563eb 100%);
+  --background-activated: linear-gradient(135deg, #0ea5b7 0%, #1d4ed8 100%);
+  --background-hover: linear-gradient(135deg, #0ea5b7 0%, #1d4ed8 100%);
+  --box-shadow: 0 16px 34px -14px rgba(34, 211, 238, 0.75);
+  --color: #04121f;
+
+  height: 56px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: none;
+
+  ion-icon {
+    margin-left: 8px;
+    font-size: 19px;
+  }
+}
+
+@media (min-width: 900px) {
+  .welcome-shell {
+    padding-top: 52px;
+    padding-bottom: 46px;
+  }
+
+  .welcome-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    align-items: center;
+    gap: clamp(40px, 6vw, 88px);
+    padding: 56px 0;
+  }
+
+  .welcome-copy {
+    max-width: 620px;
+  }
+
+  .welcome-hero h1 {
+    font-size: clamp(3rem, 5vw, 4rem);
+  }
+
+  .welcome-hero p {
+    max-width: 44ch;
+    font-size: 17px;
+  }
+
+  .welcome-points {
+    gap: 18px;
+    margin-top: 0;
+  }
+
+  .welcome-points li {
+    font-size: 15px;
+  }
+
+  .welcome-actions {
+    max-width: 420px;
+  }
+}

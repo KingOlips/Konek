@@ -80,8 +80,14 @@ try {
         exit();
     }
     
-    // Get latest location for each squad member
-    $locationStmt = $db->prepare("
+    // Get latest location for each squad member.
+    // Battery columns are optional: if the database has not been migrated yet
+    // (older schema), retry the query without them so this endpoint keeps
+    // working.
+    $buildSql = function (bool $withBattery): string {
+        $batterySelect = $withBattery ? "l.battery_level, l.is_charging," : "";
+        $batterySubSelect = $withBattery ? "battery_level, is_charging," : "";
+        return "
         SELECT 
             u.id as user_id,
             u.username,
@@ -91,6 +97,7 @@ try {
             l.altitude,
             l.speed,
             l.heading,
+            $batterySelect
             l.timestamp,
             sm.role,
             s.id as squad_id,
@@ -99,16 +106,29 @@ try {
         INNER JOIN users u ON sm.user_id = u.id
         INNER JOIN squads s ON sm.squad_id = s.id
         LEFT JOIN (
-            SELECT user_id, latitude, longitude, accuracy, altitude, speed, heading, timestamp,
+            SELECT user_id, latitude, longitude, accuracy, altitude, speed, heading, $batterySubSelect timestamp,
                    ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY timestamp DESC) as rn
             FROM locations
         ) l ON u.id = l.user_id AND l.rn = 1
         WHERE sm.squad_id = :squad_id
         AND u.active_status = 1
         ORDER BY u.username
-    ");
+        ";
+    };
+
+    $locationStmt = $db->prepare($buildSql(true));
     $locationStmt->bindParam(":squad_id", $squadId, PDO::PARAM_INT);
-    $locationStmt->execute();
+    try {
+        $locationStmt->execute();
+    } catch (PDOException $e) {
+        if (strpos($e->getMessage(), "Unknown column") === false) {
+            throw $e;
+        }
+        error_log("locations table is missing battery columns; run the migration from database/schema.sql");
+        $locationStmt = $db->prepare($buildSql(false));
+        $locationStmt->bindParam(":squad_id", $squadId, PDO::PARAM_INT);
+        $locationStmt->execute();
+    }
     
     $locations = $locationStmt->fetchAll(PDO::FETCH_ASSOC);
     
@@ -124,6 +144,8 @@ try {
             "altitude" => $loc["altitude"] !== null ? (float)$loc["altitude"] : null,
             "speed" => $loc["speed"] !== null ? (float)$loc["speed"] : null,
             "heading" => $loc["heading"] !== null ? (float)$loc["heading"] : null,
+            "battery_level" => isset($loc["battery_level"]) && $loc["battery_level"] !== null ? (int)$loc["battery_level"] : null,
+            "is_charging" => isset($loc["is_charging"]) && $loc["is_charging"] !== null ? (bool)$loc["is_charging"] : null,
             "timestamp" => $loc["timestamp"],
             "role" => $loc["role"],
             "squad_id" => (int)$loc["squad_id"],

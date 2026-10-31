@@ -32,7 +32,6 @@ import {
   moonOutline,
   sunnyOutline,
   shieldOutline,
-  keyOutline,
   speedometerOutline,
   informationCircleOutline,
   chevronForwardOutline,
@@ -87,7 +86,6 @@ export class SettingsPage implements OnInit {
       moonOutline,
       sunnyOutline,
       shieldOutline,
-      keyOutline,
       speedometerOutline,
       informationCircleOutline,
       chevronForwardOutline,
@@ -407,10 +405,9 @@ export class SettingsPage implements OnInit {
     const alert = await this.alertCtrl.create({
       header: "About Konek",
       message: `
-        <p><strong>Version:</strong> 1.0.0</p>
-        <p><strong>Build:</strong> 2026.10.20</p>
-        <p>Konek helps you stay connected with your squad through real-time location sharing.</p>
-        <p>Built with Ionic, Angular, Capacitor, and Leaflet.</p>
+        <p class="about-version">Version 1.0.0</p>
+        <p>Stay connected with your squad through real-time location sharing.</p>
+        <p class="about-tech">Built with Ionic, Angular, Capacitor &amp; Leaflet.</p>
       `,
       buttons: ["OK"],
       cssClass: "about-alert",

@@ -50,7 +50,14 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: 100%;
+  /*
+   * Exactly the viewport height, never taller. The background column is
+   * percentage-sized, so letting it grow to fit a taller form (sign up has
+   * more fields than sign in) made the gradient visibly rescale when
+   * switching. Only the form side is allowed to scroll.
+   */
+  height: 100%;
+  min-height: 0;
   background: var(--auth-page-bg);
 }
 
@@ -257,7 +264,8 @@
   box-shadow:
     0 0 0 5px rgba(103, 232, 249, 0.14),
     0 0 18px rgba(103, 232, 249, 0.7);
-  animation: auth-ping 3s ease-in-out infinite;
+  /* No animation on purpose: the brand panel must stay pixel-identical while
+     the auth form swaps, so nothing on the left ever appears to move. */
 }
 
 .dot-1 {
@@ -268,25 +276,11 @@
 .dot-2 {
   top: 58%;
   left: 24%;
-  animation-delay: 1.2s;
 }
 
 .dot-3 {
   top: 70%;
   left: 68%;
-  animation-delay: 2.1s;
-}
-
-@keyframes auth-ping {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.35);
-    opacity: 1;
-  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -308,6 +302,22 @@
   width: 100%;
   max-width: 420px;
   margin: 0 auto;
+  /*
+   * Switching between sign in and sign up keeps the branded panel and the
+   * page background still and only cross-fades the form itself, so the two
+   * screens read as one page whose form swaps out. Deliberately opacity-only:
+   * any transform or card-level fade would look like the background moving.
+   */
+}
+
+@keyframes auth-form-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .form-header {
@@ -402,7 +412,14 @@
   --padding-end: 0;
   --padding-top: 0;
   --padding-bottom: 0;
-  --highlight-color: transparent;
+  /*
+   * Ionic paints the text caret with caret-color: var(--highlight-color), and
+   * also uses --highlight-color for its Material underline bar. Keep the
+   * colour visible (so the caret shows while typing) and collapse the bar's
+   * height instead - the field's own border is the focus indicator.
+   */
+  --highlight-color: var(--auth-primary);
+  --highlight-height: 0;
   font-size: 15px;
   font-weight: 500;
   letter-spacing: 0.005em;
@@ -600,8 +617,10 @@
   .auth-shell {
     display: grid;
     grid-template-columns: 1.08fr 0.92fr;
+    grid-template-rows: minmax(0, 1fr);
     width: 100%;
-    min-height: 100%;
+    height: 100%;
+    min-height: 0;
     margin: 0;
     overflow: hidden;
     border-radius: 0;
@@ -611,7 +630,9 @@
   .brand-panel {
     display: flex;
     align-items: center;
-    min-height: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
     padding: 46px;
   }
 
@@ -632,21 +653,79 @@
     margin-top: 42px;
   }
 
+  /*
+   * The copy is page-specific (sign in vs sign up), so cross-fade it. Only the
+   * text fades - the gradient and radar behind it stay perfectly still.
+   */
+  .brand-message {
+    animation: auth-form-in 0.24s ease-out both;
+  }
+
   .form-panel {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
+    height: 100%;
+    min-height: 0;
+    /* Only this column scrolls, so the brand panel above never changes size.
+       Its bar is hidden - an auth form shouldn't look like a scrollable page. */
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     margin-top: 0;
     padding: 48px 40px;
     border-radius: 0;
     box-shadow: none;
+    animation: auth-form-in 0.26s ease-out both;
   }
 
   .form-inner {
     max-width: 360px;
+    /* Auto margins centre the form when it fits and top-align it (keeps it
+       reachable) when the panel has to scroll. */
+    margin: auto;
+    animation: none;
   }
 
   .form-header h2 {
     font-size: 30px;
+  }
+
+  .form-panel::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
+ * Short laptop windows: tighten the form so sign up fits without scrolling in
+ * the first place. The brand panel keeps its exact viewport height either way.
+ */
+@media (min-width: 900px) and (max-height: 760px) {
+  .form-panel {
+    padding: 28px 40px;
+  }
+
+  .form-header {
+    margin-bottom: 18px;
+  }
+
+  .form-header h2 {
+    font-size: 26px;
+  }
+
+  .auth-form {
+    gap: 12px;
+  }
+
+  .field-control {
+    min-height: 48px;
+  }
+
+  .auth-switch {
+    margin-top: 18px;
+  }
+
+  .auth-note {
+    margin-top: 12px;
   }
 }
 
@@ -659,6 +738,11 @@
   .form-panel {
     display: flex;
     flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    /* The gradient lives here, so this panel must keep a fixed height and the
+       card inside it scrolls instead. */
+    overflow: hidden;
     margin-top: 0;
     padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
     border-radius: 0;
@@ -673,11 +757,31 @@
     display: flex;
     flex: 1;
     flex-direction: column;
+    min-height: 0;
+    /* The card is the only scrolling surface on phones. */
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     max-width: none;
     padding: 22px 20px;
     border-radius: 0;
     background: var(--auth-surface);
     box-shadow: none;
+  }
+
+  /*
+   * Fade the card's contents rather than the card itself: the white surface
+   * and the gradient behind it must stay put, otherwise the background reads
+   * as flashing when the form swaps.
+   */
+  .form-header,
+  .auth-form,
+  .auth-divider,
+  .google-button,
+  .auth-switch,
+  .mobile-features,
+  .auth-note {
+    animation: auth-form-in 0.24s ease-out both;
   }
 
   .form-header {
@@ -717,6 +821,10 @@
     margin-top: 10px;
     padding-top: 0;
     font-size: 11px;
+  }
+
+  .form-inner::-webkit-scrollbar {
+    display: none;
   }
 
   .mobile-features {
@@ -787,6 +895,19 @@
 
 @media (prefers-reduced-motion: reduce) {
   .radar-dot {
+    animation: none;
+  }
+
+  .form-panel,
+  .form-inner,
+  .brand-message,
+  .form-header,
+  .auth-form,
+  .auth-divider,
+  .google-button,
+  .auth-switch,
+  .mobile-features,
+  .auth-note {
     animation: none;
   }
 

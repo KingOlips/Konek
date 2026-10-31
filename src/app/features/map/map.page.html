@@ -15,10 +15,6 @@
           <ion-badge color="danger" class="squad-count">{{ squadMembers.length }}</ion-badge>
         }
       </ion-button>
-
-      <ion-button fill="clear" aria-label="More options" (click)="presentMoreSheet()">
-        <ion-icon name="settings-outline" slot="icon-only"></ion-icon>
-      </ion-button>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
@@ -119,3 +115,17 @@
     </div>
   }
 </ion-content>
+
+<app-member-detail-sheet
+  [isOpen]="detailSheetOpen"
+  [isSelf]="selectedIsSelf"
+  [member]="liveSelectedMember"
+  [selfUsername]="currentUser?.username ?? ''"
+  [isOnline]="liveSelectedMember ? isMemberOnline(liveSelectedMember) : false"
+  [isTracking]="isTracking"
+  [accuracy]="lastAccuracy"
+  [updatedAt]="lastFixAt"
+  [distanceMeters]="selectedDistanceMeters"
+  (sheetClosed)="closeDetailSheet()"
+  (centerRequested)="centerOnSelection()"
+/>

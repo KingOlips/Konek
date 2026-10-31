@@ -9,7 +9,7 @@ import {
   inject,
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { Router, RouterLink } from "@angular/router";
+import { RouterLink } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import {
   ActionSheetController,
@@ -30,33 +30,27 @@ import {
   IonSpinner,
   IonTitle,
   IonToolbar,
-  LoadingController,
   ToastController,
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
 import {
   checkmarkCircleOutline,
-  downloadOutline,
   layersOutline,
   locateOutline,
-  logOutOutline,
-  mapOutline,
   peopleOutline,
-  personAddOutline,
   personCircleOutline,
   refreshOutline,
-  settingsOutline,
-  timeOutline,
-  trashOutline,
 } from "ionicons/icons";
 import * as L from "leaflet";
 import type { Position } from "@capacitor/geolocation";
 
 import { AuthService, User } from "../../core/services/auth.service";
+import { BatteryService } from "../../core/services/battery.service";
 import { LocationService } from "../../core/services/location.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
 import { SquadService } from "../../core/services/squad.service";
 import { Geofence, SquadMemberLocation } from "../../core/models/location.models";
+import { MemberDetailSheetComponent } from "./member-detail-sheet/member-detail-sheet.component";
 
 type MapStyle = "street" | "satellite" | "hybrid";
 
@@ -84,6 +78,7 @@ type MapStyle = "street" | "satellite" | "hybrid";
     IonAvatar,
     IonBadge,
     IonSpinner,
+    MemberDetailSheetComponent,
   ],
 })
 export class MapPage implements OnInit, AfterViewInit, OnDestroy {
@@ -91,12 +86,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   mapContainer!: ElementRef<HTMLDivElement>;
 
   private readonly authService = inject(AuthService);
+  private readonly batteryService = inject(BatteryService);
   private readonly locationService = inject(LocationService);
   private readonly geolocationService = inject(GeolocationService);
   private readonly squadService = inject(SquadService);
-  private readonly router = inject(Router);
   private readonly alertCtrl = inject(AlertController);
-  private readonly loadingCtrl = inject(LoadingController);
   private readonly actionSheetCtrl = inject(ActionSheetController);
   private readonly toastCtrl = inject(ToastController);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -106,10 +100,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private accuracyCircle: L.Circle | null = null;
   private squadMarkers = new Map<string, L.Marker>();
   private tileLayers: Record<MapStyle, L.TileLayer> | null = null;
+  private streetFallback: L.TileLayer | null = null;
+  private readonly tileErrorCounts: Record<MapStyle, number> = {
+    street: 0,
+    satellite: 0,
+    hybrid: 0,
+  };
   private geofenceLayers: L.Circle[] = [];
   private watchId: string | null = null;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private compassTimer: ReturnType<typeof setInterval> | null = null;
+  /** Continuous beam rotation in unwrapped degrees (tracks past 0°/360°). */
+  private headingDeg = 0;
   private resizeObserver: ResizeObserver | null = null;
   private themeObserver: MutationObserver | null = null;
   private sizeTimers: ReturnType<typeof setTimeout>[] = [];
@@ -121,6 +123,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private geofences: Geofence[] = [];
   private insideGeofence = new Map<string, boolean>();
   private activeSquadId: number | null = null;
+  private selectedMember: SquadMemberLocation | null = null;
 
   currentUser: User | null = null;
   squadMembers: SquadMemberLocation[] = [];
@@ -130,27 +133,27 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   isLoadingSquad = false;
   mapReady = false;
   connectionStatus: "connected" | "connecting" | "disconnected" = "connecting";
+  /** GPS accuracy (metres) of the user's latest fix, for the self sheet. */
+  lastAccuracy: number | null = null;
+  /** ISO timestamp of the user's latest fix, for the self sheet. */
+  lastFixAt: string | null = null;
+  detailSheetOpen = false;
+  selectedIsSelf = false;
 
   constructor() {
     addIcons({
       checkmarkCircleOutline,
-      downloadOutline,
       layersOutline,
       locateOutline,
-      logOutOutline,
-      mapOutline,
       peopleOutline,
-      personAddOutline,
       personCircleOutline,
       refreshOutline,
-      settingsOutline,
-      timeOutline,
-      trashOutline,
     });
   }
 
   async ngOnInit(): Promise<void> {
     this.currentUser = this.authService.getCurrentUser();
+    void this.batteryService.init();
     await this.setupLocationTracking();
     await this.geolocationService.startMotionTracking();
     this.startCompassUpdates();
@@ -169,16 +172,22 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.observeMapSize();
   }
 
-  /** Rotate the heading arrow as the compass changes (between GPS fixes). */
+  /**
+   * Sweep the flashlight beam as the compass changes (between GPS fixes).
+   * The angle is unwrapped so passing north (359° -> 1°) continues forward
+   * instead of spinning almost a full turn backwards.
+   */
   private startCompassUpdates(): void {
     this.compassTimer = setInterval(() => {
       const heading = this.geolocationService.getHeading();
       const arrow = this.mapContainer.nativeElement.querySelector(
         ".marker-heading"
       ) as HTMLElement | null;
-      if (arrow) {
-        arrow.style.transform = `rotate(${heading}deg)`;
-      }
+      if (!arrow) return;
+
+      const delta = (((heading - (this.headingDeg % 360)) % 360) + 540) % 360 - 180;
+      this.headingDeg += delta;
+      arrow.style.transform = `rotate(${this.headingDeg}deg)`;
     }, 500);
   }
 
@@ -215,15 +224,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     this.tileLayers = {
       street: this.createStreetLayer(),
-      satellite: L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        { maxZoom: 19, attribution: "Tiles &copy; Esri" }
-      ),
-      hybrid: L.tileLayer("https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
-        maxZoom: 20,
-        subdomains: ["mt0", "mt1", "mt2", "mt3"],
-        attribution: "&copy; Google",
-      }),
+      satellite: this.createSatelliteLayer(),
+      hybrid: this.createHybridLayer(),
     };
 
     this.tileLayers[this.mapStyle].addTo(this.map);
@@ -244,16 +246,78 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.mapReady = true;
   }
 
-  /** Clean, retina-less but crisp street basemap. No API key required. */
+  /** Clean, crisp street basemap. No API key required. */
   private createStreetLayer(): L.TileLayer {
-    return L.tileLayer(
+    const layer = L.tileLayer(
       "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
       {
         maxZoom: 19,
+        // Esri has no street detail past ~z17 in many regions: it answers with
+        // tiles reading "Map data not yet available". Capping the native zoom
+        // makes Leaflet upscale the last real tile instead of requesting those.
+        maxNativeZoom: 17,
         attribution:
           'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &middot; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors',
       }
     );
+    this.watchTileErrors(layer, "street");
+    return layer;
+  }
+
+  private createSatelliteLayer(): L.TileLayer {
+    const layer = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        maxZoom: 19,
+        // Imagery coverage is uneven; z18 is the safe ceiling worldwide.
+        maxNativeZoom: 18,
+        attribution: "Tiles &copy; Esri",
+      }
+    );
+    this.watchTileErrors(layer, "satellite");
+    return layer;
+  }
+
+  private createHybridLayer(): L.TileLayer {
+    const layer = L.tileLayer("https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
+      maxZoom: 20,
+      subdomains: ["mt0", "mt1", "mt2", "mt3"],
+      attribution: "&copy; Google",
+    });
+    this.watchTileErrors(layer, "hybrid");
+    return layer;
+  }
+
+  /**
+   * When a tile provider keeps failing (offline CDN, blocked host, missing
+   * coverage), fall back to OpenStreetMap so panning never leaves a blank
+   * "map data not yet available" grid behind.
+   */
+  private watchTileErrors(layer: L.TileLayer, style: MapStyle): void {
+    layer.on("tileerror", () => {
+      if (!this.map || this.mapStyle !== style) return;
+      if (style !== "street" || this.streetFallback) return;
+
+      this.tileErrorCounts.street += 1;
+      if (this.tileErrorCounts.street < 4) return;
+
+      this.switchToOsmFallback();
+    });
+  }
+
+  private switchToOsmFallback(): void {
+    if (!this.map || !this.tileLayers || this.streetFallback) return;
+
+    this.map.removeLayer(this.tileLayers.street);
+    const fallback = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    });
+    this.streetFallback = fallback;
+    this.tileLayers.street = fallback;
+    fallback.addTo(this.map);
+    this.applyTileTheme();
   }
 
   /** Invert the basemap in dark mode (tiles themselves have no dark variant). */
@@ -334,6 +398,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private onPositionUpdate(position: Position): void {
     const { latitude, longitude, accuracy, altitude, speed, heading } = position.coords;
     const headingDeg = heading ?? this.geolocationService.getHeading();
+    this.lastAccuracy = accuracy ?? null;
+    this.lastFixAt = new Date(position.timestamp).toISOString();
 
     this.updateUserMarker(latitude, longitude, accuracy ?? 0, headingDeg);
     if (!this.hasCentered && this.map) {
@@ -357,6 +423,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.lastUploadAt = now;
 
+    const battery = this.batteryService.getBatteryInfo();
     this.locationService
       .updateLocation({
         latitude,
@@ -365,6 +432,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         altitude: altitude ?? undefined,
         speed: speed ?? undefined,
         heading: headingDeg || undefined,
+        battery_level: battery.level ?? undefined,
+        is_charging: battery.charging ?? undefined,
       })
       .subscribe({
         next: () => {
@@ -416,17 +485,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       html,
       iconSize: [44, 44],
       iconAnchor: [22, 22],
-      popupAnchor: [0, -22],
     });
 
     if (!this.userMarker) {
       this.userMarker = L.marker(latLng, { icon, zIndexOffset: 1000 })
         .addTo(this.map)
-        .bindPopup(this.selfPopup(accuracy));
+        .on("click", () => {
+          this.openSelfDetail();
+          this.centerOnUser();
+        });
     } else {
       this.userMarker.setLatLng(latLng);
       this.userMarker.setIcon(icon);
-      this.userMarker.getPopup()?.setContent(this.selfPopup(accuracy));
     }
 
 
@@ -510,13 +580,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
       const id = String(member.user_id);
       const latLng = L.latLng(member.latitude, member.longitude);
-      const popup = this.memberPopup(member);
 
       const existing = this.squadMarkers.get(id);
       if (existing) {
         existing.setLatLng(latLng);
         existing.setIcon(this.squadIcon(member));
-        existing.getPopup()?.setContent(popup);
         continue;
       }
 
@@ -525,7 +593,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         zIndexOffset: 500,
       })
         .addTo(this.map)
-        .bindPopup(popup);
+        .on("click", () => this.openMemberDetail(member.user_id));
       this.squadMarkers.set(id, marker);
     }
   }
@@ -559,42 +627,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
-  }
-
-  private selfPopup(accuracy: number): string {
-    const accuracyText = accuracy > 0 ? ` &plusmn;${Math.round(accuracy)} m` : "";
-    return `
-      <div class="konek-popup">
-        <div class="popup-avatar is-self">You</div>
-        <div class="popup-body">
-          <strong>${this.escapeHtml(this.currentUser?.username ?? "You")}</strong>
-          <div class="popup-meta">
-            <span class="popup-dot is-online"></span>
-            <span>Sharing live</span>
-          </div>
-          <small class="popup-sub">GPS accuracy${accuracyText}</small>
-        </div>
-      </div>`;
-  }
-
-  private memberPopup(member: SquadMemberLocation): string {
-    const online = this.isMemberOnline(member);
-    const role = member.role === "admin" ? "Admin" : "Member";
-    return `
-      <div class="konek-popup">
-        <div class="popup-avatar${member.role === "admin" ? " is-admin" : ""}">
-          ${this.initialsOf(member.username)}
-        </div>
-        <div class="popup-body">
-          <strong>${this.escapeHtml(member.username)}</strong>
-          <div class="popup-meta">
-            <span class="popup-role">${role}</span>
-            <span class="popup-dot${online ? " is-online" : ""}"></span>
-            <span>${online ? "Online" : "Offline"}</span>
-          </div>
-          <small class="popup-sub">Last seen ${this.getTimeAgo(new Date(member.timestamp))}</small>
-        </div>
-      </div>`;
   }
 
   // ---------------------------------------------------------------------------
@@ -676,8 +708,68 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   centerOnMember(member: SquadMemberLocation): void {
     this.map?.flyTo([member.latitude, member.longitude], 17, { duration: 0.6 });
-    this.squadMarkers.get(String(member.user_id))?.openPopup();
     this.showSquadList = false;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Member detail sheet (tap on a marker)
+  // ---------------------------------------------------------------------------
+
+  openMemberDetail(userId: number): void {
+    const member = this.squadMembers.find((m) => m.user_id === userId);
+    if (!member) return;
+    this.selectedMember = member;
+    this.selectedIsSelf = false;
+    this.detailSheetOpen = true;
+    // Leaflet click handlers run outside Angular's change detection
+    // (zoneless app), so schedule a render for the sheet state change.
+    this.cdr.markForCheck();
+    // Bring the map to the tapped person while the sheet slides up.
+    this.centerOnMember(member);
+  }
+
+  openSelfDetail(): void {
+    this.selectedMember = null;
+    this.selectedIsSelf = true;
+    this.detailSheetOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  closeDetailSheet(): void {
+    this.detailSheetOpen = false;
+    this.cdr.markForCheck();
+  }
+
+  /** The selected member kept in sync with the latest squad poll. */
+  get liveSelectedMember(): SquadMemberLocation | null {
+    const selected = this.selectedMember;
+    if (!selected) return null;
+    return (
+      this.squadMembers.find((m) => m.user_id === selected.user_id) ?? selected
+    );
+  }
+
+  /** Distance in metres between the user and the selected member. */
+  get selectedDistanceMeters(): number | null {
+    const member = this.liveSelectedMember;
+    const origin = this.userMarker?.getLatLng();
+    if (!member || !origin) return null;
+    return this.geolocationService.calculateDistance(
+      origin.lat,
+      origin.lng,
+      member.latitude,
+      member.longitude
+    );
+  }
+
+  centerOnSelection(): void {
+    if (this.selectedIsSelf) {
+      this.centerOnUser();
+    } else {
+      const member = this.liveSelectedMember;
+      if (member) this.centerOnMember(member);
+    }
+    this.closeDetailSheet();
   }
 
   changeMapStyle(style: MapStyle): void {
@@ -701,113 +793,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     await sheet.present();
   }
 
-  async presentMoreSheet(): Promise<void> {
-    const sheet = await this.actionSheetCtrl.create({
-      header: "Konek",
-      buttons: [
-        {
-          text: "Settings",
-          icon: "settings-outline",
-          handler: () => void this.router.navigate(["/settings"]),
-        },
-        {
-          text: "Export history",
-          icon: "download-outline",
-          handler: () => void this.exportLocationHistory(),
-        },
-        {
-          text: "Clear history",
-          icon: "trash-outline",
-          handler: () => void this.clearLocationHistory(),
-        },
-        {
-          text: "Sign out",
-          icon: "log-out-outline",
-          role: "destructive",
-          handler: () => void this.logout(),
-        },
-        { text: "Cancel", role: "cancel" },
-      ],
-    });
-    await sheet.present();
-  }
-
   toggleSquadList(): void {
     this.showSquadList = !this.showSquadList;
-  }
-
-  async exportLocationHistory(): Promise<void> {
-    const sheet = await this.actionSheetCtrl.create({
-      header: "Export location history",
-      buttons: [
-        { text: "JSON", handler: () => void this.doExport("json") },
-        { text: "CSV", handler: () => void this.doExport("csv") },
-        { text: "Cancel", role: "cancel" },
-      ],
-    });
-    await sheet.present();
-  }
-
-  private async doExport(format: "json" | "csv"): Promise<void> {
-    const loading = await this.loadingCtrl.create({ message: "Preparing export..." });
-    await loading.present();
-    try {
-      const data = await this.locationService.exportHistory();
-      if (!data) {
-        await loading.dismiss();
-        await this.showAlert("No location history to export yet.");
-        return;
-      }
-
-      if (format === "csv") {
-        await this.geolocationService.exportTextToFile(
-          this.locationService.toCsv(data.locations),
-          "konek-location-history.csv",
-          "text/csv"
-        );
-      } else {
-        await this.geolocationService.exportToFile(data, "konek-location-history.json");
-      }
-
-      await loading.dismiss();
-      await this.showAlert(`Location history exported as ${format.toUpperCase()}.`);
-    } catch (error) {
-      await loading.dismiss();
-      console.error("Export failed:", error);
-      await this.showAlert("Failed to export location history.");
-    }
-  }
-
-  async clearLocationHistory(): Promise<void> {
-    const alert = await this.alertCtrl.create({
-      header: "Clear history?",
-      message: "All locally stored location points will be deleted.",
-      buttons: [
-        { text: "Cancel", role: "cancel" },
-        {
-          text: "Clear",
-          role: "destructive",
-          handler: async () => {
-            await this.locationService.clearHistory();
-            await this.showAlert("Location history cleared.");
-          },
-        },
-      ],
-    });
-    await alert.present();
-  }
-
-  async logout(): Promise<void> {
-    const loading = await this.loadingCtrl.create({ message: "Signing out..." });
-    await loading.present();
-    try {
-      await firstValueFrom(this.authService.logout());
-    } catch (error) {
-      console.debug("Server logout failed; local session cleared.", error);
-    } finally {
-      await loading.dismiss();
-      await this.router.navigate(["/login"], { replaceUrl: true });
-    }
   }
 
   // ---------------------------------------------------------------------------
@@ -889,6 +876,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.squadMarkers.clear();
     this.geofenceLayers = [];
+    this.streetFallback = null;
     this.mapReady = false;
   }
 }

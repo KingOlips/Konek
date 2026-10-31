@@ -17,6 +17,7 @@ import {
   IonSpinner,
   AlertController,
   LoadingController,
+  ModalController,
   NavController,
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
@@ -35,6 +36,7 @@ import {
 } from "ionicons/icons";
 import { AuthService } from "../../../core/services/auth.service";
 import { BiometricService } from "../../../core/services/biometric.service";
+import { OnboardingService } from "../../../core/services/onboarding.service";
 
 @Component({
   selector: "app-login",
@@ -54,8 +56,10 @@ export class LoginPage implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly navCtrl = inject(NavController);
+  private readonly modalCtrl = inject(ModalController);
   private readonly authService = inject(AuthService);
   private readonly biometricService = inject(BiometricService);
+  private readonly onboarding = inject(OnboardingService);
   private readonly alertCtrl = inject(AlertController);
   private readonly http = inject(HttpClient);
   private readonly loadingCtrl = inject(LoadingController);
@@ -65,6 +69,7 @@ export class LoginPage implements OnInit {
   isLoading = false;
   showPassword = false;
   submitted = false;
+  private isBiometricPrompting = false;
 
   constructor() {
     addIcons({
@@ -95,12 +100,19 @@ export class LoginPage implements OnInit {
    * New / signed-out users with no saved credentials simply see the form.
    */
   private async promptSavedBiometricLogin(): Promise<void> {
+    if (this.isBiometricPrompting) return;
+    this.isBiometricPrompting = true;
+
     try {
       if (!(await this.biometricService.isAvailable())) return;
       if (!(await this.biometricService.isEnabled())) return;
 
       const credentials = await this.biometricService.getCredentials();
-      if (!credentials) return;
+      if (!credentials) {
+        // The flag says enabled but nothing is stored: stop advertising it.
+        await this.biometricService.disable();
+        return;
+      }
 
       this.isLoading = true;
       const loading = await this.loadingCtrl.create({
@@ -121,7 +133,12 @@ export class LoginPage implements OnInit {
       if (response.success) {
         await this.navigateToMap();
       } else {
-        await this.showError("Biometric login failed. Please sign in with your password.");
+        // The saved credentials no longer work - forget them so the app stops
+        // prompting for biometrics on every visit and falls back to the form.
+        await this.biometricService.disable();
+        await this.showError(
+          "Saved biometric sign-in is out of date. Please sign in with your password."
+        );
       }
     } catch (error) {
       console.error("Biometric login error:", error);
@@ -133,16 +150,31 @@ export class LoginPage implements OnInit {
       }
     } finally {
       this.isLoading = false;
+      this.isBiometricPrompting = false;
       this.cdr.markForCheck();
     }
   }
 
   goToRegister(): void {
-    void this.navCtrl.navigateRoot("/register", { animated: false, replaceUrl: true });
+    // Forward push keeps a history entry (so the system back button returns
+    // here) but skips Ionic's slide transition between auth screens.
+    void this.navCtrl.navigateForward("/register", { animated: false });
   }
 
-  goToForgotPassword(): void {
-    void this.navCtrl.navigateRoot("/forgot-password", { animated: false, replaceUrl: true });
+  /**
+   * Opens the reset flow as a popup so the sign-in form stays behind it.
+   * The component is loaded lazily to keep the login bundle small.
+   */
+  async goToForgotPassword(): Promise<void> {
+    const { ForgotPasswordModalComponent } = await import(
+      "../forgot-password/forgot-password.modal"
+    );
+    const modal = await this.modalCtrl.create({
+      component: ForgotPasswordModalComponent,
+      cssClass: "forgot-password-modal",
+      backdropDismiss: true,
+    });
+    await modal.present();
   }
 
   async onGoogleLogin(): Promise<void> {
@@ -281,8 +313,13 @@ export class LoginPage implements OnInit {
               "Enable biometric login for Konek"
             );
             if (verified) {
+              // Only mark biometrics as enabled once the credentials actually
+              // round-trip; otherwise every launch prompts and then fails.
               await this.biometricService.storeCredentials(username, password);
-              await this.biometricService.enable();
+              const saved = await this.biometricService.getCredentials();
+              if (saved?.username === username && saved?.password === password) {
+                await this.biometricService.enable();
+              }
             }
             await this.navigateToMap();
           },
@@ -293,6 +330,9 @@ export class LoginPage implements OnInit {
   }
 
   private async navigateToMap(): Promise<void> {
+    // Signing in means the user is no longer brand new, so never show the
+    // one-time welcome screen again.
+    await this.onboarding.complete();
     await this.router.navigate(["/map"], { replaceUrl: true });
   }
 

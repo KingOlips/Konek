@@ -33,6 +33,7 @@ import {
   shieldCheckmarkOutline,
 } from "ionicons/icons";
 import { AuthService } from "../../../core/services/auth.service";
+import { OnboardingService } from "../../../core/services/onboarding.service";
 
 @Component({
   selector: "app-register",
@@ -53,6 +54,7 @@ export class RegisterPage {
   private readonly router = inject(Router);
   private readonly navCtrl = inject(NavController);
   private readonly authService = inject(AuthService);
+  private readonly onboarding = inject(OnboardingService);
   private readonly alertCtrl = inject(AlertController);
   private readonly loadingCtrl = inject(LoadingController);
   private readonly cdr = inject(ChangeDetectorRef);
@@ -112,7 +114,7 @@ export class RegisterPage {
   }
 
   goToLogin(): void {
-    void this.navCtrl.navigateRoot("/login", { animated: false, replaceUrl: true });
+    void this.navCtrl.navigateForward("/login", { animated: false });
   }
 
   async onSubmit(): Promise<void> {
@@ -146,7 +148,10 @@ export class RegisterPage {
         buttons: [
           {
             text: "Continue",
-            handler: () => void this.router.navigate(["/map"], { replaceUrl: true }),
+            handler: async () => {
+              await this.onboarding.complete();
+              await this.router.navigate(["/map"], { replaceUrl: true });
+            },
           },
         ],
       });

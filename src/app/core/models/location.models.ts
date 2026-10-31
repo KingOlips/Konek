@@ -15,6 +15,10 @@ export interface LocationUpdate {
   altitude?: number;
   speed?: number;
   heading?: number;
+  /** Battery level 0-100 reported by the sending device, when available. */
+  battery_level?: number;
+  /** Whether the sending device is charging, when available. */
+  is_charging?: boolean;
 }
 
 export interface LocationHistoryEntry extends LocationUpdate {
@@ -36,6 +40,10 @@ export interface SquadMemberLocation {
   role: "member" | "admin";
   squad_id: number;
   squad_name: string;
+  /** Battery level 0-100 of the member's device; null until it reports one. */
+  battery_level?: number | null;
+  /** Whether the member's device is charging. */
+  is_charging?: boolean | null;
 }
 
 export interface Geofence {

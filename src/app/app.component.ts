@@ -78,12 +78,14 @@ export class AppComponent {
     return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)).toUpperCase();
   }
 
-  /** Apply the persisted (or system) dark-mode preference at startup. */
+  /** Apply the persisted dark-mode preference at startup. */
   private applyThemePreference(): void {
     try {
       const stored = localStorage.getItem("konek_dark_mode");
-      const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-      const dark = stored === "true" || (stored === null && prefersDark);
+      // Only go dark when the user explicitly turned the switch on. Dark mode
+      // used to follow the system setting, which made the app open dark while
+      // the Settings switch still showed "off".
+      const dark = stored === "true";
       // `dark` drives the app's own styles; `ion-palette-dark` switches Ionic's
       // palette (it must sit on <html>, where Ionic sets the `md`/`ios` class).
       document.body.classList.toggle("dark", dark);
@@ -107,6 +109,9 @@ export class AppComponent {
 
         if (!this.isAuthenticated) return;
         if (this.pausedAt && Date.now() - this.pausedAt < 30000) return;
+        // A biometric sign-in moments ago already proved who the user is; don't
+        // prompt a second time when the native dialog hands control back.
+        if (this.biometricService.hasVerifiedRecently()) return;
         if (!(await this.biometricService.isEnabled())) return;
 
         const unlocked = await this.biometricService.authenticate("Unlock Konek");
@@ -131,11 +136,11 @@ export class AppComponent {
   async signOut(): Promise<void> {
     await this.closeMenu();
     try {
-      this.authService.logout().subscribe({
-        error: (error) => console.debug("Logout API failed:", error),
-      });
-    } catch {
+      await firstValueFrom(this.authService.logout());
+    } catch (error) {
       // Local session is cleared inside the service regardless.
+      console.debug("Logout API failed:", error);
     }
+    await this.router.navigate(["/login"], { replaceUrl: true });
   }
 }

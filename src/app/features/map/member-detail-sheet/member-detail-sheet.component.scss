@@ -1,0 +1,311 @@
+/* Member detail bottom sheet (marker tap) */
+
+ion-modal.member-sheet {
+  --border-radius: 22px 22px 0 0;
+  --background: #ffffff;
+  --box-shadow: 0 -10px 34px rgba(15, 23, 42, 0.22);
+}
+
+.sheet-header ion-toolbar {
+  --background: transparent;
+  --min-height: 48px;
+  --border-width: 0;
+}
+
+.sheet-header ion-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #7a8494;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding-inline-start: 20px;
+}
+
+.sheet-header ion-button {
+  --color: #7a8494;
+  margin-inline-end: 8px;
+}
+
+.sheet-content {
+  --background: #ffffff;
+  --padding-start: 20px;
+  --padding-end: 20px;
+  --padding-bottom: 24px;
+}
+
+/* Hero: avatar + name + badges */
+.member-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0 18px;
+}
+
+.hero-avatar {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 128, 255, 0.12);
+  color: #2f6fe0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 2px rgba(56, 128, 255, 0.28);
+}
+
+.hero-avatar.is-admin {
+  background: rgba(240, 160, 32, 0.16);
+  color: #b97400;
+  box-shadow: inset 0 0 0 2px rgba(240, 160, 32, 0.35);
+}
+
+.hero-avatar.is-self {
+  background: linear-gradient(180deg, #58a0ff 0%, #2f7bf0 100%);
+  color: #fff;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+.hero-meta {
+  min-width: 0;
+}
+
+.hero-meta h2 {
+  margin: 0 0 6px;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #141a24;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.you-tag {
+  font-size: 12px;
+  font-weight: 600;
+  color: #78828f;
+}
+
+.hero-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.role-badge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(56, 128, 255, 0.12);
+  color: #2f6fe0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.role-badge.is-admin {
+  background: rgba(240, 160, 32, 0.16);
+  color: #b97400;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #78828f;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #adb5bd;
+}
+
+.status.online .status-dot {
+  background: #2dd36f;
+  box-shadow: 0 0 0 2px rgba(45, 211, 111, 0.24);
+}
+
+.status.online {
+  color: #1f9d55;
+}
+
+/* Detail rows */
+.detail-card {
+  border-radius: 16px;
+  background: #f7f9fc;
+  border: 1px solid #e5e9f0;
+  overflow: hidden;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 14px;
+}
+
+.detail-row + .detail-row {
+  border-top: 1px solid #eef1f6;
+}
+
+.row-icon {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(56, 128, 255, 0.12);
+  color: #2f6fe0;
+  font-size: 17px;
+}
+
+.row-icon.is-low {
+  background: rgba(235, 68, 90, 0.12);
+  color: #e0393f;
+}
+
+.row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 550;
+  color: #141a24;
+}
+
+.row-value {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 650;
+  color: #2f6fe0;
+}
+
+.row-value.is-muted {
+  color: #a8b0bc;
+  font-weight: 600;
+}
+
+/* Actions */
+.sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 18px;
+}
+
+.sheet-actions ion-button {
+  --border-radius: 14px;
+  margin: 0;
+  font-weight: 650;
+}
+
+/* Dark theme (body.dark is toggled in Settings) */
+:host-context(.dark) {
+  ion-modal.member-sheet {
+    --background: #171a20;
+    --box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.55);
+  }
+
+  .sheet-header ion-toolbar {
+    --background: transparent;
+  }
+
+  .sheet-header ion-title {
+    color: #8b94a3;
+  }
+
+  .sheet-header ion-button {
+    --color: #8b94a3;
+  }
+
+  .sheet-content {
+    --background: #171a20;
+  }
+
+  .hero-avatar {
+    background: rgba(86, 148, 255, 0.16);
+    color: #8db4ff;
+    box-shadow: inset 0 0 0 2px rgba(86, 148, 255, 0.3);
+  }
+
+  .hero-avatar.is-admin {
+    background: rgba(255, 199, 107, 0.16);
+    color: #ffc76b;
+    box-shadow: inset 0 0 0 2px rgba(255, 199, 107, 0.32);
+  }
+
+  .hero-avatar.is-self {
+    background: linear-gradient(180deg, #3d7bf0 0%, #2f6fe0 100%);
+    color: #fff;
+  }
+
+  .hero-meta h2 {
+    color: #f4f5f7;
+  }
+
+  .you-tag {
+    color: #98a1af;
+  }
+
+  .role-badge {
+    background: rgba(86, 148, 255, 0.16);
+    color: #8db4ff;
+  }
+
+  .role-badge.is-admin {
+    background: rgba(255, 199, 107, 0.16);
+    color: #ffc76b;
+  }
+
+  .status {
+    color: #98a1af;
+  }
+
+  .status.online {
+    color: #6fdc9c;
+  }
+
+  .detail-card {
+    background: #1c2028;
+    border-color: rgba(255, 255, 255, 0.07);
+  }
+
+  .detail-row + .detail-row {
+    border-top-color: rgba(255, 255, 255, 0.06);
+  }
+
+  .row-icon {
+    background: rgba(86, 148, 255, 0.16);
+    color: #8db4ff;
+  }
+
+  .row-icon.is-low {
+    background: rgba(255, 99, 113, 0.16);
+    color: #ff8b95;
+  }
+
+  .row-label {
+    color: #f4f5f7;
+  }
+
+  .row-value {
+    color: #8db4ff;
+  }
+
+  .row-value.is-muted {
+    color: #5d6673;
+  }
+}
