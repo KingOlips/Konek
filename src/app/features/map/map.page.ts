@@ -153,7 +153,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     this.currentUser = this.authService.getCurrentUser();
-    void this.batteryService.init();
+    // Wait for the first battery read so the first uploaded fix includes it.
+    await this.batteryService.init();
     await this.setupLocationTracking();
     await this.geolocationService.startMotionTracking();
     this.startCompassUpdates();
