@@ -45,6 +45,7 @@ import * as L from "leaflet";
 import type { Position } from "@capacitor/geolocation";
 
 import { AuthService, User } from "../../core/services/auth.service";
+import { BackgroundTrackerService } from "../../core/services/background-tracker.service";
 import { BatteryService } from "../../core/services/battery.service";
 import { LocationService } from "../../core/services/location.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
@@ -86,6 +87,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   mapContainer!: ElementRef<HTMLDivElement>;
 
   private readonly authService = inject(AuthService);
+  private readonly backgroundTracker = inject(BackgroundTrackerService);
   private readonly batteryService = inject(BatteryService);
   private readonly locationService = inject(LocationService);
   private readonly geolocationService = inject(GeolocationService);
@@ -378,11 +380,28 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.isTracking = true;
       this.connectionStatus = "connected";
       this.cdr.markForCheck();
+
+      // Keep uploading location + battery after the app is backgrounded or
+      // swiped away. Android-only; no-op on web/iOS. Respect the Settings
+      // toggle when the user has turned tracking off.
+      if (this.backgroundTrackingEnabled()) {
+        void this.backgroundTracker.start(10000);
+      }
+
       await this.getInitialPosition();
     } catch (error) {
       console.error("Location tracking failed:", error);
       this.connectionStatus = "disconnected";
       this.cdr.markForCheck();
+    }
+  }
+
+  /** Settings toggle: "Location tracking" defaults to enabled. */
+  private backgroundTrackingEnabled(): boolean {
+    try {
+      return localStorage.getItem("konek_location_tracking") !== "false";
+    } catch {
+      return true;
     }
   }
 

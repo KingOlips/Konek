@@ -21,6 +21,7 @@ import {
   settingsOutline,
 } from "ionicons/icons";
 import { AuthService, User } from "./core/services/auth.service";
+import { BackgroundTrackerService } from "./core/services/background-tracker.service";
 import { BiometricService } from "./core/services/biometric.service";
 
 @Component({
@@ -41,6 +42,7 @@ import { BiometricService } from "./core/services/biometric.service";
 })
 export class AppComponent {
   private readonly authService = inject(AuthService);
+  private readonly backgroundTracker = inject(BackgroundTrackerService);
   private readonly biometricService = inject(BiometricService);
   private readonly menuController = inject(MenuController);
   private readonly router = inject(Router);
@@ -116,6 +118,8 @@ export class AppComponent {
 
         const unlocked = await this.biometricService.authenticate("Unlock Konek");
         if (!unlocked) {
+          // Never keep uploading in the background after a failed unlock.
+          await this.backgroundTracker.stop();
           try {
             await firstValueFrom(this.authService.logout());
           } catch {
@@ -135,6 +139,7 @@ export class AppComponent {
 
   async signOut(): Promise<void> {
     await this.closeMenu();
+    await this.backgroundTracker.stop();
     try {
       await firstValueFrom(this.authService.logout());
     } catch (error) {

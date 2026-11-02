@@ -18,6 +18,7 @@ import {
   ActionSheetController,
 } from "@ionic/angular";
 import { AuthService, User } from "../../core/services/auth.service";
+import { BackgroundTrackerService } from "../../core/services/background-tracker.service";
 import { BiometricService } from "../../core/services/biometric.service";
 import { LocationService } from "../../core/services/location.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
@@ -57,6 +58,7 @@ import {
 })
 export class SettingsPage implements OnInit {
   private readonly authService = inject(AuthService);
+  private readonly backgroundTracker = inject(BackgroundTrackerService);
   private readonly biometricService = inject(BiometricService);
   private readonly locationService = inject(LocationService);
   private readonly geolocationService = inject(GeolocationService);
@@ -229,9 +231,11 @@ export class SettingsPage implements OnInit {
     localStorage.setItem("konek_location_tracking", this.locationTrackingEnabled.toString());
     
     if (!this.locationTrackingEnabled) {
-      // Stop tracking would be handled by map page
+      // The map owns foreground tracking; stop the native background uploader.
+      await this.backgroundTracker.stop();
       this.showToast("Location tracking disabled");
     } else {
+      void this.backgroundTracker.start(10000);
       this.showToast("Location tracking enabled");
     }
   }
@@ -378,6 +382,9 @@ export class SettingsPage implements OnInit {
           handler: async () => {
             const loading = await this.loadingCtrl.create({ message: "Signing out..." });
             await loading.present();
+
+            // Stop the native uploader before the token is cleared.
+            await this.backgroundTracker.stop();
 
             this.authService.logout().subscribe({
               next: async () => {
