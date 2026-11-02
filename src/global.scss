@@ -37,6 +37,24 @@
 @import '@ionic/angular/css/palettes/dark.class.css';
 
 /**
+ * Custom font: Outfit (variable, self-hosted)
+ * -----------------------------------------------------
+ * Single TTF file with all weights 100-900. Works in all browsers
+ * and Capacitor native builds.
+ */
+@font-face {
+  font-family: "KonekFont";
+  src: url("assets/fonts/Outfit-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --ion-font-family: "KonekFont", system-ui, sans-serif;
+}
+
+/**
  * Leaflet overrides
  * -----------------------------------------------------
  * Marker and popup DOM is created dynamically by Leaflet, so Angular's

@@ -116,7 +116,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private themeObserver: MutationObserver | null = null;
   private sizeTimers: ReturnType<typeof setTimeout>[] = [];
   private lastUploadAt = 0;
-  private lastToastAt = 0;
   private activeToast: HTMLIonToastElement | null = null;
   private isActive = true;
   private hasCentered = false;
@@ -409,13 +408,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.cdr.markForCheck();
 
-    // Confirm the fix with a top toast, at most once every 30s so tracking
-    // does not turn into a notification stream.
-    if (Date.now() - this.lastToastAt > 30000) {
-      this.lastToastAt = Date.now();
-      void this.showUpdateToast("Updated just now");
-    }
-
     // Throttle uploads/history to the adaptive cadence: 5s while moving,
     // 30s while stationary. The map marker itself still updates on every fix.
     const now = Date.now();
@@ -554,7 +546,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.cdr.markForCheck();
       this.checkGeofenceTransitions(members);
       if (notify) {
-        this.lastToastAt = Date.now();
         void this.showUpdateToast("Squad locations refreshed");
       }
     } catch (error) {
