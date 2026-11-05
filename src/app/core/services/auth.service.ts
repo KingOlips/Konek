@@ -184,6 +184,13 @@ export class AuthService {
   }
 
   private async clearStoredSession(): Promise<void> {
+    // Drop the remembered map squad so the next account never sees the
+    // previous user's squad name flash before the list loads.
+    try {
+      localStorage.removeItem("konek_active_squad");
+    } catch {
+      // localStorage may be unavailable in private mode.
+    }
     await Promise.all([
       Preferences.remove({ key: TOKEN_KEY }),
       Preferences.remove({ key: USER_KEY }),

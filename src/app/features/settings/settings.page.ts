@@ -4,13 +4,13 @@ import { FormsModule } from "@angular/forms";
 import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import {
+  IonBackButton,
+  IonButtons,
   IonContent,
   IonHeader,
   IonTitle,
   IonToolbar,
-  IonButtons,
   IonIcon,
-  IonMenuButton,
   IonToggle,
   AlertController,
   LoadingController,
@@ -46,13 +46,13 @@ import {
   imports: [
     CommonModule,
     FormsModule,
+    IonBackButton,
+    IonButtons,
     IonContent,
     IonHeader,
     IonTitle,
     IonToolbar,
-    IonButtons,
     IonIcon,
-    IonMenuButton,
     IonToggle,
   ],
 })

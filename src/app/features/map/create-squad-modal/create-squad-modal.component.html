@@ -1,0 +1,60 @@
+<div class="sheet">
+  <span class="sheet-grabber" aria-hidden="true"></span>
+
+  <header class="sheet-head">
+    <div class="sheet-titles">
+      <p class="sheet-eyebrow">New squad</p>
+      <h2 class="sheet-title">Create a squad</h2>
+    </div>
+
+    <button type="button" class="sheet-close" (click)="close()" aria-label="Close">
+      <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+    </button>
+  </header>
+
+  <p class="sheet-lead">
+    Name your squad. Once it's created you can share the join code with your
+    members.
+  </p>
+
+  <form class="sheet-form" (ngSubmit)="submit()" novalidate>
+    <div class="field" [class.field-invalid]="showError">
+      <span class="field-label">Squad name</span>
+
+      <div class="field-control">
+        <ion-icon name="people-outline" class="field-icon" aria-hidden="true"></ion-icon>
+        <ion-input
+          #nameInput
+          name="squadName"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          placeholder="e.g. Weekend Crew"
+          maxlength="40"
+          aria-label="Squad name"
+          [(ngModel)]="name"
+        ></ion-input>
+        <span class="field-count">{{ name.length }}/40</span>
+      </div>
+
+      @if (showError) {
+        <p class="field-error" role="alert">
+          <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+          <span>{{ errorMessage }}</span>
+        </p>
+      }
+    </div>
+
+    <ion-button
+      expand="block"
+      type="submit"
+      class="sheet-submit"
+      [disabled]="!isValid"
+    >
+      <ion-icon name="person-add-outline" slot="start" aria-hidden="true"></ion-icon>
+      <span>Create squad</span>
+    </ion-button>
+  </form>
+
+  <p class="sheet-hint">You'll be the squad admin and can share its join code.</p>
+</div>

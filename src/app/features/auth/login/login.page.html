@@ -77,9 +77,9 @@
               <p class="field-error" role="alert">
                 <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
                 <span>
-                  @if (username?.hasError("required")) {
+                  @if (username.hasError("required")) {
                     Username is required
-                  } @else if (username?.hasError("minlength")) {
+                  } @else if (username.hasError("minlength")) {
                     Username must be at least 3 characters
                   }
                 </span>
@@ -119,9 +119,9 @@
               <p class="field-error" role="alert">
                 <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
                 <span>
-                  @if (password?.hasError("required")) {
+                  @if (password.hasError("required")) {
                     Password is required
-                  } @else if (password?.hasError("minlength")) {
+                  } @else if (password.hasError("minlength")) {
                     Password must be at least 6 characters
                   }
                 </span>

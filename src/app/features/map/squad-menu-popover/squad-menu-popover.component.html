@@ -1,0 +1,42 @@
+<div class="squad-menu">
+  <div class="squad-menu-header">
+    <span class="squad-menu-label">Squad</span>
+    <span class="squad-menu-name">{{ squadName }}</span>
+  </div>
+
+  @if (squads.length > 0) {
+    <div class="squad-menu-list" role="listbox" aria-label="Switch squad">
+      @for (squad of squads; track squad.id) {
+        <button
+          type="button"
+          class="squad-menu-row"
+          [class.is-active]="squad.id === activeSquadId"
+          role="option"
+          [attr.aria-selected]="squad.id === activeSquadId"
+          (click)="selectSquad(squad)"
+        >
+          <span class="squad-menu-row-name">{{ squad.squad_name }}</span>
+          @if (squad.id === activeSquadId) {
+            <ion-icon
+              class="squad-menu-check"
+              name="checkmark-outline"
+              aria-hidden="true"
+            ></ion-icon>
+          }
+        </button>
+      }
+    </div>
+  }
+
+  <div class="squad-menu-actions">
+    <button type="button" class="squad-menu-action" (click)="pick('create')">
+      <ion-icon name="add-outline"></ion-icon>
+      <span>Create a squad</span>
+    </button>
+
+    <button type="button" class="squad-menu-action" (click)="pick('join')">
+      <ion-icon name="key-outline"></ion-icon>
+      <span>Join a squad</span>
+    </button>
+  </div>
+</div>

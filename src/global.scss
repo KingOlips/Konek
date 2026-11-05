@@ -130,6 +130,22 @@
   text-decoration: none;
 }
 
+/* The map page draws the map behind the floating toolbar chips: keep Leaflet's
+ * top controls (zoom) below the header instead of under the chips. */
+.map-content .leaflet-top {
+  top: calc(var(--map-top-inset, 60px) + 8px);
+}
+
+/* The mobile squad sheet peeks over the bottom of the map: keep the
+ * scale/attribution above it so the tile credits stay visible. */
+@media (max-width: 767px) {
+  .map-content .leaflet-bottom {
+    bottom: calc(
+      var(--squad-peek-height, 82px) + 10px + var(--ion-safe-area-bottom, 0px)
+    );
+  }
+}
+
 /* Invert the light basemap in dark mode; markers/popups stay untinted. */
 .map-dark-tiles .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(1.08) contrast(0.92) saturate(0.65);
@@ -195,36 +211,13 @@
   width: 52px;
   height: 52px;
   margin-left: -26px;
-  background: linear-gradient(
-    0deg,
-    rgba(56, 128, 255, 0.65) 0%,
-    rgba(56, 128, 255, 0.4) 45%,
-    rgba(56, 128, 255, 0.12) 75%,
-    transparent 100%
-  );
+  background: linear-gradient(0deg, rgba(56, 128, 255, 0.45) 0%, transparent 100%);
   clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
-  filter: drop-shadow(0 0 6px rgba(56, 128, 255, 0.4));
+  filter: drop-shadow(0 0 6px rgba(56, 128, 255, 0.35));
   transform-origin: center bottom;
   transition: transform 0.3s ease;
   z-index: -1;
   pointer-events: none;
-}
-
-/* Bright core running down the middle of the beam */
-.marker-heading::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  width: 18px;
-  height: 34px;
-  margin-left: -9px;
-  background: linear-gradient(
-    0deg,
-    rgba(140, 190, 255, 0.8) 0%,
-    rgba(140, 190, 255, 0.15) 100%
-  );
-  clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
 }
 
 /* Squad member markers */
@@ -464,6 +457,32 @@ body.dark ion-modal.forgot-password-modal {
   --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 
+/* ---------------------------------------------------------------------------
+ * Squad create/join sheets (opened from the chip dropdown)
+ * ------------------------------------------------------------------------ */
+ion-modal.squad-form-modal {
+  --width: min(100%, 520px);
+  --height: auto;
+  --max-height: 92vh;
+  --border-radius: 22px 22px 0 0;
+  --background: #ffffff;
+  --backdrop-opacity: 0.3;
+  --box-shadow: 0 -16px 44px rgba(16, 24, 40, 0.24);
+}
+
+/* Ionic centers modals by default; anchor the sheet to the bottom edge and
+ * keep it centred horizontally at its max width. */
+ion-modal.squad-form-modal::part(content) {
+  position: absolute;
+  inset: auto 0 0;
+  margin-inline: auto;
+}
+
+body.dark ion-modal.squad-form-modal {
+  --background: #1f232b;
+  --box-shadow: 0 -16px 44px rgba(0, 0, 0, 0.6);
+}
+
 /* Transient update toast (map) */
 ion-toast.update-toast {
   --background: #171a20;
@@ -490,6 +509,52 @@ body.dark ion-toast.update-toast {
   --background: #232833;
   --color: #f4f5f7;
   --box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------------------------------------------------------------------------
+ * Squad chip dropdown (map toolbar)
+ * The Angular component supplies the contents; these rules shape the IonPopover
+ * shell so it drops straight out of the expanded chip with no modal styling.
+ * ------------------------------------------------------------------------ */
+ion-popover.squad-menu-popover {
+  --background: #ffffff;
+  --box-shadow: none;
+  --backdrop-opacity: 0.2;
+  /* Overlap the chip's bottom border by a hairline so there is no seam. */
+  --offset-y: -1px;
+}
+
+/* Same border and surface as the chip: the two elements read as one card.
+ * The top edge is borderless because the chip's bottom border is transparent,
+ * and the shadow is pushed below so it never darkens the chip above. */
+ion-popover.squad-menu-popover::part(content) {
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  border-top: none;
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 18px 24px -12px rgba(16, 24, 40, 0.28);
+  /* Ionic's MD enter animation scales the menu from 80% to 100%, which makes
+   * it visibly narrower than the chip for the first frames. Keep the width
+   * fixed and let the fade (and underlying slide) carry the entrance instead. */
+  transform: none !important;
+}
+
+/* Chip-shaped hole in the backdrop, supplied by MapPage before presenting so
+ * the chip never dims during the popover's fade-in. */
+ion-popover.squad-menu-popover::part(backdrop) {
+  clip-path: var(--squad-chip-hole, none);
+}
+
+body.dark ion-popover.squad-menu-popover {
+  /* Match the chip surface exactly so the card looks continuous. */
+  --background: #1f232b;
+  --backdrop-opacity: 0.35;
+}
+
+body.dark ion-popover.squad-menu-popover::part(content) {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 24px -12px rgba(0, 0, 0, 0.6);
 }
 
 /* ---------------------------------------------------------------------------

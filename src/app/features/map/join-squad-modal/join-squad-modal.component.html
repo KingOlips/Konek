@@ -1,0 +1,64 @@
+<div class="sheet">
+  <span class="sheet-grabber" aria-hidden="true"></span>
+
+  <header class="sheet-head">
+    <div class="sheet-titles">
+      <p class="sheet-eyebrow">Squad code</p>
+      <h2 class="sheet-title">Join a squad</h2>
+    </div>
+
+    <button type="button" class="sheet-close" (click)="close()" aria-label="Close">
+      <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+    </button>
+  </header>
+
+  <p class="sheet-lead">
+    Enter the join code shared by your squad admin to join their squad.
+  </p>
+
+  <form class="sheet-form" (ngSubmit)="submit()" novalidate>
+    <div class="field" [class.field-invalid]="showError">
+      <span class="field-label">Join code</span>
+
+      <div class="field-control">
+        <ion-icon name="key-outline" class="field-icon" aria-hidden="true"></ion-icon>
+        <ion-input
+          #codeInput
+          name="joinCode"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          autocorrect="off"
+          spellcheck="false"
+          placeholder="e.g. KONE-K123"
+          maxlength="29"
+          aria-label="Join code"
+          (ionInput)="onCodeInput($event)"
+        ></ion-input>
+        <span class="field-count">{{ rawCode.length }}/24</span>
+      </div>
+
+      @if (showError) {
+        <p class="field-error" role="alert">
+          <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+          <span>{{ errorMessage }}</span>
+        </p>
+      }
+    </div>
+
+    <ion-button
+      expand="block"
+      type="submit"
+      class="sheet-submit"
+      [disabled]="!isValid"
+    >
+      <ion-icon name="log-in-outline" slot="start" aria-hidden="true"></ion-icon>
+      <span>Join squad</span>
+    </ion-button>
+  </form>
+
+  <p class="sheet-hint">
+    Letters and numbers only. Dashes are added automatically for readability.
+  </p>
+</div>

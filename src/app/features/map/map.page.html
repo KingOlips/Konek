@@ -1,29 +1,111 @@
 <ion-header>
-  <ion-toolbar>
-    <ion-buttons slot="start">
-      <ion-menu-button></ion-menu-button>
-    </ion-buttons>
-    <ion-title>Konek Map</ion-title>
-    <ion-buttons slot="end">
-      <ion-button fill="clear" aria-label="Map style" (click)="presentMapStyleSheet()">
-        <ion-icon name="layers-outline" slot="icon-only"></ion-icon>
-      </ion-button>
+  <ion-toolbar class="map-toolbar">
+    @if (detailSheetOpen) {
+      <ion-buttons slot="start">
+        <ion-button
+          class="nav-icon-button"
+          fill="clear"
+          aria-label="Back"
+          (click)="closeDetailSheet()"
+        >
+          <ion-icon name="arrow-back-outline" slot="icon-only"></ion-icon>
+        </ion-button>
+      </ion-buttons>
 
-      <ion-button fill="clear" aria-label="Squad members" (click)="toggleSquadList()">
-        <ion-icon name="people-outline" slot="icon-only"></ion-icon>
-        @if (squadMembers.length > 0) {
-          <ion-badge color="danger" class="squad-count">{{ squadMembers.length }}</ion-badge>
-        }
-      </ion-button>
-    </ion-buttons>
+      <ion-title>
+        <span class="squad-chip">
+          <ion-icon name="person-outline"></ion-icon>
+          <span class="squad-name">{{ detailTitle }}</span>
+        </span>
+      </ion-title>
+
+      <ion-buttons slot="end">
+        <ion-button
+          class="nav-icon-button"
+          fill="clear"
+          aria-label="Refresh location"
+          [disabled]="isRefreshingDetail"
+          (click)="refreshDetail()"
+        >
+          <ion-icon
+            name="refresh-outline"
+            slot="icon-only"
+            [class.spinning]="isRefreshingDetail"
+          ></ion-icon>
+        </ion-button>
+      </ion-buttons>
+    } @else {
+      <ion-buttons slot="start">
+        <ion-button
+          class="nav-icon-button"
+          fill="clear"
+          aria-label="Settings"
+          routerLink="/settings"
+        >
+          <ion-icon name="settings-outline" slot="icon-only"></ion-icon>
+        </ion-button>
+      </ion-buttons>
+
+      <ion-title>
+        <button
+          type="button"
+          class="squad-chip"
+          aria-haspopup="menu"
+          aria-label="Squad options"
+          [class.chip-open]="squadChipOpen"
+          [attr.aria-expanded]="squadChipOpen"
+          (click)="presentSquadOptions($event)"
+        >
+          <ion-icon name="people-outline"></ion-icon>
+          <span class="squad-name">{{ activeSquadName }}</span>
+          <ion-icon class="chip-caret" name="chevron-down-outline"></ion-icon>
+        </button>
+      </ion-title>
+
+      <ion-buttons slot="end">
+        <ion-button
+          class="nav-icon-button"
+          fill="clear"
+          aria-label="Messages"
+          (click)="openMessages()"
+        >
+          <ion-icon name="chatbubbles-outline" slot="icon-only"></ion-icon>
+        </ion-button>
+      </ion-buttons>
+    }
   </ion-toolbar>
 </ion-header>
 
-<ion-content class="map-content" [fullscreen]="true">
+<ion-content class="map-content">
   <div #mapContainer class="map-container"></div>
 
-  <!-- Recenter FAB -->
-  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+  <!-- Map actions -->
+  <ion-fab
+    #mapFabs
+    class="map-fabs"
+    [class.panel-open]="showSquadList"
+    [class.member-open]="detailSheetOpen"
+    [class.sheet-full]="squadSheetSnap === 'full' && !isSheetDragging"
+    vertical="bottom"
+    horizontal="end"
+    slot="fixed"
+  >
+    <ion-fab-button
+      class="squad-fab"
+      size="small"
+      aria-label="Squad members"
+      (click)="toggleSquadList()"
+    >
+      <ion-icon name="people-outline"></ion-icon>
+      @if (squadMembers.length > 0) {
+        <ion-badge color="danger" class="squad-count">{{ squadMembers.length }}</ion-badge>
+      }
+    </ion-fab-button>
+
+    <ion-fab-button size="small" aria-label="Map style" (click)="presentMapStyleSheet()">
+      <ion-icon name="layers-outline"></ion-icon>
+    </ion-fab-button>
+
     <ion-fab-button
       aria-label="Center on me"
       [color]="isTracking ? 'primary' : 'medium'"
@@ -33,80 +115,285 @@
     </ion-fab-button>
   </ion-fab>
 
-  @if (showSquadList) {
-    <div class="squad-panel open">
-      <div class="panel-handle" (click)="toggleSquadList()"></div>
-      <div class="panel-header">
-        <h3>Squad members ({{ squadMembers.length }})</h3>
-        <ion-button
-          fill="clear"
-          size="small"
-          (click)="refreshSquadLocations()"
+  <!-- Squad list: sidebar on desktop, draggable bottom sheet on mobile -->
+  <div #squadPanel class="squad-panel" [class.open]="showSquadList">
+    <div
+      class="sheet-grabber"
+      (pointerdown)="onSheetDragStart($event)"
+      (click)="onSheetGrabberClick()"
+    >
+      <span></span>
+    </div>
+
+    <div class="panel-handle" (click)="closeSquadPanel()"></div>
+
+    <div
+      class="panel-header"
+      (pointerdown)="onSheetDragStart($event)"
+      (click)="onSheetHeaderClick($event)"
+    >
+      <div class="panel-header-main">
+        <div class="panel-squad-name">{{ activeSquadName }}</div>
+        <p class="panel-squad-meta">
+          {{ squadMembers.length }} member{{ squadMembers.length === 1 ? '' : 's' }}
+          @if (squadMembers.length > 0) {
+            <span class="meta-sep">·</span>
+            <span class="meta-online">{{ onlineCount }} online</span>
+          }
+        </p>
+      </div>
+      <div class="panel-actions">
+        <button
+          type="button"
+          class="panel-icon-btn"
           [disabled]="isLoadingSquad"
+          aria-label="Refresh squad locations"
+          (click)="refreshSquadLocations()"
         >
           <ion-icon
             name="refresh-outline"
-            slot="start"
             [class.spinning]="isLoadingSquad"
           ></ion-icon>
-          Refresh
-        </ion-button>
-      </div>
-
-      <div class="panel-content">
-        @if (isLoadingSquad) {
-          <div class="loading-squad">
-            <ion-spinner name="crescent"></ion-spinner>
-            <p>Loading squad members...</p>
-          </div>
-        } @else if (squadMembers.length === 0) {
-          <div class="empty-squad">
-            <ion-icon name="people-outline" size="large"></ion-icon>
-            <p>No squad members sharing yet</p>
-            <ion-button fill="outline" size="small" routerLink="/squads">
-              Join a squad
-            </ion-button>
-          </div>
-        } @else {
-          <ion-list lines="inset">
-            @for (member of squadMembers; track member.user_id) {
-              <ion-item
-                class="member-item"
-                button
-                detail="false"
-                (click)="centerOnMember(member)"
-              >
-                <ion-avatar slot="start">
-                  <ion-icon name="person-circle-outline" size="large"></ion-icon>
-                </ion-avatar>
-                <ion-label>
-                  <h4>
-                    {{ member.username }}
-                    @if (member.user_id === currentUser?.id) {
-                      <span class="you-tag">(you)</span>
-                    }
-                  </h4>
-                  <p>
-                    <ion-badge
-                      [color]="member.role === 'admin' ? 'warning' : 'medium'"
-                      size="small"
-                    >
-                      {{ member.role }}
-                    </ion-badge>
-                    <span class="member-status" [class.online]="isMemberOnline(member)">
-                      {{ isMemberOnline(member) ? "online" : "offline" }}
-                    </span>
-                  </p>
-                  <small>Last seen {{ getTimeAgo(member.timestamp) }}</small>
-                </ion-label>
-                <ion-icon name="locate-outline" slot="end" color="primary"></ion-icon>
-              </ion-item>
-            }
-          </ion-list>
-        }
+        </button>
+        <button
+          type="button"
+          class="panel-icon-btn"
+          aria-label="Close squad panel"
+          (click)="closeSquadPanel()"
+        >
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
       </div>
     </div>
-  }
+
+    <div class="panel-content">
+      @if (isLoadingSquad) {
+        <div class="loading-squad">
+          @for (i of [1,2,3,4]; track i) {
+            <div class="skeleton-item">
+              <div class="skeleton-avatar"></div>
+              <div class="skeleton-lines">
+                <div class="skeleton-line skeleton-name"></div>
+                <div class="skeleton-line skeleton-meta"></div>
+              </div>
+            </div>
+          }
+        </div>
+      } @else if (squadMembers.length === 0) {
+        <div class="empty-squad">
+          <div class="empty-illustration">
+            <ion-icon name="people-outline"></ion-icon>
+          </div>
+          <h4>No squad members yet</h4>
+          <p>Invite friends to share locations and see them on the map.</p>
+          <ion-button fill="outline" size="default" routerLink="/squads">
+            <ion-icon name="person-add-outline" slot="start"></ion-icon>
+            Join or create a squad
+          </ion-button>
+        </div>
+      } @else {
+        @if (onlineMembers.length > 0) {
+          <div class="group-label">
+            <span class="group-dot online"></span>
+            Online
+            <span class="group-count">{{ onlineMembers.length }}</span>
+          </div>
+          @for (member of onlineMembers; track member.user_id) {
+            <button
+              type="button"
+              class="member-row"
+              (click)="openMemberDetail(member.user_id)"
+            >
+              <span
+                class="member-avatar"
+                [style.background]="avatarGradient(member.username)"
+              >{{ memberInitials(member.username) }}</span>
+              <span class="member-main">
+                <span class="member-name">
+                  <span class="member-name-text">{{ member.username }}</span>
+                  @if (member.user_id === currentUser?.id) {
+                    <span class="you-tag">(you)</span>
+                  }
+                  @if (member.role === 'admin') {
+                    <ion-icon
+                      class="admin-mark"
+                      name="shield-checkmark-outline"
+                      aria-label="Admin"
+                    ></ion-icon>
+                  }
+                </span>
+                <span class="member-sub is-online">{{ memberSubLabel(member) }}</span>
+              </span>
+              <span class="member-end">
+                <span class="live-dot" aria-hidden="true"></span>
+              </span>
+            </button>
+          }
+        }
+
+        @if (offlineMembers.length > 0) {
+          <div class="group-label">
+            <span class="group-dot"></span>
+            Offline
+            <span class="group-count">{{ offlineMembers.length }}</span>
+          </div>
+          @for (member of offlineMembers; track member.user_id) {
+            <button
+              type="button"
+              class="member-row is-offline"
+              (click)="openMemberDetail(member.user_id)"
+            >
+              <span
+                class="member-avatar"
+                [style.background]="avatarGradient(member.username)"
+              >{{ memberInitials(member.username) }}</span>
+              <span class="member-main">
+                <span class="member-name">
+                  <span class="member-name-text">{{ member.username }}</span>
+                  @if (member.user_id === currentUser?.id) {
+                    <span class="you-tag">(you)</span>
+                  }
+                  @if (member.role === 'admin') {
+                    <ion-icon
+                      class="admin-mark"
+                      name="shield-checkmark-outline"
+                      aria-label="Admin"
+                    ></ion-icon>
+                  }
+                </span>
+                <span class="member-sub">{{ memberSubLabel(member) }}</span>
+              </span>
+              <span class="member-end"></span>
+            </button>
+          }
+        }
+      }
+    </div>
+  </div>
+
+  <!-- Friend detail: quick pings float above the draggable sheet, over the map -->
+  <div
+    #memberPanel
+    class="member-dock"
+    [class.open]="detailSheetOpen"
+    [attr.aria-hidden]="!detailSheetOpen"
+    [attr.inert]="detailSheetOpen ? null : ''"
+  >
+    @if (!selectedIsSelf) {
+      <div class="ping-scroller">
+        @for (ping of pingOptions; track ping.type) {
+          <button
+            type="button"
+            class="ping-chip"
+            [class.is-danger]="ping.danger"
+            (click)="onPing(ping.type)"
+          >
+            {{ ping.label }}
+          </button>
+        }
+      </div>
+    }
+
+    <div class="member-panel">
+      <!-- The avatar replaces the grabber; grabbing it still drags the sheet. -->
+      <div
+        class="member-grabber"
+        role="button"
+        aria-label="Drag or tap to resize friend details"
+        (pointerdown)="onMemberSheetDragStart($event)"
+        (click)="onMemberGrabberClick()"
+      >
+        <div
+          class="hero-avatar"
+          [class.is-self]="selectedIsSelf"
+          [class.is-admin]="!selectedIsSelf && detailIsAdmin"
+        >
+          {{ detailInitials }}
+        </div>
+      </div>
+
+      <div class="member-panel-content">
+        <div class="member-hero">
+          <div class="hero-meta">
+            <h2>
+              {{ detailTitle }}
+              @if (selectedIsSelf) {
+                <span class="you-tag">(you)</span>
+              }
+            </h2>
+            <div class="hero-badges">
+              @if (!selectedIsSelf) {
+                <span class="role-badge" [class.is-admin]="detailIsAdmin">
+                  {{ detailRoleLabel }}
+                </span>
+              }
+              <span class="status" [class.online]="detailStatusOnline">
+                <i class="status-dot"></i>
+                {{ detailStatusLabel }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-card">
+          <div class="detail-row">
+            <span class="row-icon"><ion-icon name="time-outline"></ion-icon></span>
+            <span class="row-label">Last update</span>
+            <span class="row-value">{{ detailLastUpdateLabel }}</span>
+          </div>
+
+          @if (selectedIsSelf) {
+            <div class="detail-row">
+              <span class="row-icon"><ion-icon name="locate-outline"></ion-icon></span>
+              <span class="row-label">GPS accuracy</span>
+              <span class="row-value">{{ detailAccuracyLabel }}</span>
+            </div>
+          } @else {
+            <div class="detail-row">
+              <span
+                class="row-icon"
+                [class.is-low]="
+                  detailHasBattery &&
+                  (liveSelectedMember?.battery_level ?? 100) < 20
+                "
+              >
+                <ion-icon [name]="detailBatteryIcon"></ion-icon>
+              </span>
+              <span class="row-label">Battery</span>
+              <span class="row-value" [class.is-muted]="!detailHasBattery">
+                {{ detailBatteryLabel }}
+              </span>
+            </div>
+
+            <div class="detail-row">
+              <span class="row-icon"><ion-icon name="navigate-outline"></ion-icon></span>
+              <span class="row-label">Distance away</span>
+              <span class="row-value">{{ detailDistanceLabel }}</span>
+            </div>
+          }
+        </div>
+
+        <div class="sheet-actions">
+          <ion-button expand="block" shape="round" (click)="centerOnSelection()">
+            <ion-icon name="locate-outline" slot="start"></ion-icon>
+            {{ selectedIsSelf ? "Center on me" : "Center on map" }}
+          </ion-button>
+
+          @if (!selectedIsSelf) {
+            <ion-button
+              expand="block"
+              shape="round"
+              fill="outline"
+              (click)="openDirections()"
+            >
+              <ion-icon name="navigate-outline" slot="start"></ion-icon>
+              Directions
+            </ion-button>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
 
   @if (!mapReady) {
     <div class="map-loading-overlay">
@@ -115,17 +402,3 @@
     </div>
   }
 </ion-content>
-
-<app-member-detail-sheet
-  [isOpen]="detailSheetOpen"
-  [isSelf]="selectedIsSelf"
-  [member]="liveSelectedMember"
-  [selfUsername]="currentUser?.username ?? ''"
-  [isOnline]="liveSelectedMember ? isMemberOnline(liveSelectedMember) : false"
-  [isTracking]="isTracking"
-  [accuracy]="lastAccuracy"
-  [updatedAt]="lastFixAt"
-  [distanceMeters]="selectedDistanceMeters"
-  (sheetClosed)="closeDetailSheet()"
-  (centerRequested)="centerOnSelection()"
-/>

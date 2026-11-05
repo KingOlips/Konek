@@ -77,11 +77,11 @@
               <p class="field-error" role="alert">
                 <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
                 <span>
-                  @if (username?.hasError("required")) {
+                  @if (username.hasError("required")) {
                     Username is required
-                  } @else if (username?.hasError("minlength")) {
+                  } @else if (username.hasError("minlength")) {
                     Username must be at least 3 characters
-                  } @else if (username?.hasError("pattern")) {
+                  } @else if (username.hasError("pattern")) {
                     Only letters, numbers, and underscores allowed
                   }
                 </span>
@@ -111,9 +111,9 @@
               <p class="field-error" role="alert">
                 <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
                 <span>
-                  @if (email?.hasError("required")) {
+                  @if (email.hasError("required")) {
                     Email is required
-                  } @else if (email?.hasError("email")) {
+                  } @else if (email.hasError("email")) {
                     Enter a valid email address
                   }
                 </span>
@@ -153,9 +153,9 @@
               <p class="field-error" role="alert">
                 <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
                 <span>
-                  @if (password?.hasError("required")) {
+                  @if (password.hasError("required")) {
                     Password is required
-                  } @else if (password?.hasError("minlength")) {
+                  } @else if (password.hasError("minlength")) {
                     Password must be at least 6 characters
                   }
                 </span>
@@ -195,9 +195,9 @@
               <p class="field-error" role="alert">
                 <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
                 <span>
-                  @if (confirmPassword?.hasError("required")) {
+                  @if (confirmPassword.hasError("required")) {
                     Please confirm your password
-                  } @else if (confirmPassword?.hasError("mismatch")) {
+                  } @else if (confirmPassword.hasError("mismatch")) {
                     Passwords do not match
                   }
                 </span>
