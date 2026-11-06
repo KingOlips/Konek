@@ -269,6 +269,19 @@
         }
       }
     </div>
+
+    @if (hasActiveSquad) {
+      <div class="panel-footer">
+        <button
+          type="button"
+          class="panel-leave-btn"
+          (click)="leaveActiveSquad()"
+        >
+          <ion-icon name="log-out-outline" aria-hidden="true"></ion-icon>
+          Leave squad
+        </button>
+      </div>
+    }
   </div>
 
   <!-- Friend detail: quick pings float above the draggable sheet, over the map -->

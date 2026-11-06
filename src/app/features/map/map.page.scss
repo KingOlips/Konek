@@ -752,10 +752,55 @@ ion-fab-button.ion-color-primary {
 }
 
 .panel-content {
-  flex: 1;
+  /* min-height: 0 is what lets this flex child shrink; without it the list
+   * grows past the sheet and gets clipped instead of scrolling. */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 8px 10px 16px;
+}
+
+/* Leave action pinned under the member list so it stays reachable when the
+ * list scrolls. */
+.panel-footer {
+  flex: 0 0 auto;
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(17, 24, 39, 0.06);
+  background: #ffffff;
+}
+
+.panel-leave-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid rgba(217, 45, 32, 0.22);
+  border-radius: 12px;
+  background: #fff5f4;
+  color: #c5001a;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.panel-leave-btn ion-icon {
+  font-size: 18px;
+}
+
+.panel-leave-btn:hover {
+  background: #ffe9e6;
+}
+
+.panel-leave-btn:active {
+  transform: scale(0.99);
 }
 
 /* Section labels: "Online 3" / "Offline 2" */
@@ -1059,6 +1104,21 @@ ion-fab-button.ion-color-primary {
 
   .panel-icon-btn:hover {
     background: rgba(255, 255, 255, 0.06);
+  }
+
+  .panel-footer {
+    background: #171a20;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .panel-leave-btn {
+    border-color: rgba(255, 99, 113, 0.24);
+    background: #2a1a1d;
+    color: #ff8b95;
+  }
+
+  .panel-leave-btn:hover {
+    background: #352024;
   }
 
   .group-label {
@@ -1383,6 +1443,10 @@ ion-fab-button.ion-color-primary {
 
   .panel-content {
     padding: 10px 12px calc(12px + var(--ion-safe-area-bottom, 0px));
+  }
+
+  .panel-footer {
+    padding: 10px 14px calc(12px + var(--ion-safe-area-bottom, 0px));
   }
 }
 

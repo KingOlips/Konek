@@ -415,29 +415,10 @@ ion-header ion-toolbar ion-title {
   letter-spacing: -0.2px;
 }
 
-/* Hamburger as a soft icon tile */
-ion-header ion-menu-button {
-  --background: rgba(56, 128, 255, 0.1);
-  --background-hover: rgba(56, 128, 255, 0.18);
-  --background-hover-opacity: 1;
-  --border-radius: 12px;
-  --color: #2f6fe0;
-  width: 40px;
-  height: 40px;
-  font-size: 22px;
-  margin-inline-start: 6px;
-}
-
 body.dark ion-header ion-toolbar {
   --background: #15181e;
   --border-color: rgba(255, 255, 255, 0.08);
   --color: #f4f5f7;
-}
-
-body.dark ion-header ion-menu-button {
-  --background: rgba(86, 148, 255, 0.14);
-  --background-hover: rgba(86, 148, 255, 0.22);
-  --color: #8db4ff;
 }
 
 /* ---------------------------------------------------------------------------

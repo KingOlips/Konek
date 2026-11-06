@@ -298,16 +298,12 @@ ion-refresher-content {
   }
 }
 
+/* Swipe action revealed on each squad row. */
 ion-item-option {
   width: 84px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.2px;
-}
-
-.leave-option {
-  --background: #c5001a;
-  --color: #ffffff;
 }
 
 /* Add squad */
@@ -415,11 +411,6 @@ ion-item-option {
 
   .add-squad-btn {
     border-color: #333b47;
-  }
-
-  .leave-option {
-    --background: #d92b3f;
-    --color: #ffffff;
   }
 
   .empty-icon {

@@ -1,26 +1,9 @@
 import { ChangeDetectorRef, Component, inject } from "@angular/core";
-import { CommonModule } from "@angular/common";
-import { Router, RouterLink, RouterLinkActive } from "@angular/router";
+import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { App } from "@capacitor/app";
-import {
-  IonApp,
-  IonContent,
-  IonIcon,
-  IonMenu,
-  IonRouterOutlet,
-  MenuController,
-} from "@ionic/angular";
-import { addIcons } from "ionicons";
-import {
-  logInOutline,
-  logOutOutline,
-  mapOutline,
-  peopleOutline,
-  personAddOutline,
-  settingsOutline,
-} from "ionicons/icons";
-import { AuthService, User } from "./core/services/auth.service";
+import { IonApp, IonRouterOutlet } from "@ionic/angular";
+import { AuthService } from "./core/services/auth.service";
 import { BackgroundTrackerService } from "./core/services/background-tracker.service";
 import { BiometricService } from "./core/services/biometric.service";
 
@@ -29,55 +12,26 @@ import { BiometricService } from "./core/services/biometric.service";
   templateUrl: "app.component.html",
   styleUrls: ["app.component.scss"],
   standalone: true,
-  imports: [
-    CommonModule,
-    RouterLink,
-    RouterLinkActive,
-    IonApp,
-    IonRouterOutlet,
-    IonMenu,
-    IonContent,
-    IonIcon,
-  ],
+  imports: [IonApp, IonRouterOutlet],
 })
 export class AppComponent {
   private readonly authService = inject(AuthService);
   private readonly backgroundTracker = inject(BackgroundTrackerService);
   private readonly biometricService = inject(BiometricService);
-  private readonly menuController = inject(MenuController);
   private readonly router = inject(Router);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  currentUser: User | null = null;
   isAuthenticated = false;
   private pausedAt = 0;
 
   constructor() {
-    addIcons({
-      logInOutline,
-      logOutOutline,
-      mapOutline,
-      peopleOutline,
-      personAddOutline,
-      settingsOutline,
-    });
-
     this.authService.currentUser$.subscribe((user) => {
-      this.currentUser = user;
       this.isAuthenticated = !!user;
       this.cdr.markForCheck();
     });
 
     void this.setupBiometricLock();
     this.applyThemePreference();
-  }
-
-  /** Up to two initials for the drawer avatar. */
-  get initials(): string {
-    const name = (this.currentUser?.username ?? "").trim();
-    if (!name) return "?";
-    const parts = name.split(/[\s._-]+/).filter(Boolean);
-    return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)).toUpperCase();
   }
 
   /** Apply the persisted dark-mode preference at startup. */
@@ -131,21 +85,5 @@ export class AppComponent {
     } catch (error) {
       console.debug("App state listener unavailable:", error);
     }
-  }
-
-  async closeMenu(): Promise<void> {
-    await this.menuController.close("main-menu");
-  }
-
-  async signOut(): Promise<void> {
-    await this.closeMenu();
-    await this.backgroundTracker.stop();
-    try {
-      await firstValueFrom(this.authService.logout());
-    } catch (error) {
-      // Local session is cleared inside the service regardless.
-      console.debug("Logout API failed:", error);
-    }
-    await this.router.navigate(["/login"], { replaceUrl: true });
   }
 }

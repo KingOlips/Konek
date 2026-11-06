@@ -43,6 +43,7 @@ import {
   closeOutline,
   layersOutline,
   locateOutline,
+  logOutOutline,
   navigateOutline,
   peopleOutline,
   personAddOutline,
@@ -234,6 +235,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       closeOutline,
       layersOutline,
       locateOutline,
+      logOutOutline,
       navigateOutline,
       peopleOutline,
       personAddOutline,
@@ -1740,6 +1742,65 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
+   * Leave the squad open in the squad panel. Confirmation and the reload happen
+   * here so the panel's footer button stays a plain click handler.
+   */
+  async leaveActiveSquad(): Promise<void> {
+    const squadId = this.activeSquadId;
+    if (squadId === null) return;
+
+    const name =
+      this.squads.find((squad) => squad.id === squadId)?.squad_name ??
+      this.activeSquadName;
+    const alert = await this.alertCtrl.create({
+      header: "Leave Squad",
+      message: `Are you sure you want to leave "${name}"?`,
+      buttons: [
+        { text: "Cancel", role: "cancel" },
+        {
+          text: "Leave",
+          role: "destructive",
+          handler: () => {
+            void this.doLeaveSquad(squadId);
+          },
+        },
+      ],
+    });
+    await alert.present();
+  }
+
+  /**
+   * Leave a squad, then move the map on: the squad list is refetched so the
+   * active squad falls back to the next one (or to none at all).
+   */
+  private async doLeaveSquad(squadId: number): Promise<void> {
+    const loading = await this.loadingCtrl.create({ message: "Leaving squad..." });
+    await loading.present();
+
+    try {
+      await firstValueFrom(this.squadService.leaveSquad(squadId));
+      await loading.dismiss();
+      void this.showUpdateToast("Left squad");
+      await this.loadSquads();
+      if (this.activeSquadId === null) {
+        // Left the last squad: drop its geofence circles from the map.
+        this.geofences = [];
+        this.renderGeofences();
+      }
+      await this.loadSquadMembers(false);
+      this.cdr.markForCheck();
+    } catch (error) {
+      await loading.dismiss();
+      console.error("Leave squad failed:", error);
+      // Surface the server's reason, e.g. the sole-admin rule.
+      const message =
+        (error as { error?: { message?: string } })?.error?.message ??
+        "Failed to leave squad";
+      void this.showUpdateToast(message);
+    }
+  }
+
+  /**
    * Ionic's backdrop dims the whole page, including the chip, which makes the
    * chip look like it belongs to the dimmed background rather than the menu.
    * Build a clip path that leaves a chip-shaped hole in the backdrop so the
@@ -1861,6 +1922,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     if (active) return active.squad_name;
     if (this.activeSquadNameCache) return this.activeSquadNameCache;
     return this.squadsLoaded ? "Konek Map" : "Loading…";
+  }
+
+  /** Whether the panel's leave action applies: a squad must be selected. */
+  get hasActiveSquad(): boolean {
+    return this.activeSquadId !== null;
   }
 
   /** Transient top-of-screen confirmation, replacing the old map pill. */

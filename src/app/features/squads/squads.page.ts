@@ -10,7 +10,7 @@ import {
   IonButtons,
   IonButton,
   IonIcon,
-  IonMenuButton,
+  IonBackButton,
   IonLabel,
   IonItem,
   IonItemSliding,
@@ -54,7 +54,7 @@ import {
     IonButtons,
     IonButton,
     IonIcon,
-    IonMenuButton,
+    IonBackButton,
     IonLabel,
     IonItem,
     IonItemSliding,
@@ -284,7 +284,11 @@ export class SquadsPage implements OnInit {
     } catch (error) {
       await loading.dismiss();
       console.error("Leave squad failed:", error);
-      this.showToast("Failed to leave squad");
+      // Surface the server's reason, e.g. "Cannot leave as sole admin…".
+      const message =
+        (error as { error?: { message?: string } })?.error?.message ??
+        "Failed to leave squad";
+      this.showToast(message);
     }
   }
 
