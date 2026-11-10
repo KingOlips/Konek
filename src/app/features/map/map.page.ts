@@ -32,6 +32,7 @@ import {
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
 import {
+  alertCircleOutline,
   arrowBackOutline,
   batteryChargingOutline,
   batteryDeadOutline,
@@ -55,6 +56,7 @@ import {
   timeOutline,
 } from "ionicons/icons";
 import * as L from "leaflet";
+import { Capacitor } from "@capacitor/core";
 import type { Position } from "@capacitor/geolocation";
 
 import { AuthService, User } from "../../core/services/auth.service";
@@ -64,6 +66,7 @@ import { LocationService } from "../../core/services/location.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
 import { SquadService } from "../../core/services/squad.service";
 import { Geofence, SquadMemberLocation } from "../../core/models/location.models";
+import { PingType } from "../../core/models/ping.models";
 import { Squad } from "../../core/models/squad.models";
 import {
   SquadMenuPopoverComponent,
@@ -72,16 +75,6 @@ import {
 
 type MapStyle = "street" | "satellite" | "hybrid";
 type SheetSnap = "peek" | "half" | "full";
-type PingType =
-  | "whats_up"
-  | "on_my_way"
-  | "where_you_at"
-  | "meet_here"
-  | "almost_there"
-  | "leaving_now"
-  | "need_help"
-  | "coffee"
-  | "custom";
 
 @Component({
   selector: "app-map",
@@ -224,6 +217,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   constructor() {
     addIcons({
+      alertCircleOutline,
       arrowBackOutline,
       batteryChargingOutline,
       batteryDeadOutline,
@@ -1085,19 +1079,66 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       void this.openCustomPing();
       return;
     }
-    this.pingMember(type);
+    void this.pingMember(type);
   }
 
   /**
-   * Send a quick ping. The recipient's app turns this into a vibration; this
-   * side only sends the signal, so nothing happens on the sender's device.
+   * Send a ping to the member whose sheet is open. The sender gets immediate
+   * haptic confirmation; the backend delivers the ping to the recipient.
    */
-  pingMember(type: PingType, customText?: string): void {
+  async pingMember(type: PingType, customText?: string): Promise<void> {
     const member = this.liveSelectedMember;
-    if (!member) return;
-    // TODO: call the push/ping endpoint once it exists.
-    console.log("Ping", type, customText ?? "", "to", member.user_id);
-    void this.showUpdateToast(`Ping sent to ${member.username}`);
+    const sender = this.currentUser;
+    if (!member || !sender) return;
+
+    void this.playPingHaptic(type);
+
+    const message = customText?.trim();
+    try {
+      await firstValueFrom(
+        this.squadService.sendPing({
+          target_user_id: member.user_id,
+          ping_type: type,
+          from_user_id: sender.id,
+          ...(message ? { message } : {}),
+        })
+      );
+      void this.showUpdateToast(`Ping sent to ${member.username}`);
+    } catch (error) {
+      console.error("Ping failed:", error);
+      const reason =
+        (error as { error?: { message?: string } })?.error?.message ??
+        "Could not send ping";
+      void this.showUpdateToast(reason, "alert-circle-outline");
+    }
+  }
+
+  /**
+   * Sender-side confirmation. Emergency pings use a heavier double burst so
+   * they feel distinct from a casual ping.
+   */
+  private async playPingHaptic(type: PingType): Promise<void> {
+    const emergency = type === "need_help";
+    const pattern = emergency ? [200, 100, 200] : 30;
+
+    if (!Capacitor.isNativePlatform()) {
+      navigator.vibrate?.(pattern);
+      return;
+    }
+
+    try {
+      const { Haptics, ImpactStyle, NotificationType } = await import(
+        "@capacitor/haptics"
+      );
+      if (emergency) {
+        await Haptics.notification({ type: NotificationType.Warning });
+        await Haptics.impact({ style: ImpactStyle.Heavy });
+      } else {
+        await Haptics.impact({ style: ImpactStyle.Light });
+      }
+    } catch {
+      navigator.vibrate?.(pattern);
+    }
   }
 
   async openCustomPing(): Promise<void> {
@@ -1118,7 +1159,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
           handler: (data) => {
             const text = String(data.text ?? "").trim();
             if (!text) return false;
-            this.pingMember("custom", text);
+            void this.pingMember("custom", text);
             return true;
           },
         },
@@ -1930,7 +1971,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Transient top-of-screen confirmation, replacing the old map pill. */
-  private async showUpdateToast(message: string): Promise<void> {
+  private async showUpdateToast(
+    message: string,
+    icon = "checkmark-circle-outline"
+  ): Promise<void> {
     try {
       if (this.activeToast) {
         await this.activeToast.dismiss();
@@ -1938,7 +1982,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       }
       this.activeToast = await this.toastCtrl.create({
         message,
-        icon: "checkmark-circle-outline",
+        icon,
         duration: 2200,
         position: "top",
         cssClass: "update-toast",

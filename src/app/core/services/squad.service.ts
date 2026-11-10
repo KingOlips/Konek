@@ -9,6 +9,7 @@ import {
   Squad,
   SquadMember,
 } from "../models/squad.models";
+import { Ping, SendPingRequest } from "../models/ping.models";
 import { environment } from "../../../environments/environment";
 
 @Injectable({
@@ -45,6 +46,10 @@ export class SquadService {
       "GET",
       `api_get_squad_locations.php${query}`
     );
+  }
+
+  sendPing(data: SendPingRequest): Observable<Ping> {
+    return this.request<Ping>("POST", "api_send_ping.php", data);
   }
 
   updateMemberRole(
