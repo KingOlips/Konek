@@ -57,6 +57,7 @@ import {
   timeOutline,
 } from "ionicons/icons";
 import * as L from "leaflet";
+import { Capacitor } from "@capacitor/core";
 import type { Position } from "@capacitor/geolocation";
 
 import { AuthService, User } from "../../core/services/auth.service";
@@ -1227,15 +1228,44 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Send a quick ping. The recipient's app turns this into a vibration; this
-   * side only sends the signal, so nothing happens on the sender's device.
+   * Send a quick ping. The sender gets haptic confirmation; the recipient's
+   * app is expected to turn the ping into a vibration once delivery exists.
    */
   pingMember(type: PingType, customText?: string): void {
     const member = this.liveSelectedMember;
     if (!member) return;
+    void this.playPingHaptic(type);
     // TODO: call the push/ping endpoint once it exists.
     console.log("Ping", type, customText ?? "", "to", member.user_id);
     void this.showUpdateToast(`Ping sent to ${member.username}`);
+  }
+
+  /**
+   * Sender-side confirmation. Emergency pings use a heavier double burst so
+   * they feel distinct from a casual ping.
+   */
+  private async playPingHaptic(type: PingType): Promise<void> {
+    const emergency = type === "need_help";
+    const pattern = emergency ? [200, 100, 200] : 30;
+
+    if (!Capacitor.isNativePlatform()) {
+      navigator.vibrate?.(pattern);
+      return;
+    }
+
+    try {
+      const { Haptics, ImpactStyle, NotificationType } = await import(
+        "@capacitor/haptics"
+      );
+      if (emergency) {
+        await Haptics.notification({ type: NotificationType.Warning });
+        await Haptics.impact({ style: ImpactStyle.Heavy });
+      } else {
+        await Haptics.impact({ style: ImpactStyle.Light });
+      }
+    } catch {
+      navigator.vibrate?.(pattern);
+    }
   }
 
   async openCustomPing(): Promise<void> {
