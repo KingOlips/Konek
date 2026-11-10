@@ -32,11 +32,13 @@ import {
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
 import {
+  alertCircleOutline,
   arrowBackOutline,
   batteryChargingOutline,
   batteryDeadOutline,
   batteryFullOutline,
   batteryHalfOutline,
+  chatbubbleEllipsesOutline,
   chatbubblesOutline,
   checkmarkCircleOutline,
   chevronDownOutline,
@@ -65,8 +67,10 @@ import { BackgroundTrackerService } from "../../core/services/background-tracker
 import { BatteryService } from "../../core/services/battery.service";
 import { LocationService } from "../../core/services/location.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
+import { PingService } from "../../core/services/ping.service";
 import { SquadService } from "../../core/services/squad.service";
 import { Geofence, SquadMemberLocation } from "../../core/models/location.models";
+import { IncomingPing, PingType } from "../../core/models/ping.models";
 import { Squad } from "../../core/models/squad.models";
 import {
   SquadMenuPopoverComponent,
@@ -83,16 +87,6 @@ interface StoredMapView {
   zoom: number;
   timestamp: number;
 }
-type PingType =
-  | "whats_up"
-  | "on_my_way"
-  | "where_you_at"
-  | "meet_here"
-  | "almost_there"
-  | "leaving_now"
-  | "need_help"
-  | "coffee"
-  | "custom";
 
 @Component({
   selector: "app-map",
@@ -135,6 +129,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly batteryService = inject(BatteryService);
   private readonly locationService = inject(LocationService);
   private readonly geolocationService = inject(GeolocationService);
+  private readonly pingService = inject(PingService);
   private readonly squadService = inject(SquadService);
   private readonly alertCtrl = inject(AlertController);
   private readonly actionSheetCtrl = inject(ActionSheetController);
@@ -158,6 +153,9 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private geofenceLayers: L.Circle[] = [];
   private watchId: string | null = null;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  private pingPollTimer: ReturnType<typeof setInterval> | null = null;
+  /** Ping ids already shown this session, so a slow mark-read never re-toasts. */
+  private readonly shownPingIds = new Set<number>();
   private compassTimer: ReturnType<typeof setInterval> | null = null;
   /** Continuous beam rotation in unwrapped degrees (tracks past 0Â°/360Â°). */
   private headingDeg = 0;
@@ -254,11 +252,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   constructor() {
     addIcons({
+      alertCircleOutline,
       arrowBackOutline,
       batteryChargingOutline,
       batteryDeadOutline,
       batteryFullOutline,
       batteryHalfOutline,
+      chatbubbleEllipsesOutline,
       chatbubblesOutline,
       checkmarkCircleOutline,
       chevronDownOutline,
@@ -292,6 +292,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.startCompassUpdates();
     await this.loadSquadMembers();
     this.scheduleSquadPoll();
+    this.startPingPolling();
   }
 
   /**
@@ -334,6 +335,79 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       await this.refreshSquadLocations(false);
       this.scheduleSquadPoll();
     }, delay);
+  }
+
+  /**
+   * Poll for pings addressed to this user. Foreground delivery only: the timer
+   * pauses while the page is hidden, and the next visible tick catches up on
+   * anything that arrived meanwhile.
+   */
+  private startPingPolling(): void {
+    if (this.pingPollTimer) return;
+    void this.pollIncomingPings();
+    this.pingPollTimer = setInterval(() => {
+      void this.pollIncomingPings();
+    }, 6000);
+  }
+
+  private async pollIncomingPings(): Promise<void> {
+    if (!this.isActive || document.visibilityState === "hidden") return;
+
+    try {
+      const pings = await firstValueFrom(this.pingService.getPendingPings());
+      if (!pings.length) return;
+
+      // Mark every fetched ping read, including stale ones we choose not to
+      // surface, so a backlog cannot buzz again on every later poll.
+      firstValueFrom(
+        this.pingService.markPingsRead(pings.map((ping) => ping.id))
+      ).catch((error) => {
+        console.error("Failed to mark pings read:", error);
+      });
+
+      const fresh = pings.filter((ping) => !this.shownPingIds.has(ping.id));
+      for (const ping of fresh) {
+        this.shownPingIds.add(ping.id);
+      }
+
+      // Pings older than two minutes are treated as missed: the map was not
+      // open when they arrived, and buzzing for them now would be confusing.
+      const recent = fresh.filter((ping) => ping.age_seconds <= 120);
+      if (!recent.length) return;
+
+      if (recent.length === 1) {
+        const ping = recent[0];
+        await this.vibrateForPing(ping.ping_type);
+        await this.showUpdateToast(this.describePing(ping), this.pingIcon(ping));
+        return;
+      }
+
+      const emergency = recent.find((ping) => ping.ping_type === "need_help");
+      await this.vibrateForPing(emergency?.ping_type ?? recent[0].ping_type);
+      await this.showUpdateToast(
+        `You have ${recent.length} new pings`,
+        "chatbubbles-outline"
+      );
+    } catch (error) {
+      console.error("Failed to poll pings:", error);
+    }
+  }
+
+  /** Recipient-facing description of a ping: sender plus label or message. */
+  private describePing(ping: IncomingPing): string {
+    if (ping.ping_type === "custom" && ping.message) {
+      return `${ping.from_username}: ${ping.message}`;
+    }
+    const label =
+      this.pingOptions.find((option) => option.type === ping.ping_type)?.label ??
+      "Ping";
+    return `${ping.from_username} pinged you: ${label}`;
+  }
+
+  private pingIcon(ping: IncomingPing): string {
+    return ping.ping_type === "need_help"
+      ? "alert-circle-outline"
+      : "chatbubble-ellipses-outline";
   }
 
   ngOnDestroy(): void {
@@ -1224,29 +1298,39 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       void this.openCustomPing();
       return;
     }
-    this.pingMember(type);
+    void this.pingMember(type);
   }
 
   /**
-   * Send a quick ping. The sender gets haptic confirmation; the recipient's
-   * app is expected to turn the ping into a vibration once delivery exists.
+   * Send a quick ping to the selected squad mate. Nothing happens on this
+   * device; the recipient's app picks the ping up on its next poll and
+   * vibrates there.
    */
-  pingMember(type: PingType, customText?: string): void {
+  async pingMember(type: PingType, customText?: string): Promise<void> {
     const member = this.liveSelectedMember;
     if (!member) return;
-    void this.playPingHaptic(type);
-    // TODO: call the push/ping endpoint once it exists.
-    console.log("Ping", type, customText ?? "", "to", member.user_id);
-    void this.showUpdateToast(`Ping sent to ${member.username}`);
+
+    try {
+      await firstValueFrom(
+        this.pingService.sendPing({
+          target_user_id: member.user_id,
+          ping_type: type,
+          ...(customText ? { message: customText } : {}),
+        })
+      );
+    } catch (error) {
+      console.error("Failed to send ping:", error);
+      void this.showUpdateToast("Couldn't send ping", "alert-circle-outline");
+    }
   }
 
   /**
-   * Sender-side confirmation. Emergency pings use a heavier double burst so
-   * they feel distinct from a casual ping.
+   * Recipient-side alert. Emergency pings use a heavier double burst so they
+   * feel distinct from a casual ping.
    */
-  private async playPingHaptic(type: PingType): Promise<void> {
+  private async vibrateForPing(type: PingType): Promise<void> {
     const emergency = type === "need_help";
-    const pattern = emergency ? [200, 100, 200] : 30;
+    const pattern = emergency ? [200, 100, 200] : [80];
 
     if (!Capacitor.isNativePlatform()) {
       navigator.vibrate?.(pattern);
@@ -1261,7 +1345,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         await Haptics.notification({ type: NotificationType.Warning });
         await Haptics.impact({ style: ImpactStyle.Heavy });
       } else {
-        await Haptics.impact({ style: ImpactStyle.Light });
+        await Haptics.notification({ type: NotificationType.Success });
       }
     } catch {
       navigator.vibrate?.(pattern);
@@ -1286,7 +1370,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
           handler: (data) => {
             const text = String(data.text ?? "").trim();
             if (!text) return false;
-            this.pingMember("custom", text);
+            void this.pingMember("custom", text);
             return true;
           },
         },
@@ -2204,7 +2288,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Transient top-of-screen confirmation, replacing the old map pill. */
-  private async showUpdateToast(message: string): Promise<void> {
+  private async showUpdateToast(
+    message: string,
+    icon = "checkmark-circle-outline"
+  ): Promise<void> {
     try {
       if (this.activeToast) {
         await this.activeToast.dismiss();
@@ -2212,7 +2299,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       }
       this.activeToast = await this.toastCtrl.create({
         message,
-        icon: "checkmark-circle-outline",
+        icon,
         duration: 2200,
         position: "top",
         cssClass: "update-toast",
@@ -2255,6 +2342,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       clearTimeout(this.pollTimer);
       this.pollTimer = null;
     }
+    if (this.pingPollTimer) {
+      clearInterval(this.pingPollTimer);
+      this.pingPollTimer = null;
+    }
+    this.shownPingIds.clear();
     if (this.compassTimer) {
       clearInterval(this.compassTimer);
       this.compassTimer = null;
