@@ -97,53 +97,10 @@
   border-bottom: none !important;
 }
 
-/* Scale + attribution, kept small and legible over imagery */
-.leaflet-control-scale {
-  margin: 0 0 4px 12px !important;
-}
-
-.leaflet-control-scale-line {
-  border-color: rgba(15, 23, 42, 0.45);
-  border-top: none;
-  background: rgba(255, 255, 255, 0.78);
-  color: #334155;
-  font-size: 10px;
-  font-weight: 600;
-  border-radius: 0 0 4px 4px;
-  backdrop-filter: blur(6px);
-}
-
-.leaflet-control-attribution {
-  margin: 0 0 10px 12px !important;
-  padding: 2px 8px !important;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.82) !important;
-  color: #475569;
-  font-size: 10px;
-  line-height: 1.5;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(6px);
-}
-
-.leaflet-control-attribution a {
-  color: #2f6fe0;
-  text-decoration: none;
-}
-
 /* The map page draws the map behind the floating toolbar chips: keep Leaflet's
  * top controls (zoom) below the header instead of under the chips. */
 .map-content .leaflet-top {
   top: calc(var(--map-top-inset, 60px) + 8px);
-}
-
-/* The mobile squad sheet peeks over the bottom of the map: keep the
- * scale/attribution above it so the tile credits stay visible. */
-@media (max-width: 767px) {
-  .map-content .leaflet-bottom {
-    bottom: calc(
-      var(--squad-peek-height, 82px) + 10px + var(--ion-safe-area-bottom, 0px)
-    );
-  }
 }
 
 /* Invert the light basemap in dark mode; markers/popups stay untinted. */
@@ -335,21 +292,6 @@
     color: #111827;
   }
 
-  .leaflet-control-scale-line {
-    background: rgba(30, 30, 30, 0.78);
-    color: #e4e4e7;
-    border-color: rgba(255, 255, 255, 0.4);
-  }
-
-  .leaflet-control-attribution {
-    background: rgba(30, 30, 30, 0.82) !important;
-    color: #a1a1aa;
-  }
-
-  .leaflet-control-attribution a {
-    color: #9cc4ff;
-  }
-
   .leaflet-popup-content-wrapper,
   .leaflet-popup-tip {
     background: #1e1e1e;
@@ -462,6 +404,24 @@ ion-modal.squad-form-modal::part(content) {
 body.dark ion-modal.squad-form-modal {
   --background: #1f232b;
   --box-shadow: 0 -16px 44px rgba(0, 0, 0, 0.6);
+}
+
+/* Phones: use the whole screen instead of a bottom sheet, so the form and
+ * keyboard never fight for space. */
+@media (max-width: 767px) {
+  ion-modal.squad-form-modal {
+    --width: 100%;
+    --height: 100%;
+    --max-height: 100%;
+    --border-radius: 0;
+    --box-shadow: none;
+  }
+
+  ion-modal.squad-form-modal::part(content) {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+  }
 }
 
 /* Transient update toast (map) */

@@ -197,6 +197,17 @@ export class AuthService {
     ]);
   }
 
+  /**
+   * Discard the local session after the API rejected its token. Unlike
+   * logout(), no server call is made: the token is already invalid, so the
+   * only useful recovery is sending the user back to login.
+   */
+  async expireSession(): Promise<void> {
+    await this.clearStoredSession();
+    this.currentUserSubject.next(null);
+    this.isAuthenticatedSubject.next(false);
+  }
+
   async getAuthToken(): Promise<string | null> {
     const { value } = await Preferences.get({ key: TOKEN_KEY });
     return value;

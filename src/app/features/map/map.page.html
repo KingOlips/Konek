@@ -1,4 +1,7 @@
-<ion-header>
+<ion-header
+  [class.toolbar-hidden]="toolbarHidden"
+  [attr.inert]="toolbarHidden ? '' : null"
+>
   <ion-toolbar class="map-toolbar">
     @if (detailSheetOpen) {
       <ion-buttons slot="start">
@@ -85,7 +88,7 @@
     class="map-fabs"
     [class.panel-open]="showSquadList"
     [class.member-open]="detailSheetOpen"
-    [class.sheet-full]="squadSheetSnap === 'full' && !isSheetDragging"
+    [class.sheet-full]="squadSheetSnap === 'full' || sheetNearFull"
     vertical="bottom"
     horizontal="end"
     slot="fixed"
@@ -115,17 +118,36 @@
     </ion-fab-button>
   </ion-fab>
 
+  <!-- Drag tab for the squad sidebar. It lives outside the panel so it is
+       still clickable while the panel is closed: one click opens, one closes. -->
+  <button
+    type="button"
+    class="panel-handle"
+    [class.open]="showSquadList"
+    [class.hidden]="isSquadFormModalOpen"
+    [attr.aria-expanded]="showSquadList"
+    aria-controls="squadPanel"
+    aria-label="Toggle squad panel"
+    (click)="toggleSquadList()"
+  ></button>
+
   <!-- Squad list: sidebar on desktop, draggable bottom sheet on mobile -->
-  <div #squadPanel class="squad-panel" [class.open]="showSquadList">
+  <div #squadPanel id="squadPanel" class="squad-panel" [class.open]="showSquadList">
     <div
       class="sheet-grabber"
+      [class.hidden]="isSquadFormModalOpen"
+      role="button"
+      tabindex="0"
+      [attr.aria-expanded]="squadSheetSnap !== 'peek'"
+      aria-controls="squadPanel"
+      aria-label="Toggle squad list"
       (pointerdown)="onSheetDragStart($event)"
       (click)="onSheetGrabberClick()"
+      (keydown.enter)="onSheetGrabberClick()"
+      (keydown.space)="onSheetGrabberClick(); $event.preventDefault()"
     >
       <span></span>
     </div>
-
-    <div class="panel-handle" (click)="closeSquadPanel()"></div>
 
     <div
       class="panel-header"
@@ -141,6 +163,31 @@
             <span class="meta-online">{{ onlineCount }} online</span>
           }
         </p>
+
+        @if (activeSquadJoinCode) {
+          <div class="panel-invite">
+            <span class="invite-label">Invite code</span>
+            <div class="invite-code-row">
+              <span class="invite-code">{{ activeSquadJoinCode }}</span>
+              <button
+                type="button"
+                class="invite-btn"
+                (click)="copySquadCode()"
+                aria-label="Copy invite code"
+              >
+                <ion-icon name="copy-outline" aria-hidden="true"></ion-icon>
+              </button>
+              <button
+                type="button"
+                class="invite-btn invite-btn-primary"
+                (click)="shareSquadCode()"
+                aria-label="Share invite code with friends"
+              >
+                <ion-icon name="share-social-outline" aria-hidden="true"></ion-icon>
+              </button>
+            </div>
+          </div>
+        }
       </div>
       <div class="panel-actions">
         <button

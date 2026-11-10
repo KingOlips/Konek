@@ -6,11 +6,12 @@ import {
   withPreloading,
   PreloadAllModules,
 } from "@angular/router";
-import { provideHttpClient, withInterceptorsFromDi } from "@angular/common/http";
+import { provideHttpClient, withInterceptors, withInterceptorsFromDi } from "@angular/common/http";
 import { IonicRouteStrategy, provideIonicAngular } from "@ionic/angular";
 
 import { routes } from "./app/app.routes";
 import { AppComponent } from "./app/app.component";
+import { authExpiryInterceptor } from "./app/core/interceptors/auth-expiry.interceptor";
 
 bootstrapApplication(AppComponent, {
   providers: [
@@ -20,6 +21,9 @@ bootstrapApplication(AppComponent, {
     // Ionic runs these through its allowlist sanitizer first.
     provideIonicAngular({ innerHTMLTemplatesEnabled: true }),
     provideRouter(routes, withPreloading(PreloadAllModules), withComponentInputBinding()),
-    provideHttpClient(withInterceptorsFromDi()),
+    provideHttpClient(
+      withInterceptorsFromDi(),
+      withInterceptors([authExpiryInterceptor])
+    ),
   ],
 });

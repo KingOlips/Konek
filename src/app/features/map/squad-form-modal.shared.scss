@@ -278,9 +278,28 @@
   --color: var(--sheet-muted);
 }
 
+/* Phones: the modal is full-screen, so the sheet fills its content area and
+ * accounts for the status-bar notch. The sheet is no longer draggable. */
+@media (max-width: 767px) {
+  :host {
+    height: 100%;
+  }
+
+  .sheet {
+    min-height: 100%;
+    max-height: 100%;
+    padding-top: calc(18px + env(safe-area-inset-top));
+  }
+
+  .sheet-grabber {
+    display: none;
+  }
+}
+
 @media (max-width: 420px) {
   .sheet {
-    padding: 10px 16px calc(18px + env(safe-area-inset-bottom));
+    padding: calc(18px + env(safe-area-inset-top)) 16px
+      calc(18px + env(safe-area-inset-bottom));
   }
 
   .sheet-title {

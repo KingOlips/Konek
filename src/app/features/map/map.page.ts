@@ -41,6 +41,7 @@ import {
   checkmarkCircleOutline,
   chevronDownOutline,
   closeOutline,
+  copyOutline,
   layersOutline,
   locateOutline,
   logOutOutline,
@@ -51,6 +52,7 @@ import {
   personOutline,
   refreshOutline,
   settingsOutline,
+  shareSocialOutline,
   shieldCheckmarkOutline,
   timeOutline,
 } from "ionicons/icons";
@@ -72,6 +74,14 @@ import {
 
 type MapStyle = "street" | "satellite" | "hybrid";
 type SheetSnap = "peek" | "half" | "full";
+
+/** Last map viewport persisted to localStorage. */
+interface StoredMapView {
+  lat: number;
+  lng: number;
+  zoom: number;
+  timestamp: number;
+}
 type PingType =
   | "whats_up"
   | "on_my_way"
@@ -148,7 +158,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private watchId: string | null = null;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private compassTimer: ReturnType<typeof setInterval> | null = null;
-  /** Continuous beam rotation in unwrapped degrees (tracks past 0°/360°). */
+  /** Continuous beam rotation in unwrapped degrees (tracks past 0Â°/360Â°). */
   private headingDeg = 0;
   private resizeObserver: ResizeObserver | null = null;
   private themeObserver: MutationObserver | null = null;
@@ -164,14 +174,29 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private activeSquadNameCache: string | null = null;
   /** True once the squad list has been fetched at least once. */
   private squadsLoaded = false;
+  /** In-flight squad list fetch shared by every caller. */
+  private squadsLoadPromise: Promise<void> | null = null;
   private selectedMember: SquadMemberLocation | null = null;
 
   /** localStorage entry remembering which squad the user was viewing. */
   private static readonly ACTIVE_SQUAD_KEY = "konek_active_squad";
 
+  /** Last map viewport, so the map reopens where the user left it. */
+  private static readonly LAST_VIEW_KEY = "konek_last_map_center";
+  /** Ignore a stored viewport older than this (milliseconds). */
+  private static readonly LAST_VIEW_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  private static readonly DEFAULT_LAT = 14.5995;
+  private static readonly DEFAULT_LNG = 120.9842;
+  private static readonly DEFAULT_ZOOM = 14;
+
+  /** True when the initial viewport came from localStorage, not the fallback. */
+  private restoredMapView = false;
+
   /** Mobile bottom-sheet snap state. Ignored on desktop. */
   squadSheetSnap: "peek" | "half" | "full" = "peek";
   isSheetDragging = false;
+  /** True while a drag has pulled the sheet above the half point (near/full). */
+  sheetNearFull = false;
   private sheetDragStartY = 0;
   private sheetDragStartOffset = 0;
   private sheetCurrentOffset = 0;
@@ -200,7 +225,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     { type: "leaving_now", label: "Leaving now" },
     { type: "need_help", label: "Need help", danger: true },
     { type: "coffee", label: "Coffee?" },
-    { type: "custom", label: "Custom…" },
+    { type: "custom", label: "Customâ€¦" },
   ];
 
   currentUser: User | null = null;
@@ -209,6 +234,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   isTracking = false;
   mapStyle: MapStyle = "street";
   showSquadList = false;
+  /** True while the create/join squad modal is on screen. */
+  isSquadFormModalOpen = false;
+  /** True when the mobile squad sheet is at (or near) its full snap. */
+  toolbarHidden = false;
   isLoadingSquad = false;
   mapReady = false;
   connectionStatus: "connected" | "connecting" | "disconnected" = "connecting";
@@ -233,6 +262,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       checkmarkCircleOutline,
       chevronDownOutline,
       closeOutline,
+      copyOutline,
       layersOutline,
       locateOutline,
       logOutOutline,
@@ -243,6 +273,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       personOutline,
       refreshOutline,
       settingsOutline,
+      shareSocialOutline,
       shieldCheckmarkOutline,
       timeOutline,
     });
@@ -277,7 +308,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   /**
    * Sweep the flashlight beam as the compass changes (between GPS fixes).
-   * The angle is unwrapped so passing north (359° -> 1°) continues forward
+   * The angle is unwrapped so passing north (359Â° -> 1Â°) continues forward
    * instead of spinning almost a full turn backwards.
    */
   private startCompassUpdates(): void {
@@ -314,16 +345,27 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   private initMap(): void {
     const container = this.mapContainer.nativeElement;
+    const storedView = this.readStoredMapView();
+    this.restoredMapView = storedView !== null;
+    const initialCenter: L.LatLngExpression = storedView
+      ? [storedView.lat, storedView.lng]
+      : [MapPage.DEFAULT_LAT, MapPage.DEFAULT_LNG];
 
     this.map = L.map(container, {
-      center: [14.5995, 120.9842], // Manila fallback until GPS responds
-      zoom: 14,
+      center: initialCenter,
+      zoom: storedView?.zoom ?? MapPage.DEFAULT_ZOOM,
       zoomControl: false,
       attributionControl: false, // replaced with a compact custom control below
       zoomAnimation: true,
       fadeAnimation: true,
       markerZoomAnimation: true,
+      // Keep the viewport on the map instead of letting the world tiles repeat.
+      maxBounds: L.latLngBounds([-85, -180], [85, 180]),
+      maxBoundsViscosity: 1.0,
     });
+
+    // Remember every pan/zoom so the next visit starts here instead of Manila.
+    this.map.on("moveend", this.onMapMoveEnd);
 
     this.tileLayers = {
       street: this.createStreetLayer(),
@@ -333,10 +375,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     this.tileLayers[this.mapStyle].addTo(this.map);
 
-    // Keep the zoom buttons clear of the recenter FAB (bottom-right).
-    L.control.zoom({ position: "topleft" }).addTo(this.map);
-    L.control.scale({ position: "bottomleft", metric: true, imperial: false }).addTo(this.map);
-    L.control.attribution({ position: "bottomleft", prefix: false }).addTo(this.map);
+    // Zoom buttons are desktop-only; phones zoom by pinch and double-tap.
+    // The scale bar and attribution are not shown on either layout.
+    if (!this.isMobileLayout()) {
+      L.control.zoom({ position: "topleft" }).addTo(this.map);
+    }
 
     // Follow the app theme: Settings toggles body.dark, so watch the class.
     this.themeObserver = new MutationObserver(() => this.applyTileTheme());
@@ -349,6 +392,59 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.mapReady = true;
   }
 
+  private readonly onMapMoveEnd = (): void => this.persistMapView();
+
+  /** Save the current viewport for the next visit. */
+  private persistMapView(): void {
+    if (!this.map) return;
+    const center = this.map.getCenter();
+    this.persistMapViewAt(center.lat, center.lng, this.map.getZoom());
+  }
+
+  private persistMapViewAt(lat: number, lng: number, zoom: number): void {
+    const view: StoredMapView = { lat, lng, zoom, timestamp: Date.now() };
+    try {
+      localStorage.setItem(MapPage.LAST_VIEW_KEY, JSON.stringify(view));
+    } catch {
+      // localStorage may be unavailable in private mode.
+    }
+  }
+
+  /** Read a recent viewport; invalid or stale data falls back to Manila. */
+  private readStoredMapView(): StoredMapView | null {
+    try {
+      const raw = localStorage.getItem(MapPage.LAST_VIEW_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<StoredMapView> | null;
+      if (!parsed) return null;
+
+      const { lat, lng, zoom, timestamp } = parsed;
+      if (
+        typeof lat !== "number" ||
+        typeof lng !== "number" ||
+        typeof zoom !== "number" ||
+        typeof timestamp !== "number" ||
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        !Number.isFinite(zoom) ||
+        !Number.isFinite(timestamp) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180 ||
+        zoom < 1 ||
+        zoom > 20
+      ) {
+        return null;
+      }
+
+      if (Date.now() - timestamp > MapPage.LAST_VIEW_MAX_AGE_MS) return null;
+      return { lat, lng, zoom, timestamp };
+    } catch {
+      return null;
+    }
+  }
+
   /** Clean, crisp street basemap. No API key required. */
   private createStreetLayer(): L.TileLayer {
     const layer = L.tileLayer(
@@ -359,6 +455,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         // tiles reading "Map data not yet available". Capping the native zoom
         // makes Leaflet upscale the last real tile instead of requesting those.
         maxNativeZoom: 17,
+        // Never draw the world twice when the viewport is wider than a world.
+        noWrap: true,
         attribution:
           'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &middot; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors',
       }
@@ -374,6 +472,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         maxZoom: 19,
         // Imagery coverage is uneven; z18 is the safe ceiling worldwide.
         maxNativeZoom: 18,
+        noWrap: true,
         attribution: "Tiles &copy; Esri",
       }
     );
@@ -385,6 +484,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const layer = L.tileLayer("https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
       maxZoom: 20,
       subdomains: ["mt0", "mt1", "mt2", "mt3"],
+      noWrap: true,
       attribution: "&copy; Google",
     });
     this.watchTileErrors(layer, "hybrid");
@@ -414,6 +514,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.map.removeLayer(this.tileLayers.street);
     const fallback = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
+      noWrap: true,
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     });
@@ -459,11 +560,30 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private refreshMapSize(): void {
     if (!this.map || !this.mapContainer.nativeElement.isConnected) return;
     this.map.invalidateSize({ animate: false });
+    this.syncMapMinZoom();
     if (!this.isSheetDragging) {
       this.applySheetSnap();
     }
     if (this.detailSheetOpen && !this.isMemberSheetDragging) {
       this.applyMemberSheetSnap();
+    }
+  }
+
+  /**
+   * Keep the world at least as large as the map viewport. Without this the
+   * lowest zooms leave empty gray space beside the single un-wrapped world.
+   * Zoom 0 is 256px wide and every level doubles it, so the smallest zoom
+   * that still covers the viewport is ceil(log2(longestSide / 256)).
+   */
+  private syncMapMinZoom(): void {
+    if (!this.map) return;
+    const size = this.map.getSize();
+    const longestSide = Math.max(size.x, size.y);
+    if (!longestSide) return;
+
+    const minZoom = Math.max(0, Math.ceil(Math.log2(longestSide / 256)));
+    if (this.map.getMinZoom() !== minZoom) {
+      this.map.setMinZoom(minZoom);
     }
   }
 
@@ -529,8 +649,15 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     this.updateUserMarker(latitude, longitude, accuracy ?? 0, headingDeg);
     if (!this.hasCentered && this.map) {
-      this.map.setView([latitude, longitude], 16, { animate: true });
+      // Preserve the user's restored zoom; otherwise use street level so the
+      // first fix is immediately useful.
+      const zoom = this.restoredMapView ? Math.max(this.map.getZoom(), 14) : 16;
+      this.map.setView([latitude, longitude], zoom, { animate: true });
       this.hasCentered = true;
+      this.restoredMapView = false;
+      // `moveend` fires after the animation; write now too so closing the app
+      // mid-animation still reopens at the right place.
+      this.persistMapViewAt(latitude, longitude, zoom);
     }
     this.cdr.markForCheck();
 
@@ -645,6 +772,17 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
    * the first one so the map always points at a real squad.
    */
   private async loadSquads(): Promise<void> {
+    if (this.squadsLoadPromise) {
+      return this.squadsLoadPromise;
+    }
+    this.squadsLoadPromise = this.fetchSquads().finally(() => {
+      this.squadsLoadPromise = null;
+    });
+    return this.squadsLoadPromise;
+  }
+
+  /** Fetch squads and keep the active selection valid. */
+  private async fetchSquads(): Promise<void> {
     try {
       const squads = await firstValueFrom(this.squadService.getUserSquads());
       this.squads = squads ?? [];
@@ -715,7 +853,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   /** Formatted distance label for a member. */
   memberDistanceLabel(member: SquadMemberLocation): string {
     const d = this.memberDistance(member);
-    if (d === null) return "—";
+    if (d === null) return "â€”";
     if (d < 1000) return `${Math.round(d)} m`;
     return `${(d / 1000).toFixed(1)} km`;
   }
@@ -1200,13 +1338,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   get detailAccuracyLabel(): string {
     return this.lastAccuracy && this.lastAccuracy > 0
-      ? `±${Math.round(this.lastAccuracy)} m`
-      : "—";
+      ? `Â±${Math.round(this.lastAccuracy)} m`
+      : "â€”";
   }
 
   get detailDistanceLabel(): string {
     const meters = this.selectedDistanceMeters;
-    if (meters === null || meters === undefined) return "—";
+    if (meters === null || meters === undefined) return "â€”";
     if (meters < 1000) return `${Math.round(meters)} m`;
     return `${(meters / 1000).toFixed(1)} km`;
   }
@@ -1220,7 +1358,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     if (!this.detailHasBattery) return "Not available";
     const member = this.liveSelectedMember;
     return member?.is_charging
-      ? `${member.battery_level}% · charging`
+      ? `${member.battery_level}% Â· charging`
       : `${member?.battery_level}%`;
   }
 
@@ -1329,6 +1467,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     if (!this.isMobileLayout()) {
       // Desktop uses the right-hand sidebar transition, not a transform.
       panel.style.transform = "";
+      this.setToolbarHidden(false);
       this.syncFabPosition(0);
       return;
     }
@@ -1336,13 +1475,24 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     // The squad sheet yields the bottom edge while the friend detail is open.
     if (this.detailSheetOpen) {
       panel.style.transform = "translateY(100%)";
+      this.setToolbarHidden(false);
       this.syncFabPosition(0);
       return;
     }
 
     const offset = this.sheetOffsetFor(this.squadSheetSnap);
     panel.style.transform = `translateY(${offset}px)`;
+    // The sheet owns the whole screen at full height: let the toolbar slide
+    // away so the squad list gets an unobstructed view.
+    this.setToolbarHidden(this.squadSheetSnap === "full");
     this.syncFabPosition(offset);
+  }
+
+  /** Toggle the floating toolbar while the squad sheet is dragged. */
+  private setToolbarHidden(hidden: boolean): void {
+    if (this.toolbarHidden === hidden) return;
+    this.toolbarHidden = hidden;
+    this.cdr.markForCheck();
   }
 
   /**
@@ -1428,11 +1578,19 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       Math.max(min, this.sheetDragStartOffset + delta)
     );
     panel.style.transform = `translateY(${this.sheetCurrentOffset}px)`;
-    this.syncFabPosition(this.sheetCurrentOffset);
-
+    // Any real drag dismisses the toolbar so the sheet can travel freely; it
+    // returns after the sheet settles (unless it landed at full height).
     if (this.sheetDragMoved) {
+      this.setToolbarHidden(true);
       event.preventDefault();
     }
+    const halfOffset = this.sheetOffsetFor("half");
+    const nearFull = this.sheetCurrentOffset < halfOffset;
+    if (nearFull !== this.sheetNearFull) {
+      this.sheetNearFull = nearFull;
+      this.cdr.markForCheck();
+    }
+    this.syncFabPosition(this.sheetCurrentOffset);
   };
 
   private readonly onSheetPointerEnd = (): void => {
@@ -1452,6 +1610,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   private endSheetDrag(): void {
     this.isSheetDragging = false;
+    this.sheetNearFull = false;
     this.squadPanel?.nativeElement.classList.remove("dragging");
     this.mapFabs?.nativeElement.classList.remove("dragging");
     window.removeEventListener("pointermove", this.onSheetPointerMove);
@@ -1459,23 +1618,28 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     window.removeEventListener("pointercancel", this.onSheetPointerEnd);
   }
 
-  /** Tap the grabber to cycle peek -> half -> full -> peek. */
+  /**
+   * Tap the grabber to toggle the sheet between peek and half: one tap opens
+   * the panel, the next closes it. A drag never counts as a tap.
+   */
   onSheetGrabberClick(): void {
-    if (this.detailSheetOpen) return;
+    if (!this.isMobileLayout() || this.detailSheetOpen) return;
     if (this.sheetDragMoved) {
       // The click that follows a drag should not also change the snap.
       this.sheetDragMoved = false;
       return;
     }
-    const order: Array<"peek" | "half" | "full"> = ["peek", "half", "full"];
-    const next = order[(order.indexOf(this.squadSheetSnap) + 1) % order.length];
-    this.setSheetSnap(next);
+    this.setSheetSnap(this.squadSheetSnap === "peek" ? "half" : "peek");
   }
 
   /** Tapping the sheet header (outside its buttons) expands it like the grabber. */
   onSheetHeaderClick(event: MouseEvent): void {
     if (this.detailSheetOpen) return;
-    if ((event.target as HTMLElement).closest("ion-button, ion-item, a")) return;
+    if (
+      (event.target as HTMLElement).closest("ion-button, ion-item, a, button")
+    ) {
+      return;
+    }
     this.onSheetGrabberClick();
   }
 
@@ -1647,12 +1811,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     // width (not the collapsed pill's) when it sizes the popover.
     this.cdr.detectChanges();
 
-    // Refresh the listed squads so one created/left on the Squads page shows
-    // up here; if the active one disappeared, reload the map for the new one.
-    const previousActiveId = this.activeSquadId;
-    await this.loadSquads();
-    if (previousActiveId !== this.activeSquadId) {
-      await this.loadSquadMembers(false);
+    // First open before the squad list has arrived: wait for it so the menu
+    // is never empty. Every later open presents instantly from cache and
+    // refreshes quietly in the background (a network round-trip here made the
+    // menu feel laggy).
+    if (!this.squadsLoaded) {
+      const previousActiveId = this.activeSquadId;
+      await this.loadSquads();
+      if (previousActiveId !== this.activeSquadId) {
+        await this.loadSquadMembers(false);
+      }
+    } else {
+      void this.refreshSquadsInBackground();
     }
 
     const popover = await this.popoverCtrl.create({
@@ -1727,6 +1897,66 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       void this.joinSquad();
     } else if (data.action === "switch") {
       void this.switchSquad(data.squadId);
+    }
+  }
+
+  /**
+   * Quietly refetch the squad list after the dropdown is already on screen so
+   * squads created/left elsewhere show up next time without delaying this open.
+   */
+  private async refreshSquadsInBackground(): Promise<void> {
+    const previousActiveId = this.activeSquadId;
+    await this.loadSquads();
+    if (previousActiveId !== this.activeSquadId) {
+      await this.loadSquadMembers(false);
+    }
+  }
+
+  /** Invite code of the squad currently shown on the map. */
+  get activeSquadJoinCode(): string | null {
+    return (
+      this.squads.find((squad) => squad.id === this.activeSquadId)?.join_code ??
+      null
+    );
+  }
+
+  /** Copy the active squad's invite code so it can be pasted into a chat. */
+  async copySquadCode(): Promise<void> {
+    const code = this.activeSquadJoinCode;
+    if (!code) return;
+
+    try {
+      await navigator.clipboard.writeText(code);
+      await this.showUpdateToast("Join code copied!");
+    } catch {
+      // Clipboard access can be denied in a WebView: still surface the code.
+      await this.showUpdateToast(`Join code: ${code}`);
+    }
+  }
+
+  /** Share the active squad's invite code via the platform share sheet. */
+  async shareSquadCode(): Promise<void> {
+    const squad = this.squads.find((entry) => entry.id === this.activeSquadId);
+    if (!squad) return;
+
+    const text = `Join "${squad.squad_name}" on Konek with the code ${squad.join_code}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Join my Konek squad", text });
+        return;
+      } catch (error) {
+        // Closing the share sheet is not an error; anything else falls back
+        // to copying the code.
+        if ((error as DOMException)?.name === "AbortError") return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(squad.join_code);
+      await this.showUpdateToast("Join code copied!");
+    } catch {
+      await this.showUpdateToast(`Join code: ${squad.join_code}`);
     }
   }
 
@@ -1832,19 +2062,26 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async createSquad(): Promise<void> {
-    const { CreateSquadModalComponent } = await import(
-      "./create-squad-modal/create-squad-modal.component"
-    );
-    const modal = await this.modalCtrl.create({
-      component: CreateSquadModalComponent,
-      cssClass: "squad-form-modal",
-      backdropDismiss: true,
-    });
-    await modal.present();
+    this.isSquadFormModalOpen = true;
+    this.cdr.markForCheck();
+    try {
+      const { CreateSquadModalComponent } = await import(
+        "./create-squad-modal/create-squad-modal.component"
+      );
+      const modal = await this.modalCtrl.create({
+        component: CreateSquadModalComponent,
+        cssClass: "squad-form-modal",
+        backdropDismiss: true,
+      });
+      await modal.present();
 
-    const { data, role } = await modal.onWillDismiss<string>();
-    if (role === "confirm" && data) {
-      await this.doCreateSquad(data);
+      const { data, role } = await modal.onWillDismiss<string>();
+      if (role === "confirm" && data) {
+        await this.doCreateSquad(data);
+      }
+    } finally {
+      this.isSquadFormModalOpen = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -1871,19 +2108,26 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async joinSquad(): Promise<void> {
-    const { JoinSquadModalComponent } = await import(
-      "./join-squad-modal/join-squad-modal.component"
-    );
-    const modal = await this.modalCtrl.create({
-      component: JoinSquadModalComponent,
-      cssClass: "squad-form-modal",
-      backdropDismiss: true,
-    });
-    await modal.present();
+    this.isSquadFormModalOpen = true;
+    this.cdr.markForCheck();
+    try {
+      const { JoinSquadModalComponent } = await import(
+        "./join-squad-modal/join-squad-modal.component"
+      );
+      const modal = await this.modalCtrl.create({
+        component: JoinSquadModalComponent,
+        cssClass: "squad-form-modal",
+        backdropDismiss: true,
+      });
+      await modal.present();
 
-    const { data, role } = await modal.onWillDismiss<string>();
-    if (role === "confirm" && data) {
-      await this.doJoinSquad(data);
+      const { data, role } = await modal.onWillDismiss<string>();
+      if (role === "confirm" && data) {
+        await this.doJoinSquad(data);
+      }
+    } finally {
+      this.isSquadFormModalOpen = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -1921,7 +2165,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const active = this.squads.find((squad) => squad.id === this.activeSquadId);
     if (active) return active.squad_name;
     if (this.activeSquadNameCache) return this.activeSquadNameCache;
-    return this.squadsLoaded ? "Konek Map" : "Loading…";
+    return this.squadsLoaded ? "Konek Map" : "Loadingâ€¦";
   }
 
   /** Whether the panel's leave action applies: a squad must be selected. */
@@ -1999,6 +2243,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     window.removeEventListener("orientationchange", this.onWindowResize);
 
     if (this.map) {
+      this.map.off("moveend", this.onMapMoveEnd);
       this.squadMarkers.forEach((marker) => this.map?.removeLayer(marker));
       this.geofenceLayers.forEach((layer) => this.map?.removeLayer(layer));
       this.map.remove();
@@ -2010,4 +2255,3 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.mapReady = false;
   }
 }
-
