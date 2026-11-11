@@ -414,7 +414,7 @@ export class SettingsPage implements OnInit {
       message: `
         <p class="about-version">Version 1.0.0</p>
         <p>Stay connected with your squad through real-time location sharing.</p>
-        <p class="about-tech">Built with Ionic, Angular, Capacitor &amp; Leaflet.</p>
+        <p class="about-tech">Built with Ionic, Angular, Capacitor &amp; MapLibre GL JS.</p>
       `,
       buttons: ["OK"],
       cssClass: "about-alert",

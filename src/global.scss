@@ -55,62 +55,75 @@
 }
 
 /**
- * Leaflet overrides
+ * MapLibre overrides
  * -----------------------------------------------------
- * Marker and popup DOM is created dynamically by Leaflet, so Angular's
+ * Marker and popup DOM is created dynamically by MapLibre, so Angular's
  * component style encapsulation does not reach it. These rules must be global.
  */
 
-.leaflet-container {
+.maplibregl-map {
   font-family: inherit;
-  height: 100%;
   width: 100%;
+  height: 100%;
   background: #e8eaed;
   outline: none;
 }
 
-/* Zoom control: circular, shadowed, clear of the FAB */
-.leaflet-control-zoom {
+.maplibregl-canvas:focus {
+  outline: none;
+}
+
+/* Keep the zoom/compass control clear of the floating toolbar. */
+.map-content .maplibregl-ctrl-top-left {
+  top: calc(var(--map-top-inset, 60px) + 8px);
+}
+
+/* Zoom/compass control: circular, shadowed, clear of the FAB. */
+.maplibregl-ctrl-group {
   margin: 12px !important;
   border: none !important;
   border-radius: 12px !important;
   overflow: hidden;
+  background: #fff;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.16), 0 1px 3px rgba(15, 23, 42, 0.1) !important;
 }
 
-.leaflet-control-zoom a {
+.maplibregl-ctrl-group button {
   width: 36px;
   height: 36px;
-  line-height: 34px;
-  font-size: 18px;
-  color: #1f2937;
-  background: #fff;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
 }
 
-.leaflet-control-zoom a:hover {
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+.maplibregl-ctrl-group button:hover {
   background: #f4f7fb;
-  color: #1f2937;
 }
 
-.leaflet-control-zoom a:last-child {
-  border-bottom: none !important;
+.maplibregl-ctrl-attrib {
+  font-family: inherit;
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.82);
 }
 
-/* The map page draws the map behind the floating toolbar chips: keep Leaflet's
- * top controls (zoom) below the header instead of under the chips. */
-.map-content .leaflet-top {
-  top: calc(var(--map-top-inset, 60px) + 8px);
+.maplibregl-ctrl-attrib a {
+  color: #2f6fe0;
 }
 
-/* Invert the light basemap in dark mode; markers/popups stay untinted. */
-.map-dark-tiles .leaflet-tile-pane {
-  filter: invert(1) hue-rotate(180deg) brightness(1.08) contrast(0.92) saturate(0.65);
+/* On phones the squad sheet docks at the bottom, so keep the compact
+ * attribution just above its peek edge instead of behind it. */
+@media (max-width: 767px) {
+  .map-content .maplibregl-ctrl-bottom-left {
+    bottom: calc(var(--squad-peek-height, 82px) + 6px);
+  }
 }
 
 /* Own position marker */
 .user-marker {
-  position: relative;
+  /* MapLibre adds `.maplibregl-marker`; match its absolute positioning so this
+   * equal-specificity rule cannot knock the marker out of the map container. */
+  position: absolute;
   width: 44px;
   height: 44px;
 }
@@ -179,7 +192,7 @@
 
 /* Squad member markers */
 .squad-marker {
-  position: relative;
+  position: absolute;
   width: 38px;
   height: 38px;
 }
@@ -233,33 +246,39 @@
 }
 
 /* Popups */
-.leaflet-popup-content-wrapper {
+.maplibregl-popup-content {
   border-radius: 16px;
-  padding: 0;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
-}
-
-.leaflet-popup-content {
-  margin: 12px 14px;
+  padding: 12px 14px;
   min-width: 186px;
   line-height: 1.3;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+  font-family: inherit;
+  color: #1f2937;
 }
 
-.leaflet-popup-tip {
-  box-shadow: none;
+.maplibregl-popup-tip {
+  display: none;
 }
 
-.leaflet-popup-close-button {
-  top: 6px !important;
-  right: 6px !important;
-  padding: 4px 4px 0 0 !important;
-  color: #94a3b8 !important;
+.maplibregl-popup-close-button {
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: #94a3b8;
+  font-size: 18px;
+}
+
+.maplibregl-popup-close-button:hover {
+  background: transparent;
+  color: #64748b;
 }
 
 /* Dark mode: body.dark is toggled by Settings (or the system preference). */
 .dark {
-  .leaflet-container {
+  .maplibregl-map {
     background: #14161a;
   }
 
@@ -276,35 +295,46 @@
     border-color: #1e1e1e;
   }
 
-  .leaflet-control-zoom {
+  .maplibregl-ctrl-group {
+    background: rgba(248, 250, 252, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.5) !important;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5) !important;
   }
 
-  .leaflet-control-zoom a {
-    background: rgba(248, 250, 252, 0.94);
-    color: #111827;
-    border-bottom-color: rgba(15, 23, 42, 0.1) !important;
+  .maplibregl-ctrl-group button {
+    background: transparent;
   }
 
-  .leaflet-control-zoom a:hover {
+  .maplibregl-ctrl-group button:hover {
     background: #ffffff;
-    color: #111827;
   }
 
-  .leaflet-popup-content-wrapper,
-  .leaflet-popup-tip {
+  .maplibregl-ctrl-group button + button {
+    border-top-color: rgba(15, 23, 42, 0.1) !important;
+  }
+
+  .maplibregl-ctrl-attrib {
+    background: rgba(24, 24, 27, 0.86);
+    color: #d4d4d8;
+  }
+
+  .maplibregl-ctrl-attrib a {
+    color: #93c5fd;
+  }
+
+  .maplibregl-popup-content {
     background: #1e1e1e;
     border-color: rgba(255, 255, 255, 0.08);
     color: #e4e4e7;
-  }
-
-  .leaflet-popup-content-wrapper {
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
   }
 
-  .leaflet-popup-close-button {
-    color: #71717a !important;
+  .maplibregl-popup-close-button {
+    color: #71717a;
+  }
+
+  .maplibregl-popup-close-button:hover {
+    color: #a1a1aa;
   }
 }
 

@@ -25,7 +25,7 @@
 
 /*
  * Marker, control and popup styling lives in src/global.scss: those elements are
- * created by Leaflet at runtime, so Angular's component encapsulation never
+ * created by MapLibre at runtime, so Angular's component encapsulation never
  * applies to them.
  */
 
@@ -1705,7 +1705,7 @@ ion-fab-button.ion-color-primary {
 
 /* High DPI Displays */
 @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-  .leaflet-tile {
+  .maplibregl-canvas {
     image-rendering: -webkit-optimize-contrast;
   }
 }

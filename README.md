@@ -6,7 +6,7 @@ An Android mobile application for real-time location sharing with squad members,
 
 - 🔐 **Authentication** - Secure login/register with bearer tokens
 - 👥 **Squads** - Create/join squads with invite codes
-- 📍 **Real-time Location** - Live location sharing on Leaflet.js map
+- 📍 **Real-time Location** - Live location sharing on a 2.5D MapLibre GL map
 - 🧭 **Compass & Heading** - Direction awareness on map
 - 📱 **Biometric Auth** - Face ID / Fingerprint login
 - 📊 **Location History** - Export as JSON/CSV
@@ -20,7 +20,7 @@ An Android mobile application for real-time location sharing with squad members,
 - **Ionic Framework 9** with **Angular 22** (Standalone Components only)
 - **Capacitor 8** for native device access
 - **Android** target (iOS not included yet)
-- **Leaflet 1.9** + Esri World Street Map tiles for interactive maps (inverted in dark mode)
+- **MapLibre GL JS 6** for 2.5D-tilted vector maps that cross-fade into Esri satellite imagery on zoom
 - **RxJS** for reactive state management
 
 ### Backend
@@ -225,8 +225,11 @@ answers `OPTIONS` preflight requests.
 - The accelerometer drives the upload/poll cadence: **5 s while moving** and
   **30 s while stationary** (map marker still updates on every GPS fix).
 - Compass heading comes from `DeviceOrientationEvent`.
-- Leaflet marker/popup styles live in `src/global.scss` because Leaflet creates
-  that DOM outside Angular's component style encapsulation.
+- MapLibre marker/popup styles live in `src/global.scss` because MapLibre
+  creates that DOM outside Angular's component style encapsulation.
+- MapLibre's web worker is served from `assets/maplibre/` (configured in
+  `angular.json`) and registered with `setWorkerUrl()`; the bundler does not
+  emit the worker next to the app chunks automatically.
 
 ## Verified Setup
 

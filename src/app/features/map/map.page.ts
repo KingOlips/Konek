@@ -58,7 +58,17 @@ import {
   shieldCheckmarkOutline,
   timeOutline,
 } from "ionicons/icons";
-import * as L from "leaflet";
+import * as maplibregl from "maplibre-gl";
+import type {
+  AttributionControl,
+  GeoJSONSource,
+  Map as MapLibreMap,
+  MapMouseEvent,
+  Marker,
+  NavigationControl,
+  Popup,
+} from "maplibre-gl";
+import type { Feature, FeatureCollection, Polygon } from "geojson";
 import { Capacitor } from "@capacitor/core";
 import type { Position } from "@capacitor/geolocation";
 
@@ -79,6 +89,17 @@ import {
 
 type MapStyle = "street" | "satellite" | "hybrid";
 type SheetSnap = "peek" | "half" | "full";
+
+/** Zoom-driven interpolation expression matching the MapLibre style spec. */
+type ZoomInterpolation = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  number,
+  number,
+  number,
+  number,
+];
 
 /** Last map viewport persisted to localStorage. */
 interface StoredMapView {
@@ -139,18 +160,26 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly toastCtrl = inject(ToastController);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  private map: L.Map | null = null;
-  private userMarker: L.Marker | null = null;
-  private accuracyCircle: L.Circle | null = null;
-  private squadMarkers = new Map<string, L.Marker>();
-  private tileLayers: Record<MapStyle, L.TileLayer> | null = null;
-  private streetFallback: L.TileLayer | null = null;
-  private readonly tileErrorCounts: Record<MapStyle, number> = {
-    street: 0,
-    satellite: 0,
-    hybrid: 0,
+  private map: MapLibreMap | null = null;
+  private userMarker: Marker | null = null;
+  private userMarkerEl: HTMLDivElement | null = null;
+  private squadMarkers = new Map<string, Marker>();
+  private squadMarkerEls = new Map<string, HTMLDivElement>();
+  private geofencePopup: Popup | null = null;
+  /** GeoJSON data kept outside the style so it survives theme reloads. */
+  private accuracyData: Feature<Polygon> | null = null;
+  private geofenceData: FeatureCollection<Polygon> = {
+    type: "FeatureCollection",
+    features: [],
   };
-  private geofenceLayers: L.Circle[] = [];
+  /** MapLibre owns the basemap; true once its style finished loading. */
+  private styleLoaded = false;
+  /** Symbol layers from the active style, toggled for satellite-only mode. */
+  private labelLayerIds: string[] = [];
+  private currentTheme: "light" | "dark" = "light";
+  private mapLoadTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Deferred map creation while the page layout settles (0x0 guard). */
+  private mapInitTimer: ReturnType<typeof setTimeout> | null = null;
   private watchId: string | null = null;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private pingPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -164,7 +193,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private headingDeg = 0;
   private resizeObserver: ResizeObserver | null = null;
   private themeObserver: MutationObserver | null = null;
-  private zoomControl: L.Control.Zoom | null = null;
+  private zoomControl: NavigationControl | null = null;
+  private attributionControl: AttributionControl | null = null;
   private sizeTimers: ReturnType<typeof setTimeout>[] = [];
   private lastUploadAt = 0;
   private lastSuccessfulUploadAt = 0;
@@ -204,6 +234,14 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private static readonly DEFAULT_LAT = 14.5995;
   private static readonly DEFAULT_LNG = 120.9842;
   private static readonly DEFAULT_ZOOM = 14;
+  /** A slight tilt makes the vector buildings feel 3D without hurting labels. */
+  private static readonly DEFAULT_PITCH = 42;
+  private static readonly STYLE_LIGHT =
+    "https://tiles.openfreemap.org/styles/liberty";
+  private static readonly STYLE_DARK =
+    "https://tiles.openfreemap.org/styles/dark";
+  private static readonly SATELLITE_TILES =
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
   /** True when the initial viewport came from localStorage, not the fallback. */
   private restoredMapView = false;
@@ -317,16 +355,43 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Leaflet measures its container once when it is created. Creating the map in
-   * ngOnInit ran before the Ionic page/menu layout settled, so it cached a tiny
-   * size and only painted a single tile in the top-left corner. Create it once
-   * the view exists, then invalidate whenever the container actually resizes.
+   * Create the map once the view exists. Running earlier (ngOnInit) measured a
+   * layout that had not settled yet; resizing afterwards keeps it accurate.
    */
   ngAfterViewInit(): void {
-    this.initMap();
+    this.startMapInit();
     this.observeMapSize();
     this.applySheetSnap();
     this.applyMemberSheetSnap();
+  }
+
+  /**
+   * MapLibre 6 throws when it measures a 0x0 container, and Ionic briefly
+   * mounts a page before its layout settles. Poll until the container has a
+   * real size, then create the map and paint any data that already arrived.
+   * A bounded number of attempts keeps a hidden page from waiting forever.
+   */
+  private startMapInit(attempt = 0): void {
+    const element = this.mapContainer.nativeElement;
+    const laidOut = element.clientWidth > 0 && element.clientHeight > 0;
+    if (!laidOut && element.isConnected && attempt < 100) {
+      this.mapInitTimer = setTimeout(() => this.startMapInit(attempt + 1), 50);
+      return;
+    }
+
+    this.mapInitTimer = null;
+    this.initMap();
+    // Data may finish loading before the map exists (both run from ngOnInit);
+    // paint whatever already arrived so the first frame is complete.
+    this.updateSquadMarkers();
+    if (this.lastKnownFix) {
+      this.updateUserMarker(
+        this.lastKnownFix.latitude,
+        this.lastKnownFix.longitude,
+        this.lastKnownFix.accuracy ?? 0,
+        this.lastKnownFix.heading ?? this.geolocationService.getHeading()
+      );
+    }
   }
 
   /**
@@ -443,51 +508,107 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const container = this.mapContainer.nativeElement;
     const storedView = this.readStoredMapView();
     this.restoredMapView = storedView !== null;
-    const initialCenter: L.LatLngExpression = storedView
-      ? [storedView.lat, storedView.lng]
-      : [MapPage.DEFAULT_LAT, MapPage.DEFAULT_LNG];
+    const center: [number, number] = storedView
+      ? [storedView.lng, storedView.lat]
+      : [MapPage.DEFAULT_LNG, MapPage.DEFAULT_LAT];
+    this.currentTheme = document.body.classList.contains("dark") ? "dark" : "light";
 
-    this.map = L.map(container, {
-      center: initialCenter,
-      zoom: storedView?.zoom ?? MapPage.DEFAULT_ZOOM,
-      zoomControl: false,
-      attributionControl: false, // replaced with a compact custom control below
-      zoomAnimation: true,
-      fadeAnimation: true,
-      markerZoomAnimation: true,
-      // Keep the viewport on the map instead of letting the world tiles repeat.
-      maxBounds: L.latLngBounds([-85, -180], [85, 180]),
-      maxBoundsViscosity: 1.0,
-    });
+    // The bundler does not emit MapLibre's worker next to the app chunks, so
+    // point MapLibre at the copy shipped from the assets folder (see
+    // angular.json) before the first map is created.
+    maplibregl.setWorkerUrl("assets/maplibre/maplibre-gl-worker.mjs");
+
+    let map: MapLibreMap;
+    try {
+      map = new maplibregl.Map({
+        container,
+        style: this.styleUrl(),
+        center,
+        zoom: storedView?.zoom ?? MapPage.DEFAULT_ZOOM,
+        pitch: MapPage.DEFAULT_PITCH,
+        bearing: 0,
+        maxPitch: 65,
+        minZoom: 1,
+        maxZoom: 20,
+        // No maxBounds: MapLibre already clamps the Mercator latitude, and
+        // renderWorldCopies:false stops duplicate worlds. (MapLibre 6.17
+        // throws inside setZoom when maxBounds is set.)
+        renderWorldCopies: false,
+        attributionControl: false,
+        fadeDuration: 200,
+        // 3D buildings are the main depth cue; keep the canvas cheap on phones.
+        canvasContextAttributes: { antialias: false },
+      });
+    } catch (error) {
+      // Older WebViews without WebGL2 cannot start MapLibre. Never leave the
+      // splash spinning forever on those devices.
+      console.error("Failed to create map:", error);
+      this.mapReady = true;
+      this.cdr.markForCheck();
+      void this.showAlert("This device is unable to display the map.");
+      return;
+    }
+    this.map = map;
 
     // Remember every pan/zoom so the next visit starts here instead of Manila.
-    this.map.on("moveend", this.onMapMoveEnd);
+    map.on("moveend", this.onMapMoveEnd);
+    map.on("style.load", this.onStyleLoad);
+    map.on("load", this.onMapLoad);
+    map.on("click", this.onMapClick);
+    map.on("error", this.onMapError);
 
-    this.tileLayers = {
-      street: this.createStreetLayer(),
-      satellite: this.createSatelliteLayer(),
-      hybrid: this.createHybridLayer(),
-    };
+    // A slow or unreachable style must never leave the splash up forever.
+    this.mapLoadTimer = setTimeout(() => {
+      this.mapReady = true;
+      this.cdr.markForCheck();
+    }, 12000);
 
-    this.tileLayers[this.mapStyle].addTo(this.map);
-
-    // Zoom buttons are desktop-only; phones zoom by pinch and double-tap.
-    // The scale bar and attribution are not shown on either layout.
+    // Zoom/compass buttons are desktop-only; phones use pinch gestures.
     this.syncZoomControl();
+    this.addAttributionControl();
 
     // Follow the app theme: Settings toggles body.dark, so watch the class.
-    this.themeObserver = new MutationObserver(() => this.applyTileTheme());
+    this.themeObserver = new MutationObserver(() => this.applyMapTheme());
     this.themeObserver.observe(document.body, {
       attributes: true,
       attributeFilter: ["class"],
     });
-    this.applyTileTheme();
-
-    this.mapReady = true;
   }
 
+  private styleUrl(): string {
+    return this.currentTheme === "dark" ? MapPage.STYLE_DARK : MapPage.STYLE_LIGHT;
+  }
+
+  private readonly onStyleLoad = (): void => {
+    if (!this.map) return;
+    this.styleLoaded = true;
+    this.labelLayerIds = (this.map.getStyle().layers ?? [])
+      .filter((layer) => layer.type === "symbol")
+      .map((layer) => layer.id);
+    this.installCustomLayers();
+    this.applyMapStyle();
+    // The splash waits for the `load` event (first complete render), so the
+    // user never sees a blank canvas behind the spinner.
+  };
+
+  private readonly onMapLoad = (): void => this.markMapReady();
+
+  private markMapReady(): void {
+    if (this.mapReady) return;
+    this.mapReady = true;
+    if (this.mapLoadTimer) {
+      clearTimeout(this.mapLoadTimer);
+      this.mapLoadTimer = null;
+    }
+    this.cdr.markForCheck();
+  }
+
+  private readonly onMapError = (event: unknown): void => {
+    console.error("Map error:", event);
+  };
+
   /**
-   * Keep the Leaflet zoom buttons in sync with the layout. They are
+   * Keep the MapLibre navigation control in sync with the layout. It is
    * desktop-only, so resizing across the 768px breakpoint must add or remove
    * the control instead of leaving a stale copy behind.
    */
@@ -496,11 +617,28 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     const shouldShow = !this.isMobileLayout();
     if (shouldShow && !this.zoomControl) {
-      this.zoomControl = L.control.zoom({ position: "topleft" }).addTo(this.map);
+      const control = new maplibregl.NavigationControl({
+        showCompass: true,
+        showZoom: true,
+        visualizePitch: true,
+      });
+      this.zoomControl = control;
+      this.map.addControl(control, "top-left");
     } else if (!shouldShow && this.zoomControl) {
       this.map.removeControl(this.zoomControl);
       this.zoomControl = null;
     }
+  }
+
+  private addAttributionControl(): void {
+    if (!this.map) return;
+    const control = new maplibregl.AttributionControl({
+      compact: true,
+      customAttribution:
+        '&copy; <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> &middot; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+    });
+    this.attributionControl = control;
+    this.map.addControl(control, "bottom-left");
   }
 
   private readonly onMapMoveEnd = (): void => this.persistMapView();
@@ -556,95 +694,256 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  /** Clean, crisp street basemap. No API key required. */
-  private createStreetLayer(): L.TileLayer {
-    const layer = L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-      {
-        maxZoom: 19,
-        // Esri has no street detail past ~z17 in many regions: it answers with
-        // tiles reading "Map data not yet available". Capping the native zoom
-        // makes Leaflet upscale the last real tile instead of requesting those.
-        maxNativeZoom: 17,
-        // Never draw the world twice when the viewport is wider than a world.
-        noWrap: true,
-        attribution:
-          'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &middot; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors',
-      }
-    );
-    this.watchTileErrors(layer, "street");
-    return layer;
+  /**
+   * Add the satellite/3D/overlay layers on top of whichever OpenFreeMap style
+   * is active. Called after every style load, including dark-mode swaps.
+   */
+  private installCustomLayers(): void {
+    if (!this.map || !this.styleLoaded) return;
+
+    this.installBuilding3d();
+    this.ensureSatelliteLayer();
+    this.ensureAccuracyLayers();
+    this.ensureGeofenceLayers();
+    this.applySky();
   }
 
-  private createSatelliteLayer(): L.TileLayer {
-    const layer = L.tileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      {
-        maxZoom: 19,
-        // Imagery coverage is uneven; z18 is the safe ceiling worldwide.
-        maxNativeZoom: 18,
-        noWrap: true,
-        attribution: "Tiles &copy; Esri",
-      }
-    );
-    this.watchTileErrors(layer, "satellite");
-    return layer;
-  }
-
-  private createHybridLayer(): L.TileLayer {
-    const layer = L.tileLayer("https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}", {
-      maxZoom: 20,
-      subdomains: ["mt0", "mt1", "mt2", "mt3"],
-      noWrap: true,
-      attribution: "&copy; Google",
-    });
-    this.watchTileErrors(layer, "hybrid");
-    return layer;
+  /** Insert new layers below the first label so text always stays readable. */
+  private firstSymbolLayerId(): string | undefined {
+    return this.map
+      ?.getStyle()
+      .layers?.find((layer) => layer.type === "symbol")?.id;
   }
 
   /**
-   * When a tile provider keeps failing (offline CDN, blocked host, missing
-   * coverage), fall back to OpenStreetMap so panning never leaves a blank
-   * "map data not yet available" grid behind.
+   * 3D buildings give the tilted street map its depth. They only exist in the
+   * light style: over the dark basemap, imagery and extruded slabs all darken
+   * into unreadable shapes, so dark mode keeps a flat (but tilted) map.
    */
-  private watchTileErrors(layer: L.TileLayer, style: MapStyle): void {
-    layer.on("tileerror", () => {
-      if (!this.map || this.mapStyle !== style) return;
-      if (style !== "street" || this.streetFallback) return;
+  private installBuilding3d(): void {
+    const map = this.map;
+    if (!map || this.currentTheme === "dark" || map.getLayer("building-3d")) {
+      return;
+    }
 
-      this.tileErrorCounts.street += 1;
-      if (this.tileErrorCounts.street < 4) return;
-
-      this.switchToOsmFallback();
-    });
-  }
-
-  private switchToOsmFallback(): void {
-    if (!this.map || !this.tileLayers || this.streetFallback) return;
-
-    this.map.removeLayer(this.tileLayers.street);
-    const fallback = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      noWrap: true,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    });
-    this.streetFallback = fallback;
-    this.tileLayers.street = fallback;
-    fallback.addTo(this.map);
-    this.applyTileTheme();
-  }
-
-  /** Invert the basemap in dark mode (tiles themselves have no dark variant). */
-  private applyTileTheme(): void {
-    const dark = document.body.classList.contains("dark");
-    this.mapContainer.nativeElement.classList.toggle(
-      "map-dark-tiles",
-      dark && this.mapStyle === "street"
+    map.addLayer(
+      {
+        id: "building-3d",
+        type: "fill-extrusion",
+        source: "openmaptiles",
+        "source-layer": "building",
+        minzoom: 14,
+        filter: ["!", ["has", "hide_3d"]],
+        paint: {
+          "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+          "fill-extrusion-height": ["coalesce", ["get", "render_height"], 0],
+          "fill-extrusion-color": "#d9d2c6",
+          "fill-extrusion-opacity": 0.72,
+        },
+      },
+      this.firstSymbolLayerId()
     );
   }
 
-  /** Keep Leaflet's cached size in sync with the real container size. */
+  private ensureSatelliteLayer(): void {
+    const map = this.map;
+    if (!map) return;
+
+    if (!map.getSource("satellite")) {
+      map.addSource("satellite", {
+        type: "raster",
+        tiles: [MapPage.SATELLITE_TILES],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: "Imagery &copy; Esri",
+      });
+    }
+
+    if (!map.getLayer("satellite")) {
+      map.addLayer(
+        {
+          id: "satellite",
+          type: "raster",
+          source: "satellite",
+          paint: {
+            "raster-opacity": 0,
+            "raster-fade-duration": 250,
+            "raster-resampling": "linear",
+          },
+        },
+        this.firstSymbolLayerId()
+      );
+    }
+  }
+
+  private ensureAccuracyLayers(): void {
+    const map = this.map;
+    if (!map) return;
+    const empty: FeatureCollection<Polygon> = {
+      type: "FeatureCollection",
+      features: [],
+    };
+
+    if (!map.getSource("accuracy")) {
+      map.addSource("accuracy", {
+        type: "geojson",
+        data: this.accuracyData ?? empty,
+      });
+    }
+
+    if (!map.getLayer("accuracy-fill")) {
+      map.addLayer(
+        {
+          id: "accuracy-fill",
+          type: "fill",
+          source: "accuracy",
+          paint: { "fill-color": "#3880ff", "fill-opacity": 0.08 },
+        },
+        this.firstSymbolLayerId()
+      );
+    }
+
+    if (!map.getLayer("accuracy-line")) {
+      map.addLayer(
+        {
+          id: "accuracy-line",
+          type: "line",
+          source: "accuracy",
+          paint: {
+            "line-color": "#3880ff",
+            "line-opacity": 0.45,
+            "line-width": 1,
+            "line-dasharray": [2, 2],
+          },
+        },
+        this.firstSymbolLayerId()
+      );
+    }
+  }
+
+  private ensureGeofenceLayers(): void {
+    const map = this.map;
+    if (!map) return;
+
+    if (!map.getSource("geofences")) {
+      map.addSource("geofences", {
+        type: "geojson",
+        data: this.geofenceData,
+      });
+    }
+
+    if (!map.getLayer("geofence-fill")) {
+      map.addLayer(
+        {
+          id: "geofence-fill",
+          type: "fill",
+          source: "geofences",
+          paint: { "fill-color": "#2dd36f", "fill-opacity": 0.05 },
+        },
+        this.firstSymbolLayerId()
+      );
+    }
+
+    if (!map.getLayer("geofence-line")) {
+      map.addLayer(
+        {
+          id: "geofence-line",
+          type: "line",
+          source: "geofences",
+          paint: {
+            "line-color": "#2dd36f",
+            "line-width": 1.2,
+            "line-dasharray": [4, 6],
+          },
+        },
+        this.firstSymbolLayerId()
+      );
+    }
+  }
+
+  /**
+   * Sky/fog gradient for the tilted horizon. MapLibre 6 stores the sky on the
+   * style itself rather than as a layer, so it follows style/theme swaps.
+   */
+  private applySky(): void {
+    const map = this.map;
+    if (!map) return;
+
+    map.setSky({
+      "sky-color": this.currentTheme === "dark" ? "#0b1020" : "#9ec9ff",
+      "sky-horizon-blend": 0.5,
+      "horizon-color": this.currentTheme === "dark" ? "#1b2438" : "#e9f2ff",
+      "horizon-fog-blend": 0.6,
+      "fog-color": this.currentTheme === "dark" ? "#0f1526" : "#d7e6f7",
+      "fog-ground-blend": 0.8,
+      "atmosphere-blend": 0.55,
+    });
+  }
+
+  /**
+   * Street mode slowly cross-fades into satellite as the user zooms in.
+   * Satellite/Hybrid modes keep imagery on; satellite-only hides labels.
+   */
+  private applyMapStyle(): void {
+    const map = this.map;
+    if (!map || !this.styleLoaded || !map.getLayer("satellite")) return;
+
+    const opacity: number | ZoomInterpolation =
+      this.mapStyle === "street"
+        ? ["interpolate", ["linear"], ["zoom"], 14.5, 0, 17.5, 1]
+        : 1;
+    map.setPaintProperty("satellite", "raster-opacity", opacity);
+
+    // The building footprints come from z14 vector tiles: overzoomed on top of
+    // imagery they turn into huge slabs, so they hand the map over to the
+    // satellite imagery before it becomes the dominant basemap.
+    const buildingOpacity: number | ZoomInterpolation =
+      this.mapStyle === "street"
+        ? ["interpolate", ["linear"], ["zoom"], 15, 0.75, 16.2, 0]
+        : 0;
+    if (map.getLayer("building-3d")) {
+      map.setPaintProperty("building-3d", "fill-extrusion-opacity", buildingOpacity);
+    }
+
+    const hideLabels = this.mapStyle === "satellite";
+    for (const id of this.labelLayerIds) {
+      if (map.getLayer(id)) {
+        map.setLayoutProperty(id, "visibility", hideLabels ? "none" : "visible");
+      }
+    }
+  }
+
+  /** Swap between the light and dark OpenFreeMap styles. */
+  private applyMapTheme(): void {
+    const theme = document.body.classList.contains("dark") ? "dark" : "light";
+    if (theme === this.currentTheme || !this.map) return;
+
+    this.currentTheme = theme;
+    this.styleLoaded = false;
+    // Full style swap keeps the camera and DOM markers; custom layers are
+    // reinstalled from `onStyleLoad`, then the satellite mode is reapplied.
+    this.map.setStyle(this.styleUrl(), { diff: false });
+  }
+
+  private readonly onMapClick = (event: MapMouseEvent): void => {
+    const map = this.map;
+    if (!map || !map.getLayer("geofence-fill")) return;
+
+    const feature = map.queryRenderedFeatures(event.point, {
+      layers: ["geofence-fill"],
+    })[0];
+    if (!feature) return;
+
+    const name = String(feature.properties?.["name"] ?? "Geofence");
+    const radius = Number(feature.properties?.["radius_meters"] ?? 0);
+    this.geofencePopup?.remove();
+    this.geofencePopup = new maplibregl.Popup({ closeButton: true, offset: 12 })
+      .setLngLat(event.lngLat)
+      .setHTML(`<b>${this.escapeHtml(name)}</b><br>${radius}m radius`)
+      .addTo(map);
+  };
+
+  /** Keep MapLibre's canvas in sync with the real container size. */
   private observeMapSize(): void {
     const element = this.mapContainer.nativeElement;
 
@@ -670,10 +969,14 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.syncZoomControl();
   };
 
-  /** Re-measure the container; Leaflet only reflows tiles on invalidateSize(). */
+  /** Re-measure the canvas after layout changes. */
   private refreshMapSize(): void {
-    if (!this.map || !this.mapContainer.nativeElement.isConnected) return;
-    this.map.invalidateSize({ animate: false });
+    const element = this.mapContainer.nativeElement;
+    if (!this.map || !element.isConnected) return;
+    // A page mid-transition can collapse to 0x0; resizing then breaks
+    // MapLibre's matrices, so wait for real dimensions.
+    if (element.clientWidth === 0 || element.clientHeight === 0) return;
+    this.map.resize();
     this.syncMapMinZoom();
     if (!this.isSheetDragging) {
       this.applySheetSnap();
@@ -685,17 +988,17 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   /**
    * Keep the world at least as large as the map viewport. Without this the
-   * lowest zooms leave empty gray space beside the single un-wrapped world.
-   * Zoom 0 is 256px wide and every level doubles it, so the smallest zoom
-   * that still covers the viewport is ceil(log2(longestSide / 256)).
+   * lowest zooms leave empty space beside the single un-wrapped world.
+   * MapLibre's world is 512px at zoom 0 and doubles each level, so the smallest
+   * zoom that still covers the viewport is ceil(log2(longestSide / 512)).
    */
   private syncMapMinZoom(): void {
     if (!this.map) return;
-    const size = this.map.getSize();
-    const longestSide = Math.max(size.x, size.y);
+    const container = this.map.getContainer();
+    const longestSide = Math.max(container.clientWidth, container.clientHeight);
     if (!longestSide) return;
 
-    const minZoom = Math.max(0, Math.ceil(Math.log2(longestSide / 256)));
+    const minZoom = Math.max(0, Math.ceil(Math.log2(longestSide / 512)));
     if (this.map.getMinZoom() !== minZoom) {
       this.map.setMinZoom(minZoom);
     }
@@ -779,7 +1082,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       // Preserve the user's restored zoom; otherwise use street level so the
       // first fix is immediately useful.
       const zoom = this.restoredMapView ? Math.max(this.map.getZoom(), 14) : 16;
-      this.map.setView([latitude, longitude], zoom, { animate: true });
+      this.map.easeTo({
+        center: [longitude, latitude],
+        zoom,
+        duration: 800,
+      });
       this.hasCentered = true;
       this.restoredMapView = false;
       // `moveend` fires after the animation; write now too so closing the app
@@ -869,52 +1176,92 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     heading: number
   ): void {
     if (!this.map) return;
-    const latLng = L.latLng(lat, lng);
-
-    const html = `
-      <div class="marker-pulse"></div>
-      <div class="marker-halo"></div>
-      <div class="marker-core">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-          <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>
-        </svg>
-      </div>
-      <div class="marker-heading" style="transform: rotate(${heading}deg)"></div>`;
-
-    const icon = L.divIcon({
-      className: "user-marker",
-      html,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
-    });
 
     if (!this.userMarker) {
-      this.userMarker = L.marker(latLng, { icon, zIndexOffset: 1000 })
-        .addTo(this.map)
-        .on("click", () => {
-          this.openSelfDetail();
-          this.centerOnUser();
-        });
+      const el = document.createElement("div");
+      el.className = "user-marker";
+      el.style.zIndex = "1000";
+      el.innerHTML = `
+        <div class="marker-pulse"></div>
+        <div class="marker-halo"></div>
+        <div class="marker-core">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>
+          </svg>
+        </div>
+        <div class="marker-heading"></div>`;
+      el.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.openSelfDetail();
+        this.centerOnUser();
+      });
+      this.userMarkerEl = el;
+      this.userMarker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat([lng, lat])
+        .addTo(this.map);
     } else {
-      this.userMarker.setLatLng(latLng);
-      this.userMarker.setIcon(icon);
+      this.userMarker.setLngLat([lng, lat]);
     }
 
-
-    if (accuracy > 0) {
-      if (!this.accuracyCircle) {
-        this.accuracyCircle = L.circle(latLng, {
-          radius: accuracy,
-          color: "#3880ff",
-          fillColor: "#3880ff",
-          fillOpacity: 0.08,
-          weight: 1,
-          dashArray: "5 5",
-        }).addTo(this.map);
-      } else {
-        this.accuracyCircle.setLatLng(latLng).setRadius(accuracy);
-      }
+    const arrow = this.userMarkerEl?.querySelector(
+      ".marker-heading"
+    ) as HTMLElement | null;
+    if (arrow) {
+      arrow.style.transform = `rotate(${heading}deg)`;
     }
+
+    this.updateAccuracyCircle(lat, lng, accuracy);
+  }
+
+  private updateAccuracyCircle(
+    lat: number,
+    lng: number,
+    accuracy: number
+  ): void {
+    this.accuracyData = accuracy > 0 ? this.circleFeature(lat, lng, accuracy, {}) : null;
+    const source = this.map?.getSource("accuracy") as GeoJSONSource | undefined;
+    source?.setData(
+      this.accuracyData ?? { type: "FeatureCollection", features: [] }
+    );
+  }
+
+  /**
+   * Build a GeoJSON polygon approximating a circle in metres. MapLibre has no
+   * metre-radius circle primitive, so accuracy rings and geofences are polygons.
+   */
+  private circleFeature(
+    lat: number,
+    lng: number,
+    radiusMeters: number,
+    properties: Record<string, string | number>
+  ): Feature<Polygon> {
+    const steps = 96;
+    const earthRadius = 6371008.8;
+    const angular = radiusMeters / earthRadius;
+    const latRad = (lat * Math.PI) / 180;
+    const lngRad = (lng * Math.PI) / 180;
+    const ring: [number, number][] = [];
+
+    for (let i = 0; i <= steps; i += 1) {
+      const bearing = ((i % steps) * 2 * Math.PI) / steps;
+      const lat2 = Math.asin(
+        Math.sin(latRad) * Math.cos(angular) +
+          Math.cos(latRad) * Math.sin(angular) * Math.cos(bearing)
+      );
+      const lng2 =
+        lngRad +
+        Math.atan2(
+          Math.sin(bearing) * Math.sin(angular) * Math.cos(latRad),
+          Math.cos(angular) - Math.sin(latRad) * Math.sin(lat2)
+        );
+      ring.push([(lng2 * 180) / Math.PI, (lat2 * 180) / Math.PI]);
+    }
+
+    return {
+      type: "Feature",
+      properties,
+      geometry: { type: "Polygon", coordinates: [ring] },
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -995,7 +1342,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   /** Distance (metres) from current user to a given member. */
   private memberDistance(member: SquadMemberLocation): number | null {
-    const me = this.userMarker?.getLatLng();
+    const me = this.userMarker?.getLngLat();
     if (!me) return null;
     return this.geolocationService.calculateDistance(
       me.lat,
@@ -1145,8 +1492,9 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const present = new Set(this.squadMembers.map((m) => String(m.user_id)));
     for (const [id, marker] of this.squadMarkers) {
       if (!present.has(id)) {
-        this.map.removeLayer(marker);
+        marker.remove();
         this.squadMarkers.delete(id);
+        this.squadMarkerEls.delete(id);
       }
     }
 
@@ -1154,39 +1502,42 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       if (member.user_id === this.currentUser?.id) continue; // skip self
 
       const id = String(member.user_id);
-      const latLng = L.latLng(member.latitude, member.longitude);
-
       const existing = this.squadMarkers.get(id);
       if (existing) {
-        existing.setLatLng(latLng);
-        existing.setIcon(this.squadIcon(member));
+        existing.setLngLat([member.longitude, member.latitude]);
+        const el = this.squadMarkerEls.get(id);
+        if (el) this.paintSquadMarker(el, member);
         continue;
       }
 
-      const marker = L.marker(latLng, {
-        icon: this.squadIcon(member),
-        zIndexOffset: 500,
-      })
-        .addTo(this.map)
-        .on("click", () => this.openMemberDetail(member.user_id));
+      const el = document.createElement("div");
+      el.style.zIndex = "500";
+      this.paintSquadMarker(el, member);
+      el.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.openMemberDetail(member.user_id);
+      });
+
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat([member.longitude, member.latitude])
+        .addTo(this.map);
       this.squadMarkers.set(id, marker);
+      this.squadMarkerEls.set(id, el);
     }
   }
 
   /** Avatar-style marker: initials, role colour and a live dot. */
-  private squadIcon(member: SquadMemberLocation): L.DivIcon {
+  private paintSquadMarker(el: HTMLDivElement, member: SquadMemberLocation): void {
     const online = this.isMemberOnline(member);
     const admin = member.role === "admin";
-    return L.divIcon({
-      className: `squad-marker${admin ? " is-admin" : ""}`,
-      html: `
-        <div class="marker-ring"></div>
-        <div class="marker-core"><span>${this.initialsOf(member.username)}</span></div>
-        ${online ? '<div class="marker-status"></div>' : ""}`,
-      iconSize: [38, 38],
-      iconAnchor: [19, 19],
-      popupAnchor: [0, -20],
-    });
+    // Preserve MapLibre's own classes (maplibregl-marker, anchor class) while
+    // refreshing the role/online state on every location poll.
+    el.classList.add("squad-marker");
+    el.classList.toggle("is-admin", admin);
+    el.innerHTML = `
+      <div class="marker-ring"></div>
+      <div class="marker-core"><span>${this.initialsOf(member.username)}</span></div>
+      ${online ? '<div class="marker-status"></div>' : ""}`;
   }
 
   private initialsOf(username: string | undefined): string {
@@ -1221,20 +1572,19 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private renderGeofences(): void {
-    if (!this.map) return;
-    this.geofenceLayers.forEach((layer) => this.map?.removeLayer(layer));
-    this.geofenceLayers = this.geofences.map((fence) =>
-      L.circle([fence.latitude, fence.longitude], {
-        radius: fence.radius_meters,
-        color: "#2dd36f",
-        fillColor: "#2dd36f",
-        fillOpacity: 0.05,
-        weight: 1,
-        dashArray: "4 6",
-      })
-        .addTo(this.map!)
-        .bindPopup(`<b>${fence.name}</b><br>${fence.radius_meters}m radius`)
-    );
+    this.geofenceData = {
+      type: "FeatureCollection",
+      features: this.geofences.map((fence) =>
+        this.circleFeature(fence.latitude, fence.longitude, fence.radius_meters, {
+          id: fence.id,
+          name: fence.name,
+          radius_meters: fence.radius_meters,
+        })
+      ),
+    };
+
+    const source = this.map?.getSource("geofences") as GeoJSONSource | undefined;
+    source?.setData(this.geofenceData);
   }
 
   private checkGeofenceTransitions(members: SquadMemberLocation[]): void {
@@ -1273,8 +1623,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   centerOnUser(): void {
     if (this.userMarker && this.map) {
-      this.map.flyTo(this.userMarker.getLatLng(), Math.max(this.map.getZoom(), 16), {
-        duration: 0.6,
+      this.map.flyTo({
+        center: this.userMarker.getLngLat(),
+        zoom: Math.max(this.map.getZoom(), 16),
+        duration: 600,
       });
     } else {
       void this.getInitialPosition();
@@ -1282,7 +1634,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   centerOnMember(member: SquadMemberLocation): void {
-    this.map?.flyTo([member.latitude, member.longitude], 17, { duration: 0.6 });
+    this.map?.flyTo({
+      center: [member.longitude, member.latitude],
+      zoom: 17,
+      duration: 600,
+    });
     this.closeSquadPanel();
   }
 
@@ -1315,7 +1671,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.detailSheetOpen = true;
     this.memberSheetSnap = "half";
     this.closeSquadPanel();
-    // Leaflet click handlers run outside Angular's change detection
+    // MapLibre click handlers run outside Angular's change detection
     // (zoneless app), so schedule a render for the sheet state change.
     this.cdr.markForCheck();
     requestAnimationFrame(() => this.applyMemberSheetSnap());
@@ -1508,7 +1864,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   /** Distance in metres between the user and the selected member. */
   get selectedDistanceMeters(): number | null {
     const member = this.liveSelectedMember;
-    const origin = this.userMarker?.getLatLng();
+    const origin = this.userMarker?.getLngLat();
     if (!member || !origin) return null;
     return this.geolocationService.calculateDistance(
       origin.lat,
@@ -1625,18 +1981,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   changeMapStyle(style: MapStyle): void {
-    if (!this.map || !this.tileLayers) return;
-    Object.values(this.tileLayers).forEach((layer) => this.map?.removeLayer(layer));
-    this.tileLayers[style].addTo(this.map);
     this.mapStyle = style;
-    this.applyTileTheme();
+    this.applyMapStyle();
   }
 
   async presentMapStyleSheet(): Promise<void> {
     const sheet = await this.actionSheetCtrl.create({
       header: "Map style",
       buttons: [
-        { text: "Street", handler: () => this.changeMapStyle("street") },
+        {
+          text: "Street (3D, auto hybrid)",
+          handler: () => this.changeMapStyle("street"),
+        },
         { text: "Satellite", handler: () => this.changeMapStyle("satellite") },
         { text: "Hybrid", handler: () => this.changeMapStyle("hybrid") },
         { text: "Cancel", role: "cancel" },
@@ -1681,7 +2037,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     return Math.max(0, height - visible);
   }
 
-  /** Peek height comes from CSS so the FAB/Leaflet offsets stay in sync. */
+  /** Peek height comes from CSS so the FAB/MapLibre offsets stay in sync. */
   private sheetPeekHeight(): number {
     const panel = this.squadPanel?.nativeElement;
     if (!panel) return 82;
@@ -2485,6 +2841,14 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.themeObserver = null;
     this.sizeTimers.forEach((timer) => clearTimeout(timer));
     this.sizeTimers = [];
+    if (this.mapLoadTimer) {
+      clearTimeout(this.mapLoadTimer);
+      this.mapLoadTimer = null;
+    }
+    if (this.mapInitTimer) {
+      clearTimeout(this.mapInitTimer);
+      this.mapInitTimer = null;
+    }
     this.endSheetDrag();
     this.endMemberSheetDrag();
     window.removeEventListener("resize", this.onWindowResize);
@@ -2492,15 +2856,27 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     if (this.map) {
       this.map.off("moveend", this.onMapMoveEnd);
-      this.squadMarkers.forEach((marker) => this.map?.removeLayer(marker));
-      this.geofenceLayers.forEach((layer) => this.map?.removeLayer(layer));
+      this.map.off("style.load", this.onStyleLoad);
+      this.map.off("load", this.onMapLoad);
+      this.map.off("click", this.onMapClick);
+      this.map.off("error", this.onMapError);
+      this.squadMarkers.forEach((marker) => marker.remove());
+      this.userMarker?.remove();
+      this.geofencePopup?.remove();
       this.map.remove();
       this.map = null;
     }
     this.zoomControl = null;
+    this.attributionControl = null;
     this.squadMarkers.clear();
-    this.geofenceLayers = [];
-    this.streetFallback = null;
+    this.squadMarkerEls.clear();
+    this.userMarker = null;
+    this.userMarkerEl = null;
+    this.geofencePopup = null;
+    this.accuracyData = null;
+    this.geofenceData = { type: "FeatureCollection", features: [] };
+    this.labelLayerIds = [];
+    this.styleLoaded = false;
     this.mapReady = false;
   }
 }
