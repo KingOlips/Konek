@@ -57,7 +57,7 @@ try {
         
         if (!$squad) {
             http_response_code(200);
-            echo json_encode(["success" => true, "data" => [], "message" => "No squad found"]);
+            echo json_encode(["success" => true, "data" => [], "message" => "No circle found"]);
             exit();
         }
         
@@ -76,7 +76,7 @@ try {
     
     if (!$member) {
         http_response_code(403);
-        echo json_encode(["success" => false, "message" => "Not a member of this squad"]);
+        echo json_encode(["success" => false, "message" => "Not a member of this circle"]);
         exit();
     }
     

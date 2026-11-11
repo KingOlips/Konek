@@ -156,13 +156,30 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private pingPollTimer: ReturnType<typeof setInterval> | null = null;
   /** Ping ids already shown this session, so a slow mark-read never re-toasts. */
   private readonly shownPingIds = new Set<number>();
+  /** Wheel-scroll animation state for the desktop ping row. */
+  private pingScrollTarget: number | null = null;
+  private pingScrollFrame: number | null = null;
   private compassTimer: ReturnType<typeof setInterval> | null = null;
   /** Continuous beam rotation in unwrapped degrees (tracks past 0Â°/360Â°). */
   private headingDeg = 0;
   private resizeObserver: ResizeObserver | null = null;
   private themeObserver: MutationObserver | null = null;
+  private zoomControl: L.Control.Zoom | null = null;
   private sizeTimers: ReturnType<typeof setTimeout>[] = [];
   private lastUploadAt = 0;
+  private lastSuccessfulUploadAt = 0;
+  private locationUploadInFlight = false;
+  /** Latest fix, reused by the foreground heartbeat when GPS goes quiet. */
+  private lastKnownFix: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    altitude?: number;
+    speed?: number;
+    heading?: number;
+    timestamp: number;
+  } | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private activeToast: HTMLIonToastElement | null = null;
   private isActive = true;
   private hasCentered = false;
@@ -239,6 +256,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   toolbarHidden = false;
   isLoadingSquad = false;
   mapReady = false;
+  /** True once the first squad/member fetch has finished (gates the splash). */
+  initialLoadDone = false;
   connectionStatus: "connected" | "connecting" | "disconnected" = "connecting";
   /** GPS accuracy (metres) of the user's latest fix, for the self sheet. */
   lastAccuracy: number | null = null;
@@ -291,6 +310,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     await this.geolocationService.startMotionTracking();
     this.startCompassUpdates();
     await this.loadSquadMembers();
+    this.initialLoadDone = true;
+    this.cdr.markForCheck();
     this.scheduleSquadPoll();
     this.startPingPolling();
   }
@@ -452,9 +473,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     // Zoom buttons are desktop-only; phones zoom by pinch and double-tap.
     // The scale bar and attribution are not shown on either layout.
-    if (!this.isMobileLayout()) {
-      L.control.zoom({ position: "topleft" }).addTo(this.map);
-    }
+    this.syncZoomControl();
 
     // Follow the app theme: Settings toggles body.dark, so watch the class.
     this.themeObserver = new MutationObserver(() => this.applyTileTheme());
@@ -465,6 +484,23 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.applyTileTheme();
 
     this.mapReady = true;
+  }
+
+  /**
+   * Keep the Leaflet zoom buttons in sync with the layout. They are
+   * desktop-only, so resizing across the 768px breakpoint must add or remove
+   * the control instead of leaving a stale copy behind.
+   */
+  private syncZoomControl(): void {
+    if (!this.map) return;
+
+    const shouldShow = !this.isMobileLayout();
+    if (shouldShow && !this.zoomControl) {
+      this.zoomControl = L.control.zoom({ position: "topleft" }).addTo(this.map);
+    } else if (!shouldShow && this.zoomControl) {
+      this.map.removeControl(this.zoomControl);
+      this.zoomControl = null;
+    }
   }
 
   private readonly onMapMoveEnd = (): void => this.persistMapView();
@@ -629,7 +665,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     window.addEventListener("orientationchange", this.onWindowResize);
   }
 
-  private readonly onWindowResize = (): void => this.refreshMapSize();
+  private readonly onWindowResize = (): void => {
+    this.refreshMapSize();
+    this.syncZoomControl();
+  };
 
   /** Re-measure the container; Leaflet only reflows tiles on invalidateSize(). */
   private refreshMapSize(): void {
@@ -682,6 +721,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.isTracking = true;
       this.connectionStatus = "connected";
       this.cdr.markForCheck();
+      this.startLocationHeartbeat();
 
       // Keep uploading location + battery after the app is backgrounded or
       // swiped away. Android-only; no-op on web/iOS. Respect the Settings
@@ -722,6 +762,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.lastAccuracy = accuracy ?? null;
     this.lastFixAt = new Date(position.timestamp).toISOString();
 
+    // Keep the freshest fix so the heartbeat can re-send it when the device
+    // is stationary and the GPS is not emitting new positions.
+    this.lastKnownFix = {
+      latitude,
+      longitude,
+      accuracy: accuracy ?? undefined,
+      altitude: altitude ?? undefined,
+      speed: speed ?? undefined,
+      heading: headingDeg || undefined,
+      timestamp: position.timestamp,
+    };
+
     this.updateUserMarker(latitude, longitude, accuracy ?? 0, headingDeg);
     if (!this.hasCentered && this.map) {
       // Preserve the user's restored zoom; otherwise use street level so the
@@ -743,41 +795,69 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
     this.lastUploadAt = now;
+    this.uploadLocation(true);
+  }
 
+  /**
+   * Re-send the last known fix while the app stays open. Phones stop emitting
+   * `watchPosition` fixes when they are still, which used to let the server
+   * timestamp age past the online window even though the app was running.
+   */
+  private startLocationHeartbeat(): void {
+    if (this.heartbeatTimer) return;
+    this.heartbeatTimer = setInterval(() => {
+      if (!this.isActive || !this.isTracking || !this.lastKnownFix) return;
+      if (this.locationUploadInFlight) return;
+      // A fresh upload already covers this window.
+      if (Date.now() - this.lastSuccessfulUploadAt < 60000) return;
+      this.uploadLocation(false);
+    }, 30000);
+  }
+
+  /** Send the latest fix to the API; history is only written for real fixes. */
+  private uploadLocation(addHistory: boolean): void {
+    const fix = this.lastKnownFix;
+    if (!fix || this.locationUploadInFlight) return;
+
+    this.locationUploadInFlight = true;
+    const now = Date.now();
     const battery = this.batteryService.getBatteryInfo();
     this.locationService
       .updateLocation({
-        latitude,
-        longitude,
-        accuracy: accuracy ?? undefined,
-        altitude: altitude ?? undefined,
-        speed: speed ?? undefined,
-        heading: headingDeg || undefined,
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        accuracy: fix.accuracy,
+        altitude: fix.altitude,
+        speed: fix.speed,
+        heading: fix.heading,
         battery_level: battery.level ?? undefined,
         is_charging: battery.charging ?? undefined,
       })
       .subscribe({
         next: () => {
+          this.lastSuccessfulUploadAt = Date.now();
+          this.locationUploadInFlight = false;
           this.connectionStatus = "connected";
           this.cdr.markForCheck();
         },
         error: () => {
+          this.locationUploadInFlight = false;
           this.connectionStatus = "disconnected";
           this.cdr.markForCheck();
         },
       });
 
-    if (this.currentUser) {
+    if (addHistory && this.currentUser) {
       void this.locationService.addToHistory({
         id: now,
         user_id: this.currentUser.id,
-        latitude,
-        longitude,
-        accuracy: accuracy ?? undefined,
-        altitude: altitude ?? undefined,
-        speed: speed ?? undefined,
-        heading: headingDeg || undefined,
-        timestamp: new Date(position.timestamp).toISOString(),
+        latitude: fix.latitude,
+        longitude: fix.longitude,
+        accuracy: fix.accuracy,
+        altitude: fix.altitude,
+        speed: fix.speed,
+        heading: fix.heading,
+        timestamp: new Date(fix.timestamp).toISOString(),
       });
     }
   }
@@ -962,7 +1042,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     return `linear-gradient(135deg, ${from} 0%, ${to} 100%)`;
   }
 
-  /** Members sharing right now (seen within the last two minutes). */
+  /** Members sharing right now (seen within the last three minutes). */
   get onlineMembers(): SquadMemberLocation[] {
     return this.squadMembers.filter((m) => this.isMemberOnline(m));
   }
@@ -1049,7 +1129,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.cdr.markForCheck();
       this.checkGeofenceTransitions(members);
       if (notify) {
-        void this.showUpdateToast("Squad locations refreshed");
+        void this.showUpdateToast("Circle locations refreshed");
       }
     } catch (error) {
       console.error("Failed to refresh squad locations:", error);
@@ -1302,9 +1382,46 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Send a quick ping to the selected squad mate. Nothing happens on this
-   * device; the recipient's app picks the ping up on its next poll and
-   * vibrates there.
+   * Desktop: translate a vertical mouse wheel into smooth horizontal chip
+   * scrolling. Wheel deltas accumulate into a target, and a rAF loop eases the
+   * row toward it so small wheel clicks glide instead of jumping.
+   */
+  onPingScrollerWheel(event: WheelEvent): void {
+    if (event.deltaX !== 0 || event.deltaY === 0) return;
+    const scroller = event.currentTarget as HTMLElement | null;
+    if (!scroller || scroller.scrollWidth <= scroller.clientWidth) return;
+
+    const max = scroller.scrollWidth - scroller.clientWidth;
+    const base = this.pingScrollTarget ?? scroller.scrollLeft;
+    // At either end, let the wheel scroll the sheet instead of trapping it.
+    if ((base <= 0 && event.deltaY < 0) || (base >= max && event.deltaY > 0)) {
+      return;
+    }
+    event.preventDefault();
+
+    this.pingScrollTarget = Math.max(0, Math.min(max, base + event.deltaY));
+
+    if (this.pingScrollFrame !== null) return;
+
+    const step = () => {
+      const target = this.pingScrollTarget ?? scroller.scrollLeft;
+      const delta = target - scroller.scrollLeft;
+      if (Math.abs(delta) < 0.5) {
+        scroller.scrollLeft = target;
+        this.pingScrollTarget = null;
+        this.pingScrollFrame = null;
+        return;
+      }
+      scroller.scrollLeft += delta * 0.22;
+      this.pingScrollFrame = requestAnimationFrame(step);
+    };
+    this.pingScrollFrame = requestAnimationFrame(step);
+  }
+
+  /**
+   * Send a quick ping to the selected squad mate. The recipient's app picks it
+   * up on its next poll and vibrates there; the sender gets no success feedback
+   * so only the person being pinged is alerted. Errors are still surfaced.
    */
   async pingMember(type: PingType, customText?: string): Promise<void> {
     const member = this.liveSelectedMember;
@@ -1407,7 +1524,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   get detailTitle(): string {
     if (this.selectedIsSelf) return this.currentUser?.username || "Your location";
-    return this.liveSelectedMember?.username ?? "Squad member";
+    return this.liveSelectedMember?.username ?? "Circle member";
   }
 
   get detailInitials(): string {
@@ -2057,7 +2174,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Join my Konek squad", text });
+        await navigator.share({ title: "Join my Konek circle", text });
         return;
       } catch (error) {
         // Closing the share sheet is not an error; anything else falls back
@@ -2097,7 +2214,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.squads.find((squad) => squad.id === squadId)?.squad_name ??
       this.activeSquadName;
     const alert = await this.alertCtrl.create({
-      header: "Leave Squad",
+      header: "Leave Circle",
       message: `Are you sure you want to leave "${name}"?`,
       buttons: [
         { text: "Cancel", role: "cancel" },
@@ -2118,13 +2235,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
    * active squad falls back to the next one (or to none at all).
    */
   private async doLeaveSquad(squadId: number): Promise<void> {
-    const loading = await this.loadingCtrl.create({ message: "Leaving squad..." });
+    const loading = await this.loadingCtrl.create({ message: "Leaving circle..." });
     await loading.present();
 
     try {
       await firstValueFrom(this.squadService.leaveSquad(squadId));
       await loading.dismiss();
-      void this.showUpdateToast("Left squad");
+      void this.showUpdateToast("Left circle");
       await this.loadSquads();
       if (this.activeSquadId === null) {
         // Left the last squad: drop its geofence circles from the map.
@@ -2139,7 +2256,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       // Surface the server's reason, e.g. the sole-admin rule.
       const message =
         (error as { error?: { message?: string } })?.error?.message ??
-        "Failed to leave squad";
+        "Failed to leave circle";
       void this.showUpdateToast(message);
     }
   }
@@ -2200,14 +2317,14 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async doCreateSquad(name: string): Promise<void> {
-    const loading = await this.loadingCtrl.create({ message: "Creating squad..." });
+    const loading = await this.loadingCtrl.create({ message: "Creating circle..." });
     await loading.present();
     try {
       const squad = await firstValueFrom(
         this.squadService.createSquad({ squad_name: name })
       );
       await loading.dismiss();
-      void this.showUpdateToast("Squad created");
+      void this.showUpdateToast("Circle created");
       // Show the new squad straight away instead of staying on the old one.
       if (squad?.id) {
         this.activeSquadId = squad.id;
@@ -2217,7 +2334,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     } catch (error) {
       await loading.dismiss();
       console.error("Create squad failed:", error);
-      void this.showUpdateToast("Failed to create squad");
+      void this.showUpdateToast("Failed to create circle");
     }
   }
 
@@ -2246,14 +2363,14 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private async doJoinSquad(code: string): Promise<void> {
-    const loading = await this.loadingCtrl.create({ message: "Joining squad..." });
+    const loading = await this.loadingCtrl.create({ message: "Joining circle..." });
     await loading.present();
     try {
       const squad = await firstValueFrom(
         this.squadService.joinSquad({ join_code: code })
       );
       await loading.dismiss();
-      void this.showUpdateToast("Joined squad");
+      void this.showUpdateToast("Joined circle");
       // Show the newly joined squad straight away.
       if (squad?.id) {
         this.activeSquadId = squad.id;
@@ -2265,7 +2382,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       console.error("Join squad failed:", error);
       const message =
         (error as { error?: { message?: string } })?.error?.message ??
-        "Failed to join squad";
+        "Failed to join circle";
       void this.showUpdateToast(message);
     }
   }
@@ -2311,7 +2428,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   isMemberOnline(member: SquadMemberLocation): boolean {
-    return Date.now() - new Date(member.timestamp).getTime() < 120000;
+    return Date.now() - new Date(member.timestamp).getTime() < 180000;
   }
 
   getTimeAgo(date: Date | string): string {
@@ -2346,10 +2463,19 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       clearInterval(this.pingPollTimer);
       this.pingPollTimer = null;
     }
+    if (this.pingScrollFrame !== null) {
+      cancelAnimationFrame(this.pingScrollFrame);
+      this.pingScrollFrame = null;
+    }
+    this.pingScrollTarget = null;
     this.shownPingIds.clear();
     if (this.compassTimer) {
       clearInterval(this.compassTimer);
       this.compassTimer = null;
+    }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
     }
     void this.geolocationService.stopMotionTracking();
 
@@ -2371,6 +2497,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.map.remove();
       this.map = null;
     }
+    this.zoomControl = null;
     this.squadMarkers.clear();
     this.geofenceLayers = [];
     this.streetFallback = null;

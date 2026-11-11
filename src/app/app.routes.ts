@@ -45,10 +45,16 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
-    path: "squads",
+    path: "circles",
     loadComponent: () =>
       import("./features/squads/squads.page").then((m) => m.SquadsPage),
     canActivate: [authGuard],
+  },
+  {
+    // Old bookmarks/links keep working after the terminology change.
+    path: "squads",
+    redirectTo: "circles",
+    pathMatch: "full",
   },
   {
     path: "settings",

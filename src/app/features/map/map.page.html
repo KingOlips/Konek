@@ -54,7 +54,7 @@
           type="button"
           class="squad-chip"
           aria-haspopup="menu"
-          aria-label="Squad options"
+          aria-label="Circle options"
           [class.chip-open]="squadChipOpen"
           [attr.aria-expanded]="squadChipOpen"
           (click)="presentSquadOptions($event)"
@@ -96,7 +96,7 @@
     <ion-fab-button
       class="squad-fab"
       size="small"
-      aria-label="Squad members"
+      aria-label="Circle members"
       (click)="toggleSquadList()"
     >
       <ion-icon name="people-outline"></ion-icon>
@@ -127,7 +127,7 @@
     [class.hidden]="isSquadFormModalOpen"
     [attr.aria-expanded]="showSquadList"
     aria-controls="squadPanel"
-    aria-label="Toggle squad panel"
+    aria-label="Toggle circle panel"
     (click)="toggleSquadList()"
   ></button>
 
@@ -140,7 +140,7 @@
       tabindex="0"
       [attr.aria-expanded]="squadSheetSnap !== 'peek'"
       aria-controls="squadPanel"
-      aria-label="Toggle squad list"
+      aria-label="Toggle circle list"
       (pointerdown)="onSheetDragStart($event)"
       (click)="onSheetGrabberClick()"
       (keydown.enter)="onSheetGrabberClick()"
@@ -157,10 +157,14 @@
       <div class="panel-header-main">
         <div class="panel-squad-name">{{ activeSquadName }}</div>
         <p class="panel-squad-meta">
-          {{ squadMembers.length }} member{{ squadMembers.length === 1 ? '' : 's' }}
-          @if (squadMembers.length > 0) {
-            <span class="meta-sep">·</span>
-            <span class="meta-online">{{ onlineCount }} online</span>
+          @if (isLoadingSquad && squadMembers.length === 0) {
+            Loading members…
+          } @else {
+            {{ squadMembers.length }} member{{ squadMembers.length === 1 ? '' : 's' }}
+            @if (squadMembers.length > 0) {
+              <span class="meta-sep">·</span>
+              <span class="meta-online">{{ onlineCount }} online</span>
+            }
           }
         </p>
 
@@ -194,7 +198,7 @@
           type="button"
           class="panel-icon-btn"
           [disabled]="isLoadingSquad"
-          aria-label="Refresh squad locations"
+          aria-label="Refresh circle locations"
           (click)="refreshSquadLocations()"
         >
           <ion-icon
@@ -205,7 +209,7 @@
         <button
           type="button"
           class="panel-icon-btn"
-          aria-label="Close squad panel"
+          aria-label="Close circle panel"
           (click)="closeSquadPanel()"
         >
           <ion-icon name="close-outline"></ion-icon>
@@ -231,11 +235,11 @@
           <div class="empty-illustration">
             <ion-icon name="people-outline"></ion-icon>
           </div>
-          <h4>No squad members yet</h4>
+          <h4>No circle members yet</h4>
           <p>Invite friends to share locations and see them on the map.</p>
-          <ion-button fill="outline" size="default" routerLink="/squads">
+          <ion-button fill="outline" size="default" routerLink="/circles">
             <ion-icon name="person-add-outline" slot="start"></ion-icon>
-            Join or create a squad
+            Join or create a circle
           </ion-button>
         </div>
       } @else {
@@ -325,7 +329,7 @@
           (click)="leaveActiveSquad()"
         >
           <ion-icon name="log-out-outline" aria-hidden="true"></ion-icon>
-          Leave squad
+          Leave circle
         </button>
       </div>
     }
@@ -340,7 +344,7 @@
     [attr.inert]="detailSheetOpen ? null : ''"
   >
     @if (!selectedIsSelf) {
-      <div class="ping-scroller">
+      <div class="ping-scroller" (wheel)="onPingScrollerWheel($event)">
         @for (ping of pingOptions; track ping.type) {
           <button
             type="button"
@@ -455,10 +459,16 @@
     </div>
   </div>
 
-  @if (!mapReady) {
+  @if (!mapReady || !initialLoadDone) {
     <div class="map-loading-overlay">
+      <div class="loading-brand">
+        <span class="loading-mark">
+          <ion-icon name="navigate-outline"></ion-icon>
+        </span>
+        <h1>Konek</h1>
+      </div>
       <ion-spinner name="crescent"></ion-spinner>
-      <p>Loading map...</p>
+      <p>Getting your circle on the map…</p>
     </div>
   }
 </ion-content>

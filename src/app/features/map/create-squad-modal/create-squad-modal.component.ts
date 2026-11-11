@@ -68,7 +68,7 @@ export class CreateSquadModalComponent implements AfterViewInit {
 
   get errorMessage(): string {
     return this.showEmptyError
-      ? "Enter a squad name"
+      ? "Enter a circle name"
       : "Use at least 2 characters";
   }
 

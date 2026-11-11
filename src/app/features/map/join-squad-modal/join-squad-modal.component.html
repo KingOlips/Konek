@@ -3,8 +3,8 @@
 
   <header class="sheet-head">
     <div class="sheet-titles">
-      <p class="sheet-eyebrow">Squad code</p>
-      <h2 class="sheet-title">Join a squad</h2>
+      <p class="sheet-eyebrow">Circle code</p>
+      <h2 class="sheet-title">Join a circle</h2>
     </div>
 
     <button type="button" class="sheet-close" (click)="close()" aria-label="Close">
@@ -13,7 +13,7 @@
   </header>
 
   <p class="sheet-lead">
-    Enter the join code shared by your squad admin to join their squad.
+    Enter the join code shared by your circle admin to join their circle.
   </p>
 
   <form class="sheet-form" (ngSubmit)="submit()" novalidate>
@@ -54,7 +54,7 @@
       [disabled]="!isValid"
     >
       <ion-icon name="log-in-outline" slot="start" aria-hidden="true"></ion-icon>
-      <span>Join squad</span>
+      <span>Join circle</span>
     </ion-button>
   </form>
 

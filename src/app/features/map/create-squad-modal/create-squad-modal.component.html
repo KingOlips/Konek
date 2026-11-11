@@ -3,8 +3,8 @@
 
   <header class="sheet-head">
     <div class="sheet-titles">
-      <p class="sheet-eyebrow">New squad</p>
-      <h2 class="sheet-title">Create a squad</h2>
+      <p class="sheet-eyebrow">New circle</p>
+      <h2 class="sheet-title">Create a circle</h2>
     </div>
 
     <button type="button" class="sheet-close" (click)="close()" aria-label="Close">
@@ -13,13 +13,13 @@
   </header>
 
   <p class="sheet-lead">
-    Name your squad. Once it's created you can share the join code with your
+    Name your circle. Once it's created you can share the join code with your
     members.
   </p>
 
   <form class="sheet-form" (ngSubmit)="submit()" novalidate>
     <div class="field" [class.field-invalid]="showError">
-      <span class="field-label">Squad name</span>
+      <span class="field-label">Circle name</span>
 
       <div class="field-control">
         <ion-icon name="people-outline" class="field-icon" aria-hidden="true"></ion-icon>
@@ -31,7 +31,7 @@
           autocomplete="off"
           placeholder="e.g. Weekend Crew"
           maxlength="40"
-          aria-label="Squad name"
+          aria-label="Circle name"
           [(ngModel)]="name"
         ></ion-input>
         <span class="field-count">{{ name.length }}/40</span>
@@ -52,9 +52,9 @@
       [disabled]="!isValid"
     >
       <ion-icon name="person-add-outline" slot="start" aria-hidden="true"></ion-icon>
-      <span>Create squad</span>
+      <span>Create circle</span>
     </ion-button>
   </form>
 
-  <p class="sheet-hint">You'll be the squad admin and can share its join code.</p>
+  <p class="sheet-hint">You'll be the circle admin and can share its join code.</p>
 </div>

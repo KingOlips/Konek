@@ -82,7 +82,7 @@ try {
     
     if ($memberCheck->fetch()) {
         http_response_code(409);
-        echo json_encode(["success" => false, "message" => "Already a member of this squad"]);
+        echo json_encode(["success" => false, "message" => "Already a member of this circle"]);
         exit();
     }
     
@@ -101,7 +101,7 @@ try {
     http_response_code(200);
     echo json_encode([
         "success" => true,
-        "message" => "Successfully joined squad",
+        "message" => "Successfully joined circle",
         "data" => [
             "id" => (int)$squadId,
             "squad_name" => $squadName,

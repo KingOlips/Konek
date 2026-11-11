@@ -28,7 +28,7 @@ $input = json_decode(file_get_contents("php://input"), true);
 
 if (!$input || !isset($input["squad_id"]) || !isset($input["user_id"]) || !isset($input["role"])) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "squad_id, user_id, and role are required"]);
+    echo json_encode(["success" => false, "message" => "Circle ID, user ID, and role are required"]);
     exit();
 }
 
@@ -91,7 +91,7 @@ try {
     
     if (!$targetUser) {
         http_response_code(404);
-        echo json_encode(["success" => false, "message" => "User is not a member of this squad"]);
+        echo json_encode(["success" => false, "message" => "User is not a member of this circle"]);
         exit();
     }
     

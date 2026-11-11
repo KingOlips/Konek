@@ -120,7 +120,7 @@ export class SquadsPage implements OnInit {
       this.cdr.markForCheck();
     } catch (error) {
       console.error("Failed to refresh squads:", error);
-      await this.showToast("Failed to refresh squads");
+      await this.showToast("Failed to refresh circles");
     } finally {
       (event.target as HTMLIonRefresherElement).complete();
     }
@@ -146,10 +146,10 @@ export class SquadsPage implements OnInit {
   /** Single entry point for both squad actions, used by the empty state and list footer. */
   async presentAddOptions(): Promise<void> {
     const sheet = await this.actionSheetCtrl.create({
-      header: "Add a squad",
+      header: "Add a circle",
       buttons: [
         {
-          text: "Create squad",
+          text: "Create circle",
           icon: "add-outline",
           handler: () => void this.createSquad(),
         },
@@ -166,13 +166,13 @@ export class SquadsPage implements OnInit {
 
   async createSquad(): Promise<void> {
     const alert = await this.alertCtrl.create({
-      header: "Create Squad",
-      message: "Enter a name for your new squad",
+      header: "Create Circle",
+      message: "Enter a name for your new circle",
       inputs: [
         {
           name: "name",
           type: "text",
-          placeholder: "Squad name",
+          placeholder: "Circle name",
         },
       ],
       buttons: [
@@ -191,7 +191,7 @@ export class SquadsPage implements OnInit {
   }
 
   private async doCreateSquad(name: string): Promise<void> {
-    const loading = await this.loadingCtrl.create({ message: "Creating squad..." });
+    const loading = await this.loadingCtrl.create({ message: "Creating circle..." });
     await loading.present();
 
     try {
@@ -200,19 +200,19 @@ export class SquadsPage implements OnInit {
       if (squad) {
         this.squads.unshift(squad);
         this.cdr.markForCheck();
-        this.showToast("Squad created successfully!");
+        this.showToast("Circle created successfully!");
       }
     } catch (error) {
       await loading.dismiss();
       console.error("Create squad failed:", error);
-      this.showToast("Failed to create squad");
+      this.showToast("Failed to create circle");
     }
   }
 
   async joinSquad(): Promise<void> {
     const alert = await this.alertCtrl.create({
-      header: "Join Squad",
-      message: "Enter the join code from your squad admin",
+      header: "Join Circle",
+      message: "Enter the join code from your circle admin",
       inputs: [
         {
           name: "code",
@@ -236,7 +236,7 @@ export class SquadsPage implements OnInit {
   }
 
   private async doJoinSquad(code: string): Promise<void> {
-    const loading = await this.loadingCtrl.create({ message: "Joining squad..." });
+    const loading = await this.loadingCtrl.create({ message: "Joining circle..." });
     await loading.present();
 
     try {
@@ -245,19 +245,19 @@ export class SquadsPage implements OnInit {
       if (squad) {
         this.squads.unshift(squad);
         this.cdr.markForCheck();
-        this.showToast("Successfully joined squad!");
+        this.showToast("Successfully joined circle!");
       }
     } catch (error: any) {
       await loading.dismiss();
       console.error("Join squad failed:", error);
-      const message = error.error?.message || "Failed to join squad";
+      const message = error.error?.message || "Failed to join circle";
       this.showToast(message);
     }
   }
 
   async leaveSquad(squad: Squad): Promise<void> {
     const alert = await this.alertCtrl.create({
-      header: "Leave Squad",
+      header: "Leave Circle",
       message: `Are you sure you want to leave "${squad.squad_name}"?`,
       buttons: [
         { text: "Cancel", role: "cancel" },
@@ -272,7 +272,7 @@ export class SquadsPage implements OnInit {
   }
 
   private async doLeaveSquad(squad: Squad): Promise<void> {
-    const loading = await this.loadingCtrl.create({ message: "Leaving squad..." });
+    const loading = await this.loadingCtrl.create({ message: "Leaving circle..." });
     await loading.present();
 
     try {
@@ -280,14 +280,14 @@ export class SquadsPage implements OnInit {
       await loading.dismiss();
       this.squads = this.squads.filter((s) => s.id !== squad.id);
       this.cdr.markForCheck();
-      this.showToast("Left squad successfully");
+      this.showToast("Left circle successfully");
     } catch (error) {
       await loading.dismiss();
       console.error("Leave squad failed:", error);
       // Surface the server's reason, e.g. "Cannot leave as sole admin…".
       const message =
         (error as { error?: { message?: string } })?.error?.message ??
-        "Failed to leave squad";
+        "Failed to leave circle";
       this.showToast(message);
     }
   }
@@ -333,7 +333,7 @@ export class SquadsPage implements OnInit {
     } catch (error) {
       await loading.dismiss();
       console.error("Failed to load squad members:", error);
-      this.showToast("Failed to load squad members");
+      this.showToast("Failed to load circle members");
     }
   }
 

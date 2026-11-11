@@ -28,7 +28,7 @@ $input = json_decode(file_get_contents("php://input"), true);
 
 if (!$input || !isset($input["squad_name"])) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "Squad name is required"]);
+    echo json_encode(["success" => false, "message" => "Circle name is required"]);
     exit();
 }
 
@@ -36,13 +36,13 @@ $squadName = trim($input["squad_name"]);
 
 if (empty($squadName)) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "Squad name cannot be empty"]);
+    echo json_encode(["success" => false, "message" => "Circle name cannot be empty"]);
     exit();
 }
 
 if (strlen($squadName) > 100) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "Squad name too long (max 100 characters)"]);
+    echo json_encode(["success" => false, "message" => "Circle name too long (max 100 characters)"]);
     exit();
 }
 
@@ -105,7 +105,7 @@ try {
         http_response_code(201);
         echo json_encode([
             "success" => true,
-            "message" => "Squad created successfully",
+            "message" => "Circle created successfully",
             "data" => [
                 "id" => (int)$squadId,
                 "squad_name" => $squadName,

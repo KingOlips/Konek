@@ -1,11 +1,11 @@
 <div class="squad-menu">
   <div class="squad-menu-header">
-    <span class="squad-menu-label">Squad</span>
+    <span class="squad-menu-label">Circle</span>
     <span class="squad-menu-name">{{ squadName }}</span>
   </div>
 
   @if (squads.length > 0) {
-    <div class="squad-menu-list" role="listbox" aria-label="Switch squad">
+    <div class="squad-menu-list" role="listbox" aria-label="Switch circle">
       @for (squad of squads; track squad.id) {
         <button
           type="button"
@@ -31,12 +31,12 @@
   <div class="squad-menu-actions">
     <button type="button" class="squad-menu-action" (click)="pick('create')">
       <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
-      <span>Create a squad</span>
+      <span>Create a circle</span>
     </button>
 
     <button type="button" class="squad-menu-action" (click)="pick('join')">
       <ion-icon name="key-outline" aria-hidden="true"></ion-icon>
-      <span>Join a squad</span>
+      <span>Join a circle</span>
     </button>
   </div>
 </div>

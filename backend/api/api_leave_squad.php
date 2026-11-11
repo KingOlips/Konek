@@ -26,7 +26,7 @@ $squadId = isset($_GET["squad_id"]) ? (int)$_GET["squad_id"] : null;
 
 if (!$squadId) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "Squad ID is required"]);
+    echo json_encode(["success" => false, "message" => "Circle ID is required"]);
     exit();
 }
 
@@ -58,7 +58,7 @@ try {
     
     if (!$member) {
         http_response_code(403);
-        echo json_encode(["success" => false, "message" => "Not a member of this squad"]);
+        echo json_encode(["success" => false, "message" => "Not a member of this circle"]);
         exit();
     }
     
@@ -103,7 +103,7 @@ try {
     }
     
     http_response_code(200);
-    echo json_encode(["success" => true, "message" => "Left squad successfully"]);
+    echo json_encode(["success" => true, "message" => "Left circle successfully"]);
     
 } catch (PDOException $e) {
     error_log("Leave squad error: " . $e->getMessage());

@@ -3,7 +3,7 @@
     <ion-buttons slot="start">
       <ion-back-button defaultHref="/map" text=""></ion-back-button>
     </ion-buttons>
-    <ion-title>My Squads</ion-title>
+    <ion-title>My Circles</ion-title>
   </ion-toolbar>
 </ion-header>
 
@@ -17,7 +17,7 @@
     @if (isLoading) {
       <div class="loading-state">
         <ion-spinner name="crescent"></ion-spinner>
-        <p>Loading squads...</p>
+        <p>Loading circles...</p>
       </div>
     }
 
@@ -27,7 +27,7 @@
         <div class="empty-icon error" aria-hidden="true">
           <ion-icon name="cloud-offline-outline"></ion-icon>
         </div>
-        <h2>Couldn't load squads</h2>
+        <h2>Couldn't load circles</h2>
         <p>Check your connection and try again.</p>
         <ion-button class="empty-cta" (click)="loadSquads()">
           <ion-icon name="refresh-outline" slot="start" aria-hidden="true"></ion-icon>
@@ -42,11 +42,11 @@
         <div class="empty-icon" aria-hidden="true">
           <ion-icon name="people-outline"></ion-icon>
         </div>
-        <h2>No squads yet</h2>
-        <p>Create a squad or join one with a code to start sharing locations with your group.</p>
+        <h2>No circles yet</h2>
+        <p>Create a circle or join one with a code to start sharing locations with your group.</p>
         <ion-button class="empty-cta" (click)="presentAddOptions()">
           <ion-icon name="add-outline" slot="start" aria-hidden="true"></ion-icon>
-          Create or join a squad
+          Create or join a circle
         </ion-button>
       </div>
     }
@@ -54,7 +54,7 @@
     <!-- Squads List -->
     @if (!isLoading && squads.length > 0) {
       <div class="section-header">
-        <h2>Your squads</h2>
+        <h2>Your circles</h2>
         <span>{{ squads.length }}</span>
       </div>
 
@@ -120,7 +120,7 @@
 
       <ion-button class="add-squad-btn" fill="clear" (click)="presentAddOptions()">
         <ion-icon name="add-outline" slot="start" aria-hidden="true"></ion-icon>
-        Create or join a squad
+        Create or join a circle
       </ion-button>
     }
   </div>

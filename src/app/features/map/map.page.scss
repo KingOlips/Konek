@@ -442,6 +442,33 @@ ion-fab-button.ion-color-primary {
   display: none;
 }
 
+/*
+ * Mouse users have no swipe gesture, so reveal a thin scrollbar whenever the
+ * chips overflow. It stays hidden on touch devices where swiping works.
+ * `overflow-x: auto` means the bar only appears if there is something to scroll.
+ */
+@media (pointer: fine) {
+  .ping-scroller {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(47, 111, 224, 0.35) transparent;
+    padding-bottom: 6px;
+  }
+
+  .ping-scroller::-webkit-scrollbar {
+    display: block;
+    height: 8px;
+  }
+
+  .ping-scroller::-webkit-scrollbar-thumb {
+    background: rgba(47, 111, 224, 0.35);
+    border-radius: 999px;
+  }
+
+  .ping-scroller::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
 .ping-chip {
   flex: 0 0 auto;
   padding: 9px 15px;
@@ -703,8 +730,52 @@ ion-fab-button.ion-color-primary {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  gap: 16px;
+  z-index: 1200;
+  gap: 18px;
+}
+
+/* Splash branding while the first squad fetch is in flight. */
+.loading-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.loading-mark {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #2f6fe0, #5aa4ff);
+  color: #fff;
+  box-shadow: 0 14px 34px rgba(47, 111, 224, 0.32);
+  animation: loading-pulse 1.8s ease-in-out infinite;
+}
+
+.loading-mark ion-icon {
+  font-size: 32px;
+}
+
+.loading-brand h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ion-text-color, #1f2937);
+}
+
+@keyframes loading-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 14px 34px rgba(47, 111, 224, 0.32);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 18px 42px rgba(47, 111, 224, 0.42);
+  }
 }
 
 .map-loading-overlay p {
@@ -1422,6 +1493,10 @@ ion-fab-button.ion-color-primary {
 
   .map-loading-overlay p {
     color: #98a1af;
+  }
+
+  .loading-brand h1 {
+    color: #f3f5f8;
   }
 
   .panel-handle {

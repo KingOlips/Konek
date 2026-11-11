@@ -27,7 +27,7 @@ $targetUserId = isset($_GET["user_id"]) ? (int)$_GET["user_id"] : null;
 
 if (!$squadId || !$targetUserId) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "squad_id and user_id are required"]);
+    echo json_encode(["success" => false, "message" => "Circle ID and user ID are required"]);
     exit();
 }
 
@@ -52,7 +52,7 @@ try {
     // Prevent self-removal (use leave squad instead)
     if ($currentUserId === $targetUserId) {
         http_response_code(400);
-        echo json_encode(["success" => false, "message" => "Use leave squad endpoint to remove yourself"]);
+        echo json_encode(["success" => false, "message" => "Use the leave circle action to remove yourself"]);
         exit();
     }
     
@@ -80,7 +80,7 @@ try {
     
     if (!$targetUser) {
         http_response_code(404);
-        echo json_encode(["success" => false, "message" => "User is not a member of this squad"]);
+        echo json_encode(["success" => false, "message" => "User is not a member of this circle"]);
         exit();
     }
     

@@ -26,7 +26,7 @@ $squadId = isset($_GET["squad_id"]) ? (int)$_GET["squad_id"] : null;
 
 if (!$squadId) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "squad_id is required"]);
+    echo json_encode(["success" => false, "message" => "Circle ID is required"]);
     exit();
 }
 
@@ -58,7 +58,7 @@ try {
     
     if (!$member) {
         http_response_code(403);
-        echo json_encode(["success" => false, "message" => "Not a member of this squad"]);
+        echo json_encode(["success" => false, "message" => "Not a member of this circle"]);
         exit();
     }
     
