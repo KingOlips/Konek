@@ -234,6 +234,9 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private static readonly DEFAULT_LAT = 14.5995;
   private static readonly DEFAULT_LNG = 120.9842;
   private static readonly DEFAULT_ZOOM = 14;
+  private static readonly MAX_ZOOM = 20;
+  /** Esri World Imagery has native tiles through z19 in most cities. */
+  private static readonly SATELLITE_MAX_ZOOM = 19;
   /** A slight tilt makes the vector buildings feel 3D without hurting labels. */
   private static readonly DEFAULT_PITCH = 42;
   private static readonly STYLE_LIGHT =
@@ -529,7 +532,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         bearing: 0,
         maxPitch: 65,
         minZoom: 1,
-        maxZoom: 20,
+        maxZoom: MapPage.MAX_ZOOM,
         // No maxBounds: MapLibre already clamps the Mercator latitude, and
         // renderWorldCopies:false stops duplicate worlds. (MapLibre 6.17
         // throws inside setZoom when maxBounds is set.)
@@ -682,7 +685,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         lng < -180 ||
         lng > 180 ||
         zoom < 1 ||
-        zoom > 20
+        zoom > MapPage.MAX_ZOOM
       ) {
         return null;
       }
@@ -754,8 +757,9 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         type: "raster",
         tiles: [MapPage.SATELLITE_TILES],
         tileSize: 256,
-        maxzoom: 19,
-        attribution: "Imagery &copy; Esri",
+        maxzoom: MapPage.SATELLITE_MAX_ZOOM,
+        attribution:
+          'Imagery &copy; <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, Maxar, Earthstar Geographics',
       });
     }
 
@@ -888,11 +892,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const map = this.map;
     if (!map || !this.styleLoaded || !map.getLayer("satellite")) return;
 
-    const opacity: number | ZoomInterpolation =
+    const satelliteOpacity: number | ZoomInterpolation =
       this.mapStyle === "street"
         ? ["interpolate", ["linear"], ["zoom"], 14.5, 0, 17.5, 1]
         : 1;
-    map.setPaintProperty("satellite", "raster-opacity", opacity);
+    map.setPaintProperty("satellite", "raster-opacity", satelliteOpacity);
 
     // The building footprints come from z14 vector tiles: overzoomed on top of
     // imagery they turn into huge slabs, so they hand the map over to the
