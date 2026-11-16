@@ -17,10 +17,19 @@ import { Squad } from "../models/squad.models";
 export interface User {
   id: number;
   username: string;
+  email?: string | null;
+  contact_number?: string | null;
+  profile_picture?: string | null;
   auth_token: string;
   active_status: number;
   created_at: string;
   squads?: Squad[];
+}
+
+export interface ProfileUpdate {
+  username: string;
+  email: string | null;
+  contact_number: string | null;
 }
 
 export interface Credentials {
@@ -143,6 +152,73 @@ export class AuthService {
       { current_password: currentPassword, new_password: newPassword },
       { headers }
     );
+  }
+
+  /** Load the signed-in user's profile from the server and cache it locally. */
+  getProfile(): Observable<ApiResponse<User>> {
+    return this.http
+      .get<ApiResponse<User>>(`${environment.apiUrl}/api_get_profile.php`, {
+        headers: this.authHeaders(),
+      })
+      .pipe(this.mergeProfileIntoSession());
+  }
+
+  /** Update the signed-in user's name, email, and contact number. */
+  updateProfile(updates: ProfileUpdate): Observable<ApiResponse<User>> {
+    return this.http
+      .post<ApiResponse<User>>(`${environment.apiUrl}/api_update_profile.php`, updates, {
+        headers: this.authHeaders(true),
+      })
+      .pipe(this.mergeProfileIntoSession());
+  }
+
+  /**
+   * Upload a profile picture picked from the device. The file is sent as
+   * multipart/form-data; the browser sets the boundary (no Content-Type header).
+   */
+  uploadProfilePicture(file: File): Observable<ApiResponse<User>> {
+    const formData = new FormData();
+    formData.append("profile_picture", file, file.name);
+
+    return this.http
+      .post<ApiResponse<User>>(`${environment.apiUrl}/api_upload_profile_picture.php`, formData, {
+        headers: this.authHeaders(),
+      })
+      .pipe(this.mergeProfileIntoSession());
+  }
+
+  /**
+   * Resolve a stored profile picture path (e.g. "uploads/profile_pictures/x.jpg")
+   * into an absolute URL that can be used in an <img> tag.
+   */
+  pictureUrl(path?: string | null): string | null {
+    if (!path) return null;
+    if (/^https?:\/\//i.test(path)) return path;
+    const base = environment.apiUrl.replace(/\/api\/?$/, "");
+    return `${base}/${path.replace(/^\/+/, "")}`;
+  }
+
+  /** Persist profile fields returned by the API into the cached session. */
+  private mergeProfileIntoSession() {
+    return (source: Observable<ApiResponse<User>>): Observable<ApiResponse<User>> =>
+      source.pipe(
+        switchMap((response) => {
+          if (!response.success || !response.data) {
+            return from(Promise.resolve(response));
+          }
+          const current = this.currentUserSubject.value;
+          const merged: User = { ...current, ...response.data } as User;
+          return from(this.updateUserData(merged)).pipe(map(() => response));
+        })
+      );
+  }
+
+  private authHeaders(json = false): HttpHeaders {
+    const token = this.currentUserSubject.value?.auth_token;
+    return new HttpHeaders({
+      ...(json ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    });
   }
 
   logout(): Observable<ApiResponse<void>> {

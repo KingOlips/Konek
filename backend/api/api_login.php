@@ -41,7 +41,7 @@ try {
     $db = getDBConnection();
     
     // Prepare statement to prevent SQL injection
-    $stmt = $db->prepare("SELECT id, username, password_hash, active_status FROM users WHERE username = :username LIMIT 1");
+    $stmt = $db->prepare("SELECT id, username, email, contact_number, profile_picture, password_hash, active_status FROM users WHERE username = :username LIMIT 1");
     $stmt->bindParam(":username", $username, PDO::PARAM_STR);
     $stmt->execute();
     

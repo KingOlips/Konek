@@ -10,8 +10,14 @@
 <ion-content class="settings-content">
   <div class="settings-wrap">
     <!-- Profile -->
-    <section class="profile-card">
-      <div class="profile-avatar">{{ initials }}</div>
+    <button type="button" class="profile-card" (click)="openProfile()">
+      <div class="profile-avatar">
+        @if (profilePictureUrl) {
+          <img class="profile-avatar-image" [attr.src]="profilePictureUrl" alt="Profile picture" />
+        } @else {
+          {{ initials }}
+        }
+      </div>
       <div class="profile-meta">
         <h2>{{ currentUser?.username || "User" }}</h2>
         <span class="profile-pill">
@@ -19,7 +25,8 @@
           Active
         </span>
       </div>
-    </section>
+      <ion-icon class="profile-chevron" name="chevron-forward-outline" aria-hidden="true"></ion-icon>
+    </button>
 
     <!-- Security -->
     <section class="settings-group">

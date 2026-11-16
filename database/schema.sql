@@ -8,11 +8,15 @@ USE `konek_db`;
 CREATE TABLE `users` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `username` VARCHAR(50) NOT NULL UNIQUE,
+    `email` VARCHAR(255) DEFAULT NULL,
+    `contact_number` VARCHAR(20) DEFAULT NULL,
+    `profile_picture` VARCHAR(255) DEFAULT NULL,
     `password_hash` VARCHAR(255) NOT NULL,
     `auth_token` VARCHAR(64) DEFAULT NULL UNIQUE,
     `active_status` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
+    UNIQUE KEY `unique_email` (`email`),
     INDEX `idx_username` (`username`),
     INDEX `idx_auth_token` (`auth_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
