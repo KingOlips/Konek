@@ -102,6 +102,15 @@ export class SettingsPage implements OnInit {
     return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)).toUpperCase();
   }
 
+  /** Absolute URL of the saved profile picture, if one exists. */
+  get profilePictureUrl(): string | null {
+    return this.authService.pictureUrl(this.currentUser?.profile_picture);
+  }
+
+  openProfile(): void {
+    void this.router.navigate(["/profile"]);
+  }
+
   async ngOnInit(): Promise<void> {
     this.currentUser = this.authService.getCurrentUser();
     this.biometricAvailable = await this.biometricService.isAvailable();

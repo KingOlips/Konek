@@ -360,6 +360,7 @@
             type="button"
             class="ping-chip"
             [class.is-danger]="ping.danger"
+            [disabled]="isSendingPing"
             (click)="onPing(ping.type, $event)"
           >
             {{ ping.label }}

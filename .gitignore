@@ -68,3 +68,8 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
+
+# User-uploaded profile pictures (keep the directory and its hardening files)
+/backend/uploads/profile_pictures/*
+!/backend/uploads/profile_pictures/.htaccess
+!/backend/uploads/profile_pictures/index.html

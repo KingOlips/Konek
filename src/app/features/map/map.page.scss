@@ -509,6 +509,13 @@ ion-fab-button.ion-color-primary {
   background: #ffe9e9;
 }
 
+/* Sending is fire-and-forget: dim the row just long enough to show it is busy. */
+.ping-chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+
 .member-panel-content {
   flex: 1 1 auto;
   min-height: 0;

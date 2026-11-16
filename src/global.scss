@@ -476,10 +476,25 @@ ion-toast.update-toast::part(icon) {
   margin-inline-end: 8px;
 }
 
+/* Emergency ping: red accent so it reads as an alert, not a routine update. */
+ion-toast.update-toast.ping-alert-toast {
+  --background: #7f1d1d;
+  --color: #fff5f5;
+}
+
+ion-toast.update-toast.ping-alert-toast::part(icon) {
+  color: #fecaca;
+}
+
 body.dark ion-toast.update-toast {
   --background: #232833;
   --color: #f4f5f7;
   --box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+body.dark ion-toast.update-toast.ping-alert-toast {
+  --background: #991b1b;
+  --color: #fff5f5;
 }
 
 /* ---------------------------------------------------------------------------

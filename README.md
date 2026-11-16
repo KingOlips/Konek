@@ -7,6 +7,7 @@ An Android mobile application for real-time location sharing with squad members,
 - 🔐 **Authentication** - Secure login/register with bearer tokens
 - 👥 **Squads** - Create/join squads with invite codes
 - 📍 **Real-time Location** - Live location sharing on a 2.5D MapLibre GL map
+- 📨 **Squad Pings** - Quick pings that vibrate and toast on the recipient's phone
 - 🧭 **Compass & Heading** - Direction awareness on map
 - 📱 **Biometric Auth** - Face ID / Fingerprint login
 - 📊 **Location History** - Export as JSON/CSV
@@ -53,6 +54,9 @@ An Android mobile application for real-time location sharing with squad members,
 # Start XAMPP (Apache + MySQL)
 # Import the database schema
 mysql -u root < database/schema.sql
+
+# Existing databases only: add the pings table
+mysql -u root konek_db < database/migrations/2026-11-10_add_pings_table.sql
 ```
 
 ### 2. Backend Setup
@@ -134,12 +138,17 @@ Konek/
 │   │   ├── api_remove_member.php
 │   │   ├── api_create_geofence.php
 │   │   ├── api_get_geofences.php
-│   │   └── api_delete_geofence.php
+│   │   ├── api_delete_geofence.php
+│   │   ├── api_send_ping.php
+│   │   ├── api_get_pings.php
+│   │   └── api_mark_ping_read.php
 │   └── config/
 │       ├── database.php
 │       └── cors.php
 ├── database/
-│   └── schema.sql
+│   ├── schema.sql
+│   └── migrations/
+│       └── 2026-11-10_add_pings_table.sql
 ├── android/                  # Native Android project
 ├── src/
 │   ├── app/
@@ -149,11 +158,13 @@ Konek/
 │   │   │   │   ├── biometric.service.ts
 │   │   │   │   ├── location.service.ts
 │   │   │   │   ├── geolocation.service.ts
+│   │   │   │   ├── ping.service.ts
 │   │   │   │   └── squad.service.ts
 │   │   │   ├── guards/
 │   │   │   │   └── auth.guard.ts
 │   │   │   └── models/
-│   │   │       └── location.models.ts
+│   │   │       ├── location.models.ts
+│   │   │       └── ping.models.ts
 │   │   ├── features/
 │   │   │   ├── auth/
 │   │   │   │   ├── login/
@@ -205,6 +216,13 @@ Konek/
 | GET | `/api_get_geofences.php` | Get squad geofences |
 | DELETE | `/api_delete_geofence.php` | Delete geofence |
 
+### Pings
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api_send_ping.php` | Ping a squad member |
+| GET | `/api_get_pings.php` | Get unread pings for the user |
+| POST | `/api_mark_ping_read.php` | Mark pings as read |
+
 ## API Configuration
 
 Database credentials and the API base URL are configured in source:
@@ -224,6 +242,10 @@ answers `OPTIONS` preflight requests.
   async handler or the UI will not refresh.
 - The accelerometer drives the upload/poll cadence: **5 s while moving** and
   **30 s while stationary** (map marker still updates on every GPS fix).
+- Pings are foreground-only for now: the map polls every 6 s (and immediately
+  when the app returns to the foreground). Pings older than two minutes are
+  treated as missed, and every fetched ping is marked read so it never buzzes
+  twice.
 - Compass heading comes from `DeviceOrientationEvent`.
 - MapLibre marker/popup styles live in `src/global.scss` because MapLibre
   creates that DOM outside Angular's component style encapsulation.
@@ -235,7 +257,7 @@ answers `OPTIONS` preflight requests.
 
 The following was tested end-to-end against XAMPP (Apache + MariaDB):
 
-- Database import (5 tables: `users`, `squads`, `squad_members`, `locations`, `geofences`)
+- Database import (6 tables: `users`, `squads`, `squad_members`, `locations`, `geofences`, `pings`)
 - Register → login → authenticated logout
 - Change password (wrong current password rejected, new password works, old rejected)
 - Create squad, join squad by code, fetch squads/members

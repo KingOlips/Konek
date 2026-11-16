@@ -1,0 +1,167 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/settings" text=""></ion-back-button>
+    </ion-buttons>
+    <ion-title>Profile</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="profile-content">
+  <div class="profile-wrap">
+    <!-- Profile picture -->
+    <section class="avatar-card">
+      <div class="avatar-wrap">
+        @if (avatarImageUrl) {
+          <img class="avatar-image" [attr.src]="avatarImageUrl" alt="Profile picture" />
+        } @else {
+          <span class="avatar-fallback" aria-hidden="true">{{ initials }}</span>
+        }
+      </div>
+
+      <p class="avatar-hint">JPG, JPEG, PNG or WEBP &middot; up to 5 MB</p>
+
+      <input
+        #pictureInput
+        type="file"
+        class="picture-input"
+        accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+        aria-hidden="true"
+        tabindex="-1"
+        (change)="onPictureSelected($event)"
+      />
+
+      @if (pendingPicture) {
+        <div class="avatar-actions">
+          <button
+            type="button"
+            class="save-photo"
+            [disabled]="isUploadingPicture"
+            (click)="savePicture()"
+          >
+            @if (isUploadingPicture) {
+              <ion-spinner name="crescent" aria-hidden="true"></ion-spinner>
+              <span>Saving...</span>
+            } @else {
+              <ion-icon name="checkmark-outline" aria-hidden="true"></ion-icon>
+              <span>Save photo</span>
+            }
+          </button>
+          <button
+            type="button"
+            class="discard-photo"
+            [disabled]="isUploadingPicture"
+            (click)="cancelPicture()"
+          >
+            Cancel
+          </button>
+        </div>
+      } @else {
+        <button type="button" class="change-photo" (click)="openPicturePicker()">
+          <ion-icon name="camera-outline" aria-hidden="true"></ion-icon>
+          <span>{{ avatarImageUrl ? "Change photo" : "Upload photo" }}</span>
+        </button>
+      }
+    </section>
+
+    <!-- Profile details -->
+    <section class="details-card">
+      <h3 class="group-title">Profile details</h3>
+
+      <form [formGroup]="profileForm" (ngSubmit)="saveProfile()" novalidate>
+        <!-- Name -->
+        <div class="field" [class.field-invalid]="username?.invalid && submitted">
+          <span class="field-label">Name</span>
+          <div class="field-control">
+            <ion-icon name="person-outline" class="field-icon" aria-hidden="true"></ion-icon>
+            <ion-input
+              formControlName="username"
+              type="text"
+              autocomplete="username"
+              autocapitalize="off"
+              spellcheck="false"
+              aria-label="Name"
+              placeholder="Your name"
+            ></ion-input>
+          </div>
+          @if (username?.invalid && submitted) {
+            <p class="field-error" role="alert">
+              <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+              <span>
+                @if (username.hasError("required")) {
+                  Name is required
+                } @else if (username.hasError("minlength")) {
+                  Name must be at least 3 characters
+                } @else if (username.hasError("maxlength")) {
+                  Name must be at most 50 characters
+                } @else if (username.hasError("pattern")) {
+                  Only letters, numbers, and underscores allowed
+                }
+              </span>
+            </p>
+          }
+        </div>
+
+        <!-- Email -->
+        <div class="field" [class.field-invalid]="email?.invalid && submitted">
+          <span class="field-label">Email address</span>
+          <div class="field-control">
+            <ion-icon name="mail-outline" class="field-icon" aria-hidden="true"></ion-icon>
+            <ion-input
+              formControlName="email"
+              type="email"
+              autocomplete="email"
+              autocapitalize="off"
+              spellcheck="false"
+              aria-label="Email address"
+              placeholder="you@example.com"
+            ></ion-input>
+          </div>
+          @if (email?.invalid && submitted) {
+            <p class="field-error" role="alert">
+              <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+              <span>Enter a valid email address</span>
+            </p>
+          }
+        </div>
+
+        <!-- Contact number -->
+        <div class="field" [class.field-invalid]="contactNumber?.invalid && submitted">
+          <span class="field-label">Contact number</span>
+          <div class="field-control">
+            <ion-icon name="call-outline" class="field-icon" aria-hidden="true"></ion-icon>
+            <ion-input
+              formControlName="contact_number"
+              type="tel"
+              inputmode="tel"
+              autocomplete="tel"
+              aria-label="Contact number"
+              placeholder="+63 912 345 6789"
+            ></ion-input>
+          </div>
+          @if (contactNumber?.invalid && submitted) {
+            <p class="field-error" role="alert">
+              <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+              <span>Enter a valid contact number (7-20 digits, spaces, +, -, or parentheses)</span>
+            </p>
+          }
+        </div>
+
+        <ion-button expand="block" type="submit" class="save-button" [disabled]="isSaving">
+          @if (isSaving) {
+            <ion-spinner name="crescent" aria-hidden="true"></ion-spinner>
+            <span>Saving...</span>
+          } @else {
+            <ion-icon name="save-outline" slot="start" aria-hidden="true"></ion-icon>
+            <span>Save changes</span>
+          }
+        </ion-button>
+      </form>
+    </section>
+
+    <p class="profile-note">
+      <ion-icon name="person-outline" aria-hidden="true"></ion-icon>
+      <span>Only you can see and change your personal information.</span>
+    </p>
+  </div>
+</ion-content>

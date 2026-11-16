@@ -248,13 +248,15 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private watchId: string | null = null;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private pingPollTimer: ReturnType<typeof setInterval> | null = null;
+  /** True while a ping request is in flight, so ticks never stack up. */
+  private pingPollInFlight = false;
   /** Ping ids already shown this session, so a slow mark-read never re-toasts. */
   private readonly shownPingIds = new Set<number>();
   /** Wheel-scroll animation state for the desktop ping row. */
   private pingScrollTarget: number | null = null;
   private pingScrollFrame: number | null = null;
   private compassTimer: ReturnType<typeof setInterval> | null = null;
-  /** Continuous beam rotation in unwrapped degrees (tracks past 0Â°/360Â°). */
+  /** Continuous beam rotation in unwrapped degrees (tracks past 0°/360°). */
   private headingDeg = 0;
   private resizeObserver: ResizeObserver | null = null;
   private zoomControl: NavigationControl | null = null;
@@ -390,6 +392,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   detailSheetOpen = false;
   selectedIsSelf = false;
   isRefreshingDetail = false;
+  /** True while a ping is being sent, so a double tap cannot send twice. */
+  isSendingPing = false;
   /** True while the toolbar chip is expanded under its dropdown. */
   squadChipOpen = false;
 
@@ -482,7 +486,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   /**
    * Sweep the flashlight beam as the compass changes (between GPS fixes).
-   * The angle is unwrapped so passing north (359Â° -> 1Â°) continues forward
+   * The angle is unwrapped so passing north (359° -> 1°) continues forward
    * instead of spinning almost a full turn backwards.
    */
   private startCompassUpdates(): void {
@@ -516,18 +520,35 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
    */
   private startPingPolling(): void {
     if (this.pingPollTimer) return;
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
     void this.pollIncomingPings();
     this.pingPollTimer = setInterval(() => {
       void this.pollIncomingPings();
     }, 6000);
   }
 
-  private async pollIncomingPings(): Promise<void> {
-    if (!this.isActive || document.visibilityState === "hidden") return;
+  /** A ping that arrived while the app was backgrounded should buzz at once. */
+  private readonly onVisibilityChange = (): void => {
+    if (document.visibilityState === "visible") {
+      void this.pollIncomingPings();
+    }
+  };
 
+  private async pollIncomingPings(): Promise<void> {
+    // A slow request must not overlap the next six-second tick.
+    if (
+      !this.isActive ||
+      this.pingPollInFlight ||
+      document.visibilityState === "hidden"
+    ) {
+      return;
+    }
+
+    this.pingPollInFlight = true;
     try {
       const pings = await firstValueFrom(this.pingService.getPendingPings());
-      if (!pings.length) return;
+      // The user may have left the map while the request was in flight.
+      if (!this.isActive || !pings.length) return;
 
       // Mark every fetched ping read, including stale ones we choose not to
       // surface, so a backlog cannot buzz again on every later poll.
@@ -547,22 +568,42 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       const recent = fresh.filter((ping) => ping.age_seconds <= 120);
       if (!recent.length) return;
 
-      if (recent.length === 1) {
-        const ping = recent[0];
-        await this.vibrateForPing(ping.ping_type);
-        await this.showUpdateToast(this.describePing(ping), this.pingIcon(ping));
-        return;
-      }
-
       const emergency = recent.find((ping) => ping.ping_type === "need_help");
       await this.vibrateForPing(emergency?.ping_type ?? recent[0].ping_type);
       await this.showUpdateToast(
-        `You have ${recent.length} new pings`,
-        "chatbubbles-outline"
+        this.summarizePings(recent),
+        this.pingIcon(emergency ?? recent[0]),
+        emergency ? { cssClass: "ping-alert-toast", duration: 4000 } : undefined
       );
     } catch (error) {
       console.error("Failed to poll pings:", error);
+    } finally {
+      this.pingPollInFlight = false;
     }
+  }
+
+  /** One-line summary that names senders and calls out emergencies first. */
+  private summarizePings(pings: IncomingPing[]): string {
+    const emergency = pings.find((ping) => ping.ping_type === "need_help");
+    if (emergency) {
+      const extra = pings.length - 1;
+      return extra > 0
+        ? `${emergency.from_username} needs help — ${extra} more ping${
+            extra === 1 ? "" : "s"
+          }`
+        : `${emergency.from_username} needs help!`;
+    }
+
+    if (pings.length === 1) return this.describePing(pings[0]);
+
+    const names = [...new Set(pings.map((ping) => ping.from_username))];
+    const senders =
+      names.length === 1
+        ? names[0]
+        : names.length === 2
+          ? `${names[0]} and ${names[1]}`
+          : `${names[0]}, ${names[1]} and ${names.length - 2} more`;
+    return `${pings.length} new pings from ${senders}`;
   }
 
   /** Recipient-facing description of a ping: sender plus label. */
@@ -1472,7 +1513,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   /** Formatted distance label for a member. */
   memberDistanceLabel(member: SquadMemberLocation): string {
     const d = this.memberDistance(member);
-    if (d === null) return "â€”";
+    if (d === null) return "—";
     if (d < 1000) return `${Math.round(d)} m`;
     return `${(d / 1000).toFixed(1)} km`;
   }
@@ -1915,8 +1956,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
    */
   async pingMember(type: PingType): Promise<void> {
     const member = this.liveSelectedMember;
-    if (!member) return;
+    if (!member || this.isSendingPing) return;
 
+    this.isSendingPing = true;
+    this.cdr.markForCheck();
     try {
       await firstValueFrom(
         this.pingService.sendPing({
@@ -1927,6 +1970,9 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     } catch (error) {
       console.error("Failed to send ping:", error);
       void this.showUpdateToast("Couldn't send ping", "alert-circle-outline");
+    } finally {
+      this.isSendingPing = false;
+      this.cdr.markForCheck();
     }
   }
 
@@ -2031,13 +2077,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   get detailAccuracyLabel(): string {
     return this.lastAccuracy && this.lastAccuracy > 0
-      ? `Â±${Math.round(this.lastAccuracy)} m`
-      : "â€”";
+      ? `±${Math.round(this.lastAccuracy)} m`
+      : "—";
   }
 
   get detailDistanceLabel(): string {
     const meters = this.selectedDistanceMeters;
-    if (meters === null || meters === undefined) return "â€”";
+    if (meters === null || meters === undefined) return "—";
     if (meters < 1000) return `${Math.round(meters)} m`;
     return `${(meters / 1000).toFixed(1)} km`;
   }
@@ -2858,7 +2904,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const active = this.squads.find((squad) => squad.id === this.activeSquadId);
     if (active) return active.squad_name;
     if (this.activeSquadNameCache) return this.activeSquadNameCache;
-    return this.squadsLoaded ? "Konek Map" : "Loadingâ€¦";
+    return this.squadsLoaded ? "Konek Map" : "Loading…";
   }
 
   /** Whether the panel's leave action applies: a squad must be selected. */
@@ -2869,7 +2915,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   /** Transient top-of-screen confirmation, replacing the old map pill. */
   private async showUpdateToast(
     message: string,
-    icon = "checkmark-circle-outline"
+    icon = "checkmark-circle-outline",
+    options: { cssClass?: string; duration?: number } = {}
   ): Promise<void> {
     try {
       if (this.activeToast) {
@@ -2879,9 +2926,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.activeToast = await this.toastCtrl.create({
         message,
         icon,
-        duration: 2200,
+        duration: options.duration ?? 2200,
         position: "top",
-        cssClass: "update-toast",
+        cssClass: options.cssClass
+          ? `update-toast ${options.cssClass}`
+          : "update-toast",
       });
       await this.activeToast.present();
     } catch {
@@ -2930,6 +2979,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.pingScrollFrame = null;
     }
     this.pingScrollTarget = null;
+    this.pingPollInFlight = false;
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.shownPingIds.clear();
     if (this.compassTimer) {
       clearInterval(this.compassTimer);
