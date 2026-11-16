@@ -91,6 +91,7 @@ try {
         SELECT 
             u.id as user_id,
             u.username,
+            u.profile_picture,
             l.latitude,
             l.longitude,
             l.accuracy,
@@ -138,6 +139,7 @@ try {
         $data[] = [
             "user_id" => (int)$loc["user_id"],
             "username" => $loc["username"],
+            "profile_picture" => $loc["profile_picture"],
             "latitude" => (float)$loc["latitude"],
             "longitude" => (float)$loc["longitude"],
             "accuracy" => $loc["accuracy"] !== null ? (float)$loc["accuracy"] : null,

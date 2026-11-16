@@ -14,6 +14,8 @@ $isDevOrigin = $origin !== "" && (
         $origin
     ) === 1
     || in_array($origin, ["capacitor://localhost", "ionic://localhost", "https://localhost"], true)
+    // Tailscale Funnel hostnames (e.g. https://yuji.tail58cd54.ts.net)
+    || preg_match('#^https://[a-z0-9-]+\.tail[0-9a-f]+\.ts\.net$#', $origin) === 1
 );
 
 if ($isDevOrigin) {

@@ -1547,6 +1547,24 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     return `linear-gradient(135deg, ${from} 0%, ${to} 100%)`;
   }
 
+  /** Absolute URL for a member's profile picture, or null when they have none. */
+  memberPictureUrl(member: SquadMemberLocation): string | null {
+    return this.authService.pictureUrl(member.profile_picture);
+  }
+
+  /** Avatar background: the member's photo when set, otherwise their gradient. */
+  memberAvatarBackground(member: SquadMemberLocation): string {
+    const url = this.memberPictureUrl(member);
+    return url
+      ? `url("${url}") center / cover no-repeat`
+      : this.avatarGradient(member.username);
+  }
+
+  /** Initials are only shown when there is no profile picture. */
+  memberAvatarLabel(member: SquadMemberLocation): string {
+    return this.memberPictureUrl(member) ? "" : this.memberInitials(member.username);
+  }
+
   /** Members sharing right now (seen within the last three minutes). */
   get onlineMembers(): SquadMemberLocation[] {
     return this.squadMembers.filter((m) => this.isMemberOnline(m));
@@ -2044,6 +2062,25 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       ? parts[0][0] + parts[1][0]
       : name.slice(0, 2)
     ).toUpperCase();
+  }
+
+  /** Absolute URL of the avatar photo for the open detail sheet. */
+  get detailPictureUrl(): string | null {
+    if (this.selectedIsSelf) {
+      return this.authService.pictureUrl(this.currentUser?.profile_picture);
+    }
+    return this.authService.pictureUrl(this.liveSelectedMember?.profile_picture);
+  }
+
+  /** Hero avatar photo; null keeps the CSS role colours + initials fallback. */
+  get detailAvatarBackground(): string | null {
+    const url = this.detailPictureUrl;
+    return url ? `url("${url}") center / cover no-repeat` : null;
+  }
+
+  /** Initials are only shown when there is no profile picture. */
+  get detailAvatarLabel(): string {
+    return this.detailPictureUrl ? "" : this.detailInitials;
   }
 
   get detailRoleLabel(): string {

@@ -85,6 +85,7 @@ try {
         SELECT 
             u.id as user_id,
             u.username,
+            u.profile_picture,
             sm.role,
             sm.joined_at,
             l.latitude,
@@ -114,6 +115,7 @@ try {
         $data[] = [
             "user_id" => (int)$m["user_id"],
             "username" => $m["username"],
+            "profile_picture" => $m["profile_picture"],
             "role" => $m["role"],
             "joined_at" => $m["joined_at"],
             "last_location" => $m["latitude"] !== null ? [

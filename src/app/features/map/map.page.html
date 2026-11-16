@@ -266,8 +266,8 @@
             >
               <span
                 class="member-avatar"
-                [style.background]="avatarGradient(member.username)"
-              >{{ memberInitials(member.username) }}</span>
+                [style.background]="memberAvatarBackground(member)"
+              >{{ memberAvatarLabel(member) }}</span>
               <span class="member-main">
                 <span class="member-name">
                   <span class="member-name-text">{{ member.username }}</span>
@@ -305,8 +305,8 @@
             >
               <span
                 class="member-avatar"
-                [style.background]="avatarGradient(member.username)"
-              >{{ memberInitials(member.username) }}</span>
+                [style.background]="memberAvatarBackground(member)"
+              >{{ memberAvatarLabel(member) }}</span>
               <span class="member-main">
                 <span class="member-name">
                   <span class="member-name-text">{{ member.username }}</span>
@@ -382,8 +382,9 @@
           class="hero-avatar"
           [class.is-self]="selectedIsSelf"
           [class.is-admin]="!selectedIsSelf && detailIsAdmin"
+          [style.background]="detailAvatarBackground"
         >
-          {{ detailInitials }}
+          {{ detailAvatarLabel }}
         </div>
       </div>
 

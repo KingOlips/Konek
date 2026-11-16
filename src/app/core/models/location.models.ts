@@ -30,6 +30,8 @@ export interface LocationHistoryEntry extends LocationUpdate {
 export interface SquadMemberLocation {
   user_id: number;
   username: string;
+  /** Stored profile picture path, or null when the member has none. */
+  profile_picture?: string | null;
   latitude: number;
   longitude: number;
   accuracy?: number | null;
