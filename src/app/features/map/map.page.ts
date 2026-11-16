@@ -1702,17 +1702,22 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  /** Avatar-style marker: initials, role colour and a live dot. */
+  /** Avatar-style marker: photo (or initials), role colour and a live dot. */
   private paintSquadMarker(el: HTMLDivElement, member: SquadMemberLocation): void {
     const online = this.isMemberOnline(member);
     const admin = member.role === "admin";
+    const photo = this.memberPictureUrl(member);
     // Preserve MapLibre's own classes (maplibregl-marker, anchor class) while
     // refreshing the role/online state on every location poll.
     el.classList.add("squad-marker");
     el.classList.toggle("is-admin", admin);
     el.innerHTML = `
       <div class="marker-ring"></div>
-      <div class="marker-core"><span>${this.initialsOf(member.username)}</span></div>
+      <div class="marker-core">${
+        photo
+          ? `<img class="marker-photo" src="${this.escapeHtml(photo)}" alt="" />`
+          : `<span>${this.initialsOf(member.username)}</span>`
+      }</div>
       ${online ? '<div class="marker-status"></div>' : ""}`;
   }
 
