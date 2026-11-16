@@ -1,5 +1,6 @@
 <ion-header
   [class.toolbar-hidden]="toolbarHidden"
+  [class.map-ui-hidden]="!mapReady || !initialLoadDone"
   [attr.inert]="toolbarHidden ? '' : null"
 >
   <ion-toolbar class="map-toolbar">
@@ -86,6 +87,7 @@
   <ion-fab
     #mapFabs
     class="map-fabs"
+    [class.map-ui-hidden]="!mapReady || !initialLoadDone"
     [class.panel-open]="showSquadList"
     [class.member-open]="detailSheetOpen"
     [class.sheet-full]="squadSheetSnap === 'full' || sheetNearFull"
@@ -123,6 +125,7 @@
   <button
     type="button"
     class="panel-handle"
+    [class.map-ui-hidden]="!mapReady || !initialLoadDone"
     [class.open]="showSquadList"
     [class.hidden]="isSquadFormModalOpen"
     [attr.aria-expanded]="showSquadList"
@@ -131,8 +134,14 @@
     (click)="toggleSquadList()"
   ></button>
 
-  <!-- Squad list: sidebar on desktop, draggable bottom sheet on mobile -->
-  <div #squadPanel id="squadPanel" class="squad-panel" [class.open]="showSquadList">
+  <!-- Circle list: sidebar on desktop, draggable bottom sheet on mobile -->
+  <div
+    #squadPanel
+    id="squadPanel"
+    class="squad-panel"
+    [class.map-ui-hidden]="!mapReady || !initialLoadDone"
+    [class.open]="showSquadList"
+  >
     <div
       class="sheet-grabber"
       [class.hidden]="isSquadFormModalOpen"
@@ -339,6 +348,7 @@
   <div
     #memberPanel
     class="member-dock"
+    [class.map-ui-hidden]="!mapReady || !initialLoadDone"
     [class.open]="detailSheetOpen"
     [attr.aria-hidden]="!detailSheetOpen"
     [attr.inert]="detailSheetOpen ? null : ''"
@@ -350,7 +360,7 @@
             type="button"
             class="ping-chip"
             [class.is-danger]="ping.danger"
-            (click)="onPing(ping.type)"
+            (click)="onPing(ping.type, $event)"
           >
             {{ ping.label }}
           </button>

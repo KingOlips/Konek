@@ -6,8 +6,7 @@
  * Headers: Authorization: Bearer <auth_token>
  * Request Body: {
  *   "target_user_id": number,
- *   "ping_type": "whats_up" | "on_my_way" | ... | "custom",
- *   "message": "string"   // optional; required when ping_type is "custom"
+ *   "ping_type": "whats_up" | "on_my_way" | ...
  * }
  * Response: { "success": bool, "data": {...}, "message": "string" }
  *
@@ -49,7 +48,6 @@ $allowedTypes = [
     "leaving_now",
     "need_help",
     "coffee",
-    "custom",
 ];
 
 if ($targetUserId <= 0) {
@@ -61,24 +59,6 @@ if ($targetUserId <= 0) {
 if (!in_array($pingType, $allowedTypes, true)) {
     http_response_code(400);
     echo json_encode(["success" => false, "message" => "Unknown ping type"]);
-    exit();
-}
-
-$message = null;
-if (isset($input["message"])) {
-    $message = trim((string)$input["message"]);
-    if ($message === "") {
-        $message = null;
-    } elseif (function_exists("mb_substr")) {
-        $message = mb_substr($message, 0, 120);
-    } else {
-        $message = substr($message, 0, 120);
-    }
-}
-
-if ($pingType === "custom" && $message === null) {
-    http_response_code(400);
-    echo json_encode(["success" => false, "message" => "A custom ping needs a message"]);
     exit();
 }
 
@@ -132,13 +112,12 @@ try {
 
     $insertStmt = $db->prepare("
         INSERT INTO pings (squad_id, from_user_id, target_user_id, ping_type, message)
-        VALUES (:squad_id, :from_user_id, :target_user_id, :ping_type, :message)
+        VALUES (:squad_id, :from_user_id, :target_user_id, :ping_type, NULL)
     ");
     $insertStmt->bindParam(":squad_id", $squadId, PDO::PARAM_INT);
     $insertStmt->bindParam(":from_user_id", $senderId, PDO::PARAM_INT);
     $insertStmt->bindParam(":target_user_id", $targetUserId, PDO::PARAM_INT);
     $insertStmt->bindParam(":ping_type", $pingType, PDO::PARAM_STR);
-    $insertStmt->bindParam(":message", $message, PDO::PARAM_STR);
     $insertStmt->execute();
 
     $pingId = (int)$db->lastInsertId();
@@ -153,7 +132,7 @@ try {
             "from_username" => $sender["username"],
             "target_user_id" => $targetUserId,
             "ping_type" => $pingType,
-            "message" => $message,
+            "message" => null,
             "created_at" => date("Y-m-d H:i:s"),
             "age_seconds" => 0,
         ],

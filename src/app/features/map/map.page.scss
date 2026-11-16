@@ -59,6 +59,13 @@ ion-header.toolbar-hidden {
   pointer-events: none;
 }
 
+/* Keep all chrome out of the way until the splash has finished. */
+.map-ui-hidden {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 ion-buttons[slot="start"],
 ion-buttons[slot="end"] {
   margin-inline: 0;

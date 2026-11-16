@@ -13,14 +13,11 @@ export type PingType =
   | "almost_there"
   | "leaving_now"
   | "need_help"
-  | "coffee"
-  | "custom";
+  | "coffee";
 
 export interface SendPingRequest {
   target_user_id: number;
   ping_type: PingType;
-  /** Required for `custom` pings, optional otherwise. */
-  message?: string;
 }
 
 export interface IncomingPing {

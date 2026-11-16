@@ -109,6 +109,72 @@ interface StoredMapView {
   timestamp: number;
 }
 
+/**
+ * Esri serves this exact 2521-byte JPEG wherever World Imagery has no tile at
+ * the requested zoom. It is a grey "Map data not yet available" card, so the
+ * map turns it into a transparent tile and lets the sharper fallback show
+ * through.
+ */
+const ESRI_PLACEHOLDER_BYTES = 2521;
+const ESRI_PLACEHOLDER_FNV1A = 0x92d9118f;
+
+/** 1x1 fully transparent PNG, returned in place of Esri placeholder tiles. */
+const TRANSPARENT_TILE_PNG = Uint8Array.from(
+  atob(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII="
+  ),
+  (char) => char.charCodeAt(0)
+);
+
+let esriProtocolRegistered = false;
+
+/** True for Esri's byte-identical "Map data not yet available" tile. */
+function isEsriPlaceholderTile(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength !== ESRI_PLACEHOLDER_BYTES) return false;
+
+  const bytes = new Uint8Array(buffer);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i++) {
+    hash ^= bytes[i];
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0) === ESRI_PLACEHOLDER_FNV1A;
+}
+
+/**
+ * Route Esri World Imagery through a custom protocol so missing high-zoom
+ * tiles can be swapped for transparency. Only the placeholder bytes are
+ * filtered; real imagery is returned untouched.
+ */
+function registerEsriTileProtocol(): void {
+  if (esriProtocolRegistered) return;
+  esriProtocolRegistered = true;
+
+  try {
+    maplibregl.addProtocol("esri", async (requestParameters, abortController) => {
+      const response = await fetch(
+        requestParameters.url.replace(/^esri:\/\//, "https://"),
+        { signal: abortController.signal }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Esri tile request failed (${response.status})`);
+      }
+
+      const data = await response.arrayBuffer();
+      if (isEsriPlaceholderTile(data)) {
+        // A fresh buffer per tile: MapLibre may transfer (detach) the result.
+        return { data: new Uint8Array(TRANSPARENT_TILE_PNG).buffer };
+      }
+
+      return { data };
+    });
+  } catch (error) {
+    // Hot reload can re-run this module; a duplicate registration is harmless.
+    console.warn("Esri tile protocol was already registered:", error);
+  }
+}
+
 @Component({
   selector: "app-map",
   templateUrl: "./map.page.html",
@@ -176,7 +242,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private styleLoaded = false;
   /** Symbol layers from the active style, toggled for satellite-only mode. */
   private labelLayerIds: string[] = [];
-  private currentTheme: "light" | "dark" = "light";
   private mapLoadTimer: ReturnType<typeof setTimeout> | null = null;
   /** Deferred map creation while the page layout settles (0x0 guard). */
   private mapInitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -192,7 +257,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   /** Continuous beam rotation in unwrapped degrees (tracks past 0Â°/360Â°). */
   private headingDeg = 0;
   private resizeObserver: ResizeObserver | null = null;
-  private themeObserver: MutationObserver | null = null;
   private zoomControl: NavigationControl | null = null;
   private attributionControl: AttributionControl | null = null;
   private sizeTimers: ReturnType<typeof setTimeout>[] = [];
@@ -235,16 +299,24 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private static readonly DEFAULT_LNG = 120.9842;
   private static readonly DEFAULT_ZOOM = 14;
   private static readonly MAX_ZOOM = 20;
+  /** Focus zoom for a circle member: neighbourhood scale, not rooftop scale. */
+  private static readonly MEMBER_FOCUS_ZOOM = 14;
   /** Esri World Imagery has native tiles through z19 in most cities. */
   private static readonly SATELLITE_MAX_ZOOM = 19;
+  /** z17 imagery is available almost everywhere; used below missing z18/z19 tiles. */
+  private static readonly SATELLITE_FALLBACK_MAX_ZOOM = 17;
+  /** z18 is the sharpest common fallback; z19 gaps use it before dropping to z17. */
+  private static readonly SATELLITE_FALLBACK_18_MAX_ZOOM = 18;
+  /** Stay below z17 imagery until the detail layer is about to need fallback. */
+  private static readonly SATELLITE_FALLBACK_MIN_ZOOM = 17.4;
+  /** The z18 fallback only becomes useful once the detail layer requests z19. */
+  private static readonly SATELLITE_FALLBACK_18_MIN_ZOOM = 18.4;
   /** A slight tilt makes the vector buildings feel 3D without hurting labels. */
   private static readonly DEFAULT_PITCH = 42;
   private static readonly STYLE_LIGHT =
     "https://tiles.openfreemap.org/styles/liberty";
-  private static readonly STYLE_DARK =
-    "https://tiles.openfreemap.org/styles/dark";
   private static readonly SATELLITE_TILES =
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+    "esri://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
   /** True when the initial viewport came from localStorage, not the fallback. */
   private restoredMapView = false;
@@ -282,8 +354,19 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     { type: "leaving_now", label: "Leaving now" },
     { type: "need_help", label: "Need help", danger: true },
     { type: "coffee", label: "Coffee?" },
-    { type: "custom", label: "Customâ€¦" },
   ];
+
+  /** Emoji shown when a ping is sent — instant feedback for the sender. */
+  private readonly PING_EMOJI: Record<PingType, string> = {
+    whats_up: "👋",
+    on_my_way: "🏃‍♂️",
+    where_you_at: "📍",
+    meet_here: "📌",
+    almost_there: "⏳",
+    leaving_now: "🚗",
+    need_help: "🆘",
+    coffee: "☕",
+  };
 
   currentUser: User | null = null;
   squadMembers: SquadMemberLocation[] = [];
@@ -482,11 +565,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  /** Recipient-facing description of a ping: sender plus label or message. */
+  /** Recipient-facing description of a ping: sender plus label. */
   private describePing(ping: IncomingPing): string {
-    if (ping.ping_type === "custom" && ping.message) {
-      return `${ping.from_username}: ${ping.message}`;
-    }
     const label =
       this.pingOptions.find((option) => option.type === ping.ping_type)?.label ??
       "Ping";
@@ -514,12 +594,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const center: [number, number] = storedView
       ? [storedView.lng, storedView.lat]
       : [MapPage.DEFAULT_LNG, MapPage.DEFAULT_LAT];
-    this.currentTheme = document.body.classList.contains("dark") ? "dark" : "light";
 
     // The bundler does not emit MapLibre's worker next to the app chunks, so
     // point MapLibre at the copy shipped from the assets folder (see
     // angular.json) before the first map is created.
     maplibregl.setWorkerUrl("assets/maplibre/maplibre-gl-worker.mjs");
+    // Must exist before the first style requests an Esri tile.
+    registerEsriTileProtocol();
 
     let map: MapLibreMap;
     try {
@@ -569,17 +650,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     // Zoom/compass buttons are desktop-only; phones use pinch gestures.
     this.syncZoomControl();
     this.addAttributionControl();
-
-    // Follow the app theme: Settings toggles body.dark, so watch the class.
-    this.themeObserver = new MutationObserver(() => this.applyMapTheme());
-    this.themeObserver.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
   }
 
   private styleUrl(): string {
-    return this.currentTheme === "dark" ? MapPage.STYLE_DARK : MapPage.STYLE_LIGHT;
+    return MapPage.STYLE_LIGHT;
   }
 
   private readonly onStyleLoad = (): void => {
@@ -698,8 +772,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Add the satellite/3D/overlay layers on top of whichever OpenFreeMap style
-   * is active. Called after every style load, including dark-mode swaps.
+   * Add the satellite/3D/overlay layers on top of the OpenFreeMap style.
+   * Called after every style load.
    */
   private installCustomLayers(): void {
     if (!this.map || !this.styleLoaded) return;
@@ -719,13 +793,14 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * 3D buildings give the tilted street map its depth. They only exist in the
-   * light style: over the dark basemap, imagery and extruded slabs all darken
-   * into unreadable shapes, so dark mode keeps a flat (but tilted) map.
+   * 3D buildings give the tilted street map its depth. The building
+   * footprints come from z14 vector tiles: overzoomed on top of imagery they
+   * turn into huge slabs, so `applyMapStyle` fades them out as satellite
+   * imagery takes over.
    */
   private installBuilding3d(): void {
     const map = this.map;
-    if (!map || this.currentTheme === "dark" || map.getLayer("building-3d")) {
+    if (!map || map.getLayer("building-3d")) {
       return;
     }
 
@@ -751,6 +826,51 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private ensureSatelliteLayer(): void {
     const map = this.map;
     if (!map) return;
+
+    // Fallbacks sit underneath the detail layer, sharpest first. A missing
+    // z19 tile lets the z18 layer show through; where z18 is also missing, the
+    // z17 layer keeps real imagery visible instead of a grey card. Order in
+    // the style is z17, z18, z19 (top).
+    const fallbacks = [
+      {
+        id: "satellite-fallback",
+        maxzoom: MapPage.SATELLITE_FALLBACK_MAX_ZOOM,
+        minzoom: MapPage.SATELLITE_FALLBACK_MIN_ZOOM,
+      },
+      {
+        id: "satellite-fallback-18",
+        maxzoom: MapPage.SATELLITE_FALLBACK_18_MAX_ZOOM,
+        minzoom: MapPage.SATELLITE_FALLBACK_18_MIN_ZOOM,
+      },
+    ];
+
+    for (const fallback of fallbacks) {
+      if (!map.getSource(fallback.id)) {
+        map.addSource(fallback.id, {
+          type: "raster",
+          tiles: [MapPage.SATELLITE_TILES],
+          tileSize: 256,
+          maxzoom: fallback.maxzoom,
+        });
+      }
+
+      if (!map.getLayer(fallback.id)) {
+        map.addLayer(
+          {
+            id: fallback.id,
+            type: "raster",
+            source: fallback.id,
+            minzoom: fallback.minzoom,
+            paint: {
+              "raster-opacity": 0,
+              "raster-fade-duration": 250,
+              "raster-resampling": "linear",
+            },
+          },
+          this.firstSymbolLayerId()
+        );
+      }
+    }
 
     if (!map.getSource("satellite")) {
       map.addSource("satellite", {
@@ -874,11 +994,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     if (!map) return;
 
     map.setSky({
-      "sky-color": this.currentTheme === "dark" ? "#0b1020" : "#9ec9ff",
+      "sky-color": "#9ec9ff",
       "sky-horizon-blend": 0.5,
-      "horizon-color": this.currentTheme === "dark" ? "#1b2438" : "#e9f2ff",
+      "horizon-color": "#e9f2ff",
       "horizon-fog-blend": 0.6,
-      "fog-color": this.currentTheme === "dark" ? "#0f1526" : "#d7e6f7",
+      "fog-color": "#d7e6f7",
       "fog-ground-blend": 0.8,
       "atmosphere-blend": 0.55,
     });
@@ -897,6 +1017,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         ? ["interpolate", ["linear"], ["zoom"], 14.5, 0, 17.5, 1]
         : 1;
     map.setPaintProperty("satellite", "raster-opacity", satelliteOpacity);
+    for (const id of ["satellite-fallback", "satellite-fallback-18"]) {
+      if (map.getLayer(id)) {
+        map.setPaintProperty(id, "raster-opacity", satelliteOpacity);
+      }
+    }
 
     // The building footprints come from z14 vector tiles: overzoomed on top of
     // imagery they turn into huge slabs, so they hand the map over to the
@@ -915,18 +1040,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         map.setLayoutProperty(id, "visibility", hideLabels ? "none" : "visible");
       }
     }
-  }
-
-  /** Swap between the light and dark OpenFreeMap styles. */
-  private applyMapTheme(): void {
-    const theme = document.body.classList.contains("dark") ? "dark" : "light";
-    if (theme === this.currentTheme || !this.map) return;
-
-    this.currentTheme = theme;
-    this.styleLoaded = false;
-    // Full style swap keeps the camera and DOM markers; custom layers are
-    // reinstalled from `onStyleLoad`, then the satellite mode is reapplied.
-    this.map.setStyle(this.styleUrl(), { diff: false });
   }
 
   private readonly onMapClick = (event: MapMouseEvent): void => {
@@ -1629,7 +1742,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     if (this.userMarker && this.map) {
       this.map.flyTo({
         center: this.userMarker.getLngLat(),
-        zoom: Math.max(this.map.getZoom(), 16),
+        zoom: Math.max(this.map.getZoom(), MapPage.MEMBER_FOCUS_ZOOM),
         duration: 600,
       });
     } else {
@@ -1640,7 +1753,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   centerOnMember(member: SquadMemberLocation): void {
     this.map?.flyTo({
       center: [member.longitude, member.latitude],
-      zoom: 17,
+      zoom: MapPage.MEMBER_FOCUS_ZOOM,
       duration: 600,
     });
     this.closeSquadPanel();
@@ -1667,6 +1780,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     // Tapping your own row opens the self sheet: no ping chips, no directions.
     if (member.user_id === this.currentUser?.id) {
       this.openSelfDetail();
+      this.centerOnUser();
       return;
     }
     this.rememberSquadPanelState();
@@ -1733,12 +1847,28 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  onPing(type: PingType): void {
-    if (type === "custom") {
-      void this.openCustomPing();
-      return;
-    }
+  onPing(type: PingType, event?: MouseEvent): void {
     void this.pingMember(type);
+    this.showPingSentEmoji(type, event);
+  }
+
+  /**
+   * Pop an emoji from the tapped ping chip so the sender instantly sees that
+   * the ping was sent — the receiver's phone answers with a vibration.
+   */
+  private showPingSentEmoji(type: PingType, event?: MouseEvent): void {
+    if (!event) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const emoji = this.PING_EMOJI[type] ?? "📍";
+    const el = document.createElement("span");
+    el.textContent = emoji;
+    el.className = "ping-sent-emoji";
+    el.setAttribute("aria-hidden", "true");
+    el.style.left = `${event.clientX}px`;
+    el.style.top = `${event.clientY}px`;
+    document.body.appendChild(el);
+    window.setTimeout(() => el.remove(), 1200);
   }
 
   /**
@@ -1783,7 +1913,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
    * up on its next poll and vibrates there; the sender gets no success feedback
    * so only the person being pinged is alerted. Errors are still surfaced.
    */
-  async pingMember(type: PingType, customText?: string): Promise<void> {
+  async pingMember(type: PingType): Promise<void> {
     const member = this.liveSelectedMember;
     if (!member) return;
 
@@ -1792,7 +1922,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         this.pingService.sendPing({
           target_user_id: member.user_id,
           ping_type: type,
-          ...(customText ? { message: customText } : {}),
         })
       );
     } catch (error) {
@@ -1827,33 +1956,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     } catch {
       navigator.vibrate?.(pattern);
     }
-  }
-
-  async openCustomPing(): Promise<void> {
-    const alert = await this.alertCtrl.create({
-      header: "Custom ping",
-      inputs: [
-        {
-          name: "text",
-          type: "text",
-          placeholder: "Message",
-          attributes: { maxlength: 120 },
-        },
-      ],
-      buttons: [
-        { text: "Cancel", role: "cancel" },
-        {
-          text: "Send",
-          handler: (data) => {
-            const text = String(data.text ?? "").trim();
-            if (!text) return false;
-            void this.pingMember("custom", text);
-            return true;
-          },
-        },
-      ],
-    });
-    await alert.present();
   }
 
   /** The selected member kept in sync with the latest squad poll. */
@@ -2841,8 +2943,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
-    this.themeObserver?.disconnect();
-    this.themeObserver = null;
     this.sizeTimers.forEach((timer) => clearTimeout(timer));
     this.sizeTimers = [];
     if (this.mapLoadTimer) {
