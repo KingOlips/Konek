@@ -9,57 +9,36 @@
       <h2>{{ memberName }}</h2>
       <p>{{ relationshipLabel ? relationshipLabel : "Circle member" }}</p>
     </div>
-    <button type="button" class="role-close" (click)="close()" aria-label="Close role picker">
+    <button type="button" class="role-close" (click)="close()" aria-label="Close relationship picker">
       <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
     </button>
   </header>
 
-  <p class="role-label">Role in this circle</p>
+  <p class="role-label">Relationship in this circle</p>
 
-  <div class="role-options" role="radiogroup" aria-label="Role in this circle">
-    <button
-      type="button"
-      class="role-option"
-      role="radio"
-      [class.is-selected]="draftRole === 'member'"
-      [attr.aria-checked]="draftRole === 'member'"
-      (click)="selectRole('member')"
-    >
-      <span class="option-icon" aria-hidden="true">
-        <ion-icon name="person-outline"></ion-icon>
-      </span>
-      <span class="option-copy">
-        <span class="option-title">Member</span>
-        <span class="option-sub">Shares their location and sees everyone in the circle</span>
-      </span>
-      <span class="option-radio" [class.is-checked]="draftRole === 'member'" aria-hidden="true">
-        @if (draftRole === "member") {
-          <ion-icon name="checkmark-outline"></ion-icon>
-        }
-      </span>
-    </button>
-
-    <button
-      type="button"
-      class="role-option"
-      role="radio"
-      [class.is-selected]="draftRole === 'admin'"
-      [attr.aria-checked]="draftRole === 'admin'"
-      (click)="selectRole('admin')"
-    >
-      <span class="option-icon admin" aria-hidden="true">
-        <ion-icon name="shield-checkmark-outline"></ion-icon>
-      </span>
-      <span class="option-copy">
-        <span class="option-title">Admin</span>
-        <span class="option-sub">Can promote, demote, and remove members</span>
-      </span>
-      <span class="option-radio" [class.is-checked]="draftRole === 'admin'" aria-hidden="true">
-        @if (draftRole === "admin") {
-          <ion-icon name="checkmark-outline"></ion-icon>
-        }
-      </span>
-    </button>
+  <div class="role-options" role="radiogroup" aria-label="Relationship in this circle">
+    @for (option of relationshipOptions; track option.value) {
+      <button
+        type="button"
+        class="role-option"
+        role="radio"
+        [class.is-selected]="draftRelationship === option.value"
+        [attr.aria-checked]="draftRelationship === option.value"
+        (click)="selectRelationship(option.value)"
+      >
+        <span class="option-icon" [class.admin]="option.value === 'partner'" aria-hidden="true">
+          <ion-icon [name]="option.icon"></ion-icon>
+        </span>
+        <span class="option-copy">
+          <span class="option-title">{{ option.label }}</span>
+        </span>
+        <span class="option-radio" [class.is-checked]="draftRelationship === option.value" aria-hidden="true">
+          @if (draftRelationship === option.value) {
+            <ion-icon name="checkmark-outline"></ion-icon>
+          }
+        </span>
+      </button>
+    }
   </div>
 
   <button type="button" class="role-save" [disabled]="!changed" (click)="save()">

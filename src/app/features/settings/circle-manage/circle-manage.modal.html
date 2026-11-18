@@ -81,12 +81,14 @@
       <div class="member-list">
         @for (member of members; track member.user_id) {
           <div class="member" [class.is-busy]="busyMemberId === member.user_id">
-            <span
-              class="member-avatar"
-              [style.background]="memberGradient(member.username)"
-              aria-hidden="true"
-            >
-              {{ memberInitials(member.username) }}
+            <span class="member-avatar" aria-hidden="true">
+              @if (memberAvatarUrl(member); as avatarUrl) {
+                <img [src]="avatarUrl" alt="" class="avatar-image" />
+              } @else {
+                <span [style.background]="memberGradient(member.username)" class="avatar-initials">
+                  {{ memberInitials(member.username) }}
+                </span>
+              }
             </span>
 
             <span class="member-body">
@@ -111,7 +113,7 @@
                 class="member-menu"
                 [disabled]="busyMemberId !== null"
                 (click)="openRolePicker(member)"
-                [attr.aria-label]="'Change ' + member.username + '\'s role'"
+                [attr.aria-label]="'Change ' + member.username + '\'s relationship'"
               >
                 <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
               </button>

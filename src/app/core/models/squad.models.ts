@@ -32,6 +32,8 @@ export interface SquadMember {
   role: "member" | "admin";
   /** Optional family/friend label, separate from the permission role. */
   relationship?: MemberRelationship | null;
+  /** Profile picture path, or null when the member has none. */
+  profile_picture?: string | null;
   joined_at: string;
 }
 

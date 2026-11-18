@@ -32,7 +32,7 @@ import {
   SquadMember,
 } from "../../../core/models/squad.models";
 import { avatarGradient, initialsFor } from "../../../core/utils/avatar";
-import type { CircleRole, MemberRoleResult } from "./member-role.modal";
+import type { MemberRelationshipOption, MemberRelationshipResult } from "./member-role.modal";
 
 /** What the circles page learns when this sheet closes. */
 export interface CircleManageResult {
@@ -140,6 +140,14 @@ export class CircleManageModalComponent implements OnInit {
     return avatarGradient(username);
   }
 
+  /** Get avatar URL for a member: profile picture if available, otherwise gradient. */
+  memberAvatarUrl(member: SquadMember): string | null {
+    if (member.profile_picture) {
+      return this.authService.pictureUrl(member.profile_picture);
+    }
+    return null;
+  }
+
   /** Human-readable relationship label (matches the map's member sheet). */
   relationshipLabel(relationship: MemberRelationship | null | undefined): string {
     if (!relationship) return "";
@@ -196,7 +204,7 @@ export class CircleManageModalComponent implements OnInit {
       componentProps: {
         memberName: member.username,
         relationshipLabel: this.relationshipLabel(member.relationship),
-        initialRole: member.role,
+        initialRelationship: member.relationship ?? null,
         canRemove: member.role !== "admin",
       },
       cssClass: "member-role-modal",
@@ -204,35 +212,35 @@ export class CircleManageModalComponent implements OnInit {
     });
 
     await modal.present();
-    const { data } = await modal.onWillDismiss<MemberRoleResult>();
+    const { data } = await modal.onWillDismiss<MemberRelationshipResult>();
 
     if (!data) return;
-    if (data.action === "role" && data.role) {
-      await this.setRole(member, data.role);
+    if (data.action === "relationship" && data.relationship !== undefined) {
+      await this.setRelationship(member, data.relationship);
     } else if (data.action === "remove") {
       await this.confirmRemoveMember(member);
     }
   }
 
-  private async setRole(member: SquadMember, role: CircleRole): Promise<void> {
-    if (this.busyMemberId !== null || member.role === role) return;
+  private async setRelationship(member: SquadMember, relationship: MemberRelationshipOption): Promise<void> {
+    if (this.busyMemberId !== null || member.relationship === relationship) return;
 
     this.busyMemberId = member.user_id;
     this.cdr.markForCheck();
 
     try {
       await firstValueFrom(
-        this.squadService.updateMemberRole(this.squad.id, member.user_id, role)
+        this.squadService.updateMemberRelationship(this.squad.id, member.user_id, relationship)
       );
-      member.role = role;
+      member.relationship = relationship;
       this.changed = true;
       await this.showToast(
-        role === "admin"
-          ? `${member.username} is now an admin`
-          : `${member.username} is now a member`
+        relationship
+          ? `${member.username} is now set as ${this.relationshipLabel(relationship)}`
+          : `${member.username}'s relationship label cleared`
       );
     } catch (error) {
-      console.error("Failed to update member role:", error);
+      console.error("Failed to update member relationship:", error);
       await this.showToast(this.errorMessage(error, "Failed to update member"));
     } finally {
       this.busyMemberId = null;
