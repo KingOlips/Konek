@@ -62,6 +62,14 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: "settings/circles",
+    loadComponent: () =>
+      import("./features/settings/circles/circles.page").then(
+        (m) => m.CircleManagementPage
+      ),
+    canActivate: [authGuard],
+  },
+  {
     path: "profile",
     loadComponent: () =>
       import("./features/profile/profile.page").then((m) => m.ProfilePage),

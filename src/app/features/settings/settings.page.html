@@ -30,78 +30,19 @@
 
     <!-- Circles -->
     <section class="settings-group">
-      <div class="group-heading">
-        <h3 class="group-title">Circles</h3>
-        @if (!circlesLoading && circles.length > 0) {
-          <span class="group-count">{{ circles.length }}</span>
-        }
-      </div>
-
+      <h3 class="group-title">Circles</h3>
       <div class="group-card">
-        @if (circlesLoading) {
-          <div class="row row-static">
-            <span class="row-icon"><ion-icon name="people-outline"></ion-icon></span>
-            <div class="row-body">
-              <span class="row-title">Loading your circles…</span>
-              <span class="row-sub">Syncing with Konek</span>
-            </div>
-            <ion-spinner name="crescent" class="row-spinner"></ion-spinner>
+        <button type="button" class="row row-button" (click)="openCircleManagement()">
+          <span class="row-icon"><ion-icon name="people-outline"></ion-icon></span>
+          <div class="row-body">
+            <span class="row-title">Circle management</span>
+            <span class="row-sub">{{ circlesSummary }}</span>
           </div>
-        } @else if (circlesError && circles.length === 0) {
-          <button type="button" class="row row-button" (click)="loadCircles()">
-            <span class="row-icon row-icon-danger">
-              <ion-icon name="cloud-offline-outline"></ion-icon>
-            </span>
-            <div class="row-body">
-              <span class="row-title">Couldn't load circles</span>
-              <span class="row-sub">Check your connection, then tap to retry</span>
-            </div>
-            <ion-icon class="row-chevron" name="refresh-outline"></ion-icon>
-          </button>
-        } @else {
-          @if (circles.length === 0) {
-            <div class="row row-static">
-              <span class="row-icon"><ion-icon name="people-outline"></ion-icon></span>
-              <div class="row-body">
-                <span class="row-title">No circles yet</span>
-                <span class="row-sub">Create one or join with a code below</span>
-              </div>
-            </div>
+          @if (circles.length > 0 && !circlesLoading) {
+            <span class="row-badge">{{ circles.length }}</span>
           }
-
-          @for (circle of circles; track circle.id) {
-            <button type="button" class="row row-button circle-row" (click)="openCircle(circle)">
-              <span class="circle-avatar" [class.admin]="isCircleAdmin(circle)">
-                {{ circleInitials(circle.squad_name) }}
-              </span>
-              <div class="row-body">
-                <span class="row-title">{{ circle.squad_name }}</span>
-                <span class="row-sub">
-                  {{ isCircleAdmin(circle) ? "Admin" : "Member" }} &middot;
-                  {{ circle.member_count || 1 }}
-                  {{ (circle.member_count || 1) === 1 ? "member" : "members" }}
-                </span>
-              </div>
-              <ion-icon class="row-chevron" name="chevron-forward-outline"></ion-icon>
-            </button>
-          }
-
-          <button type="button" class="row row-button" (click)="createCircle()">
-            <span class="row-icon"><ion-icon name="add-outline"></ion-icon></span>
-            <div class="row-body">
-              <span class="row-title">Create a circle</span>
-              <span class="row-sub">Start a group and invite people with a code</span>
-            </div>
-          </button>
-
-          <button type="button" class="row row-button" (click)="joinCircle()">
-            <span class="row-icon"><ion-icon name="key-outline"></ion-icon></span>
-            <div class="row-body">
-              <span class="row-title">Join with a code</span>
-              <span class="row-sub">Enter the invite code from a circle admin</span>
-            </div>
-          </button>
-        }
+          <ion-icon class="row-chevron" name="chevron-forward-outline"></ion-icon>
+        </button>
       </div>
     </section>
 

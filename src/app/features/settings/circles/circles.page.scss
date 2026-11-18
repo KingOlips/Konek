@@ -1,0 +1,378 @@
+/* Circle management (Settings → Circles) */
+
+.circles-content {
+  --background: #f2f4f8;
+}
+
+.circles-wrap {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 18px 16px 32px;
+}
+
+/* Header row above the list */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 4px 12px;
+
+  h2 {
+    margin: 0;
+    color: #7a8494;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
+}
+
+.section-count {
+  min-width: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e8eefb;
+  color: #2f6fe0;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Circle cards */
+.circle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.circle-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #e5e9f0;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 8px 22px -16px rgba(16, 24, 40, 0.3);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+
+  &:hover {
+    border-color: #cfe0ff;
+    box-shadow:
+      0 2px 4px rgba(16, 24, 40, 0.05),
+      0 12px 26px -16px rgba(47, 111, 224, 0.4);
+  }
+
+  &:active {
+    transform: scale(0.995);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #2f6fe0;
+    outline-offset: 2px;
+  }
+}
+
+.circle-avatar {
+  flex: 0 0 48px;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  box-shadow: 0 8px 18px -12px rgba(15, 23, 42, 0.65);
+}
+
+.circle-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.circle-name {
+  color: #141a24;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.circle-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #78828f;
+  font-size: 12.5px;
+}
+
+.meta-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f4fa;
+  color: #5a6472;
+  font-size: 11px;
+  font-weight: 600;
+
+  ion-icon {
+    font-size: 12px;
+  }
+
+  &.admin {
+    background: rgba(15, 118, 110, 0.11);
+    color: #0f766e;
+  }
+}
+
+.meta-dot {
+  color: #b3bac5;
+}
+
+.circle-chevron {
+  flex: 0 0 auto;
+  color: #b3bac5;
+  font-size: 18px;
+}
+
+.list-hint {
+  margin: 16px 6px 0;
+  color: #97a0ad;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* Empty / error states */
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 52vh;
+  padding: 24px;
+  text-align: center;
+
+  h2 {
+    margin: 0;
+    color: #1a1f2b;
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+  }
+
+  p {
+    margin: 0;
+    max-width: 300px;
+    color: #6c757d;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+}
+
+.state-icon {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  margin-bottom: 2px;
+  border-radius: 26px;
+  background: linear-gradient(135deg, #eaf1ff, #dbe7ff);
+  color: #2f6bff;
+  box-shadow: 0 10px 24px rgba(47, 107, 255, 0.12);
+
+  ion-icon {
+    font-size: 38px;
+  }
+
+  &.error {
+    background: linear-gradient(135deg, #fff1f1, #ffe3e3);
+    color: #d64545;
+    box-shadow: 0 10px 24px rgba(214, 69, 69, 0.12);
+  }
+}
+
+.state-cta {
+  --border-radius: 14px;
+  width: 100%;
+  max-width: 280px;
+  height: 48px;
+  margin-top: 4px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Loading skeletons */
+.circle-skeletons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skeleton-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid #e9edf4;
+  border-radius: 18px;
+  background: #ffffff;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: #eef2f8;
+}
+
+.skeleton-lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-line {
+  height: 10px;
+  border-radius: 999px;
+  background: #eef2f8;
+
+  &.name {
+    width: 46%;
+  }
+
+  &.meta {
+    width: 64%;
+    height: 8px;
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Dark theme */
+:host-context(.dark) {
+  .circles-content {
+    --background: #0f1116;
+  }
+
+  .section-head h2 {
+    color: #8b94a3;
+  }
+
+  .section-count {
+    background: rgba(86, 148, 255, 0.16);
+    color: #8db4ff;
+  }
+
+  .circle-card {
+    border-color: rgba(255, 255, 255, 0.07);
+    background: #171a20;
+    box-shadow: none;
+
+    &:hover {
+      border-color: rgba(120, 170, 255, 0.35);
+    }
+  }
+
+  .circle-name {
+    color: #f4f5f7;
+  }
+
+  .circle-meta {
+    color: #98a1af;
+  }
+
+  .meta-role {
+    background: rgba(255, 255, 255, 0.06);
+    color: #c5ccd6;
+
+    &.admin {
+      background: rgba(45, 212, 191, 0.14);
+      color: #5eead4;
+    }
+  }
+
+  .meta-dot,
+  .circle-chevron {
+    color: #5d6673;
+  }
+
+  .list-hint {
+    color: #6d7684;
+  }
+
+  .state h2 {
+    color: #f4f5f7;
+  }
+
+  .state p {
+    color: #98a1af;
+  }
+
+  .state-icon {
+    background: rgba(86, 148, 255, 0.14);
+    color: #8db4ff;
+    box-shadow: none;
+
+    &.error {
+      background: rgba(255, 99, 113, 0.14);
+      color: #ff8b95;
+    }
+  }
+
+  .skeleton-card {
+    border-color: rgba(255, 255, 255, 0.06);
+    background: #171a20;
+  }
+
+  .skeleton-avatar,
+  .skeleton-line {
+    background: rgba(255, 255, 255, 0.07);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circle-card {
+    transition: none;
+
+    &:active {
+      transform: none;
+    }
+  }
+
+  .skeleton-card {
+    animation: none;
+  }
+}

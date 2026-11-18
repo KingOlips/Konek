@@ -7,15 +7,14 @@ import {
 } from "@angular/core";
 import { firstValueFrom } from "rxjs";
 import {
-  ActionSheetController,
   AlertController,
   IonContent,
+  IonFooter,
+  IonHeader,
   IonIcon,
-  IonSpinner,
   ModalController,
   ToastController,
 } from "@ionic/angular";
-import type { ActionSheetButton } from "@ionic/angular";
 import { addIcons } from "ionicons";
 import {
   closeOutline,
@@ -32,8 +31,10 @@ import {
   Squad,
   SquadMember,
 } from "../../../core/models/squad.models";
+import { avatarGradient, initialsFor } from "../../../core/utils/avatar";
+import type { CircleRole, MemberRoleResult } from "./member-role.modal";
 
-/** What the settings page learns when this sheet closes. */
+/** What the circles page learns when this sheet closes. */
 export interface CircleManageResult {
   /** True when membership or roles changed and the list needs a refresh. */
   changed: boolean;
@@ -42,29 +43,29 @@ export interface CircleManageResult {
 }
 
 /**
- * Management sheet for one circle (opened from Settings → Circles).
+ * Bottom sheet for managing one circle (opened from Settings → Circle
+ * management).
  *
- * Shows the join code, the member list, and — for admins — the actions the
- * backend supports: promote/demote members and remove them. Leaving the
- * circle lives here too, with the same sole-admin guard the API enforces.
+ * Header shows the circle identity, the body holds the invite code and the
+ * member list, and the footer keeps "Leave" and "Done" reachable however long
+ * the list is. Admins can open the role picker on any other member.
  */
 @Component({
   selector: "app-circle-manage-modal",
   templateUrl: "./circle-manage.modal.html",
   styleUrls: ["./circle-manage.modal.scss"],
   standalone: true,
-  imports: [IonContent, IonIcon, IonSpinner],
+  imports: [IonHeader, IonContent, IonFooter, IonIcon],
 })
 export class CircleManageModalComponent implements OnInit {
   private readonly modalCtrl = inject(ModalController);
   private readonly alertCtrl = inject(AlertController);
-  private readonly actionSheetCtrl = inject(ActionSheetController);
   private readonly toastCtrl = inject(ToastController);
   private readonly squadService = inject(SquadService);
   private readonly authService = inject(AuthService);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  /** Circle being managed; supplied by the settings page. */
+  /** Circle being managed; supplied by the circles page. */
   @Input() squad!: Squad;
 
   members: SquadMember[] = [];
@@ -112,7 +113,11 @@ export class CircleManageModalComponent implements OnInit {
   }
 
   get initials(): string {
-    return CircleManageModalComponent.initialsFor(this.squad?.squad_name ?? "");
+    return initialsFor(this.squad?.squad_name ?? "");
+  }
+
+  get gradient(): string {
+    return avatarGradient(this.squad?.squad_name ?? "");
   }
 
   isMe(member: SquadMember): boolean {
@@ -123,16 +128,20 @@ export class CircleManageModalComponent implements OnInit {
   canManage(member: SquadMember): boolean {
     if (!this.isAdmin || this.isMe(member)) return false;
     // Another admin must be demoted before they can be removed, so only offer
-    // the menu while more than one admin exists.
+    // the picker while more than one admin exists.
     return member.role !== "admin" || this.adminCount > 1;
   }
 
   memberInitials(username: string): string {
-    return CircleManageModalComponent.initialsFor(username);
+    return initialsFor(username);
+  }
+
+  memberGradient(username: string): string {
+    return avatarGradient(username);
   }
 
   /** Human-readable relationship label (matches the map's member sheet). */
-  relationshipLabel(relationship: MemberRelationship | null): string {
+  relationshipLabel(relationship: MemberRelationship | null | undefined): string {
     if (!relationship) return "";
     const labels: Record<MemberRelationship, string> = {
       dad: "Dad",
@@ -176,40 +185,37 @@ export class CircleManageModalComponent implements OnInit {
   // Member actions
   // ---------------------------------------------------------------------------
 
-  async openMemberActions(member: SquadMember): Promise<void> {
+  /** Open the role picker for a member (admin only). */
+  async openRolePicker(member: SquadMember): Promise<void> {
     if (!this.canManage(member) || this.busyMemberId !== null) return;
 
-    const buttons: ActionSheetButton[] = [];
-    if (member.role === "admin") {
-      buttons.push({
-        text: "Make member",
-        handler: () => void this.setRole(member, "member"),
-      });
-    } else {
-      buttons.push({
-        text: "Make admin",
-        handler: () => void this.setRole(member, "admin"),
-      });
-      buttons.push({
-        text: "Remove from circle",
-        role: "destructive",
-        handler: () => void this.confirmRemoveMember(member),
-      });
-    }
-    buttons.push({ text: "Cancel", role: "cancel" });
+    const { MemberRoleModalComponent } = await import("./member-role.modal");
 
-    const sheet = await this.actionSheetCtrl.create({
-      header: member.username,
-      buttons,
+    const modal = await this.modalCtrl.create({
+      component: MemberRoleModalComponent,
+      componentProps: {
+        memberName: member.username,
+        relationshipLabel: this.relationshipLabel(member.relationship),
+        initialRole: member.role,
+        canRemove: member.role !== "admin",
+      },
+      cssClass: "member-role-modal",
+      backdropDismiss: true,
     });
-    await sheet.present();
+
+    await modal.present();
+    const { data } = await modal.onWillDismiss<MemberRoleResult>();
+
+    if (!data) return;
+    if (data.action === "role" && data.role) {
+      await this.setRole(member, data.role);
+    } else if (data.action === "remove") {
+      await this.confirmRemoveMember(member);
+    }
   }
 
-  private async setRole(
-    member: SquadMember,
-    role: "admin" | "member"
-  ): Promise<void> {
-    if (this.busyMemberId !== null) return;
+  private async setRole(member: SquadMember, role: CircleRole): Promise<void> {
+    if (this.busyMemberId !== null || member.role === role) return;
 
     this.busyMemberId = member.user_id;
     this.cdr.markForCheck();
@@ -282,9 +288,9 @@ export class CircleManageModalComponent implements OnInit {
 
     try {
       await navigator.clipboard.writeText(code);
-      await this.showToast("Join code copied");
+      await this.showToast("Invite code copied");
     } catch {
-      await this.showToast(`Join code: ${code}`);
+      await this.showToast(`Invite code: ${code}`);
     }
   }
 
@@ -354,14 +360,6 @@ export class CircleManageModalComponent implements OnInit {
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
-
-  private static initialsFor(name: string): string {
-    const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
-    if (!parts.length) return "?";
-    const first = parts[0].charAt(0);
-    const second = parts.length > 1 ? parts[1].charAt(0) : "";
-    return (first + second).toUpperCase();
-  }
 
   private errorMessage(error: unknown, fallback: string): string {
     const message = (error as { error?: { message?: unknown } })?.error?.message;

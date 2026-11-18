@@ -609,21 +609,57 @@ body.dark ion-modal.change-password-modal {
 }
 
 /* ---------------------------------------------------------------------------
- * Circle management sheet (Settings → Circles)
+ * Circle management + role picker sheets (Settings → Circle management)
+ * Bottom-anchored sheets: the component owns a sticky header and footer, so
+ * the middle scrolls while the actions stay reachable.
  * ------------------------------------------------------------------------ */
 ion-modal.circle-manage-modal {
-  --width: min(480px, 94vw);
+  --width: min(560px, 100%);
   --height: auto;
-  --max-height: min(88vh, 720px);
-  --border-radius: 22px;
-  --backdrop-opacity: 0.55;
-  --box-shadow: 0 24px 60px rgba(2, 6, 23, 0.3);
+  --max-height: 90vh;
+  --border-radius: 26px 26px 0 0;
+  --backdrop-opacity: 0.45;
+  --box-shadow: 0 -20px 50px rgba(2, 6, 23, 0.3);
   --background: #ffffff;
 }
 
+ion-modal.circle-manage-modal::part(content) {
+  position: absolute;
+  inset: auto 0 0;
+  margin-inline: auto;
+}
+
 body.dark ion-modal.circle-manage-modal {
+  --background: #0f1622;
+  --box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.65);
+}
+
+ion-modal.member-role-modal {
+  --width: min(480px, 100%);
+  --height: auto;
+  --max-height: 88vh;
+  --border-radius: 24px 24px 0 0;
+  --backdrop-opacity: 0.35;
+  --box-shadow: 0 -16px 44px rgba(2, 6, 23, 0.28);
+  --background: #ffffff;
+}
+
+ion-modal.member-role-modal::part(content) {
+  position: absolute;
+  inset: auto 0 0;
+  margin-inline: auto;
+}
+
+body.dark ion-modal.member-role-modal {
   --background: #101722;
-  --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  --box-shadow: 0 -16px 44px rgba(0, 0, 0, 0.6);
+}
+
+/* Ionic hides the backdrop of a modal that follows another modal. The role
+ * picker stacks on the management sheet, so restore a light dim to keep the
+ * two layers distinguishable. */
+body ion-modal.member-role-modal.show-modal.modal-default {
+  --backdrop-opacity: 0.35;
 }
 
 /* ---------------------------------------------------------------------------
@@ -671,12 +707,22 @@ body.dark ion-modal.squad-form-modal {
 }
 
 /* Transient update toast (map) */
+/* ---------------------------------------------------------------------------
+ * Transient confirmation pill (location refreshes, pings, copy actions).
+ * A light card reads better than the old dark banner and still stands out
+ * against the map. Pings keep their red accent.
+ * ------------------------------------------------------------------------ */
 ion-toast.update-toast {
-  --background: #171a20;
-  --color: #f4f5f7;
-  --border-radius: 14px;
-  --box-shadow: 0 10px 30px rgba(16, 24, 40, 0.28);
-  --max-width: 320px;
+  --background: rgba(255, 255, 255, 0.97);
+  --color: #0f172a;
+  --border-width: 1px;
+  --border-style: solid;
+  --border-color: #e3e9f2;
+  --border-radius: 16px;
+  --box-shadow:
+    0 18px 40px -22px rgba(15, 23, 42, 0.42),
+    0 2px 6px rgba(15, 23, 42, 0.06);
+  --max-width: 336px;
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: 0.1px;
@@ -688,14 +734,17 @@ ion-toast.update-toast::part(wrapper) {
 }
 
 ion-toast.update-toast::part(icon) {
-  color: #4ade80;
-  margin-inline-end: 8px;
+  color: #16a34a;
+  font-size: 20px;
+  margin-inline-end: 9px;
 }
 
 /* Emergency ping: red accent so it reads as an alert, not a routine update. */
 ion-toast.update-toast.ping-alert-toast {
   --background: #7f1d1d;
+  --border-color: rgba(254, 202, 202, 0.3);
   --color: #fff5f5;
+  --box-shadow: 0 18px 40px -20px rgba(127, 29, 29, 0.7);
 }
 
 ion-toast.update-toast.ping-alert-toast::part(icon) {
@@ -703,14 +752,24 @@ ion-toast.update-toast.ping-alert-toast::part(icon) {
 }
 
 body.dark ion-toast.update-toast {
-  --background: #232833;
+  --background: rgba(28, 36, 51, 0.97);
+  --border-color: rgba(255, 255, 255, 0.09);
   --color: #f4f5f7;
-  --box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --box-shadow: 0 18px 40px -20px rgba(0, 0, 0, 0.75);
+}
+
+body.dark ion-toast.update-toast::part(icon) {
+  color: #4ade80;
 }
 
 body.dark ion-toast.update-toast.ping-alert-toast {
   --background: #991b1b;
+  --border-color: rgba(254, 202, 202, 0.22);
   --color: #fff5f5;
+}
+
+body.dark ion-toast.update-toast.ping-alert-toast::part(icon) {
+  color: #fecaca;
 }
 
 /* ---------------------------------------------------------------------------

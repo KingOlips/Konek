@@ -1,0 +1,283 @@
+:host {
+  --r-surface: #ffffff;
+  --r-surface-soft: #f5f8fd;
+  --r-ink: #0f172a;
+  --r-ink-soft: #334155;
+  --r-muted: #667085;
+  --r-line: #e3e9f2;
+  --r-primary: #2f6fe0;
+  --r-primary-rgb: 47, 111, 224;
+  --r-danger: #d92d20;
+  --r-admin: #0f766e;
+  display: block;
+}
+
+:host-context(.dark) {
+  --r-surface: #101722;
+  --r-surface-soft: #161e2b;
+  --r-ink: #f1f5f9;
+  --r-ink-soft: #cbd5e1;
+  --r-muted: #8b9cb5;
+  --r-line: #24314a;
+  --r-primary: #6da2ff;
+  --r-primary-rgb: 109, 162, 255;
+  --r-danger: #ff8b95;
+  --r-admin: #5eead4;
+}
+
+.role-sheet {
+  padding: 8px 20px calc(20px + env(safe-area-inset-bottom));
+  background: var(--r-surface);
+  color: var(--r-ink);
+}
+
+.grabber {
+  display: block;
+  width: 38px;
+  height: 4px;
+  margin: 0 auto 14px;
+  border-radius: 999px;
+  background: var(--r-line);
+}
+
+.role-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.role-avatar {
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.role-titles {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  h2 {
+    margin: 0;
+    color: var(--r-ink);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  p {
+    margin: 3px 0 0;
+    color: var(--r-muted);
+    font-size: 12.5px;
+  }
+}
+
+.role-close {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--r-surface-soft);
+  color: var(--r-ink-soft);
+  cursor: pointer;
+
+  ion-icon {
+    font-size: 18px;
+  }
+
+  &:hover {
+    background: var(--r-line);
+  }
+}
+
+.role-label {
+  margin: 18px 0 8px;
+  color: var(--r-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.role-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.role-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1.5px solid var(--r-line);
+  border-radius: 15px;
+  background: var(--r-surface-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:hover {
+    border-color: rgba(var(--r-primary-rgb), 0.4);
+  }
+
+  &.is-selected {
+    border-color: var(--r-primary);
+    background: rgba(var(--r-primary-rgb), 0.07);
+    box-shadow: 0 0 0 3px rgba(var(--r-primary-rgb), 0.12);
+  }
+}
+
+.option-icon {
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(var(--r-primary-rgb), 0.12);
+  color: var(--r-primary);
+
+  ion-icon {
+    font-size: 20px;
+  }
+
+  &.admin {
+    background: rgba(15, 118, 110, 0.12);
+    color: var(--r-admin);
+  }
+}
+
+.option-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.option-title {
+  color: var(--r-ink);
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.option-sub {
+  color: var(--r-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.option-radio {
+  flex: 0 0 22px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--r-line);
+  border-radius: 50%;
+  background: var(--r-surface);
+  color: #ffffff;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  ion-icon {
+    font-size: 14px;
+  }
+
+  &.is-checked {
+    border-color: var(--r-primary);
+    background: var(--r-primary);
+  }
+}
+
+.role-save {
+  width: 100%;
+  height: 48px;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--r-primary);
+  color: #ffffff;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    opacity 0.15s ease,
+    transform 0.12s ease;
+
+  &:active:not(:disabled) {
+    transform: scale(0.99);
+  }
+
+  &:disabled {
+    background: var(--r-surface-soft);
+    color: var(--r-muted);
+    cursor: default;
+  }
+}
+
+.role-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px;
+  border: 1px solid rgba(217, 45, 32, 0.28);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--r-danger);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  ion-icon {
+    font-size: 17px;
+  }
+
+  &:hover {
+    background: rgba(217, 45, 32, 0.07);
+  }
+}
+
+.role-close:focus-visible,
+.role-option:focus-visible,
+.role-save:focus-visible,
+.role-remove:focus-visible {
+  outline: 2px solid var(--r-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .role-option,
+  .option-radio,
+  .role-save,
+  .role-remove {
+    transition: none;
+  }
+}
