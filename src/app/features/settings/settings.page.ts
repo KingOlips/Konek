@@ -11,6 +11,7 @@ import {
   IonTitle,
   IonToolbar,
   IonIcon,
+  IonSpinner,
   IonToggle,
   AlertController,
   LoadingController,
@@ -18,11 +19,14 @@ import {
   ToastController,
   ActionSheetController,
 } from "@ionic/angular";
+import type { ViewWillEnter } from "@ionic/angular";
 import { AuthService, User } from "../../core/services/auth.service";
 import { BackgroundTrackerService } from "../../core/services/background-tracker.service";
 import { BiometricService } from "../../core/services/biometric.service";
 import { LocationService } from "../../core/services/location.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
+import { SquadService } from "../../core/services/squad.service";
+import { Squad } from "../../core/models/squad.models";
 import { addIcons } from "ionicons";
 import {
   fingerPrintOutline,
@@ -37,6 +41,11 @@ import {
   speedometerOutline,
   informationCircleOutline,
   chevronForwardOutline,
+  peopleOutline,
+  addOutline,
+  keyOutline,
+  cloudOfflineOutline,
+  refreshOutline,
 } from "ionicons/icons";
 
 @Component({
@@ -54,15 +63,17 @@ import {
     IonTitle,
     IonToolbar,
     IonIcon,
+    IonSpinner,
     IonToggle,
   ],
 })
-export class SettingsPage implements OnInit {
+export class SettingsPage implements OnInit, ViewWillEnter {
   private readonly authService = inject(AuthService);
   private readonly backgroundTracker = inject(BackgroundTrackerService);
   private readonly biometricService = inject(BiometricService);
   private readonly locationService = inject(LocationService);
   private readonly geolocationService = inject(GeolocationService);
+  private readonly squadService = inject(SquadService);
   private readonly router = inject(Router);
   private readonly alertCtrl = inject(AlertController);
   private readonly loadingCtrl = inject(LoadingController);
@@ -82,6 +93,11 @@ export class SettingsPage implements OnInit {
   adaptiveGps = true;
   historyCount = 0;
 
+  /** Circles shown in the management section. */
+  circles: Squad[] = [];
+  circlesLoading = true;
+  circlesError = false;
+
   constructor() {
     addIcons({
       fingerPrintOutline,
@@ -96,6 +112,11 @@ export class SettingsPage implements OnInit {
       speedometerOutline,
       informationCircleOutline,
       chevronForwardOutline,
+      peopleOutline,
+      addOutline,
+      keyOutline,
+      cloudOfflineOutline,
+      refreshOutline,
     });
   }
 
@@ -114,6 +135,147 @@ export class SettingsPage implements OnInit {
 
   openProfile(): void {
     void this.router.navigate(["/profile"]);
+  }
+
+  /** Refresh circles whenever Settings is shown so map changes show up here. */
+  ionViewWillEnter(): void {
+    void this.loadCircles();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Circles
+  // ---------------------------------------------------------------------------
+
+  async loadCircles(): Promise<void> {
+    // Keep the current list on screen during a refresh; only the first load
+    // shows the spinner.
+    this.circlesLoading = this.circles.length === 0;
+    this.circlesError = false;
+    this.cdr.markForCheck();
+
+    try {
+      const circles = await firstValueFrom(this.squadService.getUserSquads());
+      this.circles = circles ?? [];
+    } catch (error) {
+      console.error("Failed to load circles:", error);
+      this.circlesError = true;
+    } finally {
+      this.circlesLoading = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  isCircleAdmin(circle: Squad): boolean {
+    return (circle.user_role ?? circle.role) === "admin";
+  }
+
+  circleInitials(name: string): string {
+    const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "?";
+    const first = parts[0].charAt(0);
+    const second = parts.length > 1 ? parts[1].charAt(0) : "";
+    return (first + second).toUpperCase();
+  }
+
+  /** Open the member/role manager for a circle. */
+  async openCircle(circle: Squad): Promise<void> {
+    const { CircleManageModalComponent } = await import(
+      "./circle-manage/circle-manage.modal"
+    );
+
+    const modal = await this.modalCtrl.create({
+      component: CircleManageModalComponent,
+      componentProps: { squad: circle },
+      cssClass: "circle-manage-modal",
+      backdropDismiss: true,
+    });
+
+    await modal.present();
+    const { data } = await modal.onWillDismiss<{
+      changed?: boolean;
+      left?: boolean;
+    }>();
+
+    if (data?.changed) {
+      await this.loadCircles();
+      if (data.left) {
+        await this.showToast(`Left ${circle.squad_name}`);
+      }
+    }
+  }
+
+  async createCircle(): Promise<void> {
+    const { CreateSquadModalComponent } = await import(
+      "../map/create-squad-modal/create-squad-modal.component"
+    );
+
+    const modal = await this.modalCtrl.create({
+      component: CreateSquadModalComponent,
+      cssClass: "squad-form-modal",
+      backdropDismiss: true,
+    });
+    await modal.present();
+
+    const { data, role } = await modal.onWillDismiss<string>();
+    if (role !== "confirm" || !data) return;
+
+    const loading = await this.loadingCtrl.create({
+      message: "Creating circle...",
+    });
+    await loading.present();
+
+    try {
+      await firstValueFrom(
+        this.squadService.createSquad({ squad_name: data })
+      );
+      await loading.dismiss();
+      await this.loadCircles();
+      await this.showToast("Circle created");
+    } catch (error) {
+      await loading.dismiss();
+      console.error("Create circle failed:", error);
+      await this.showToast(this.errorMessage(error, "Failed to create circle"));
+    }
+  }
+
+  async joinCircle(): Promise<void> {
+    const { JoinSquadModalComponent } = await import(
+      "../map/join-squad-modal/join-squad-modal.component"
+    );
+
+    const modal = await this.modalCtrl.create({
+      component: JoinSquadModalComponent,
+      cssClass: "squad-form-modal",
+      backdropDismiss: true,
+    });
+    await modal.present();
+
+    const { data, role } = await modal.onWillDismiss<string>();
+    if (role !== "confirm" || !data) return;
+
+    const loading = await this.loadingCtrl.create({
+      message: "Joining circle...",
+    });
+    await loading.present();
+
+    try {
+      await firstValueFrom(
+        this.squadService.joinSquad({ join_code: data.toUpperCase() })
+      );
+      await loading.dismiss();
+      await this.loadCircles();
+      await this.showToast("Joined circle");
+    } catch (error) {
+      await loading.dismiss();
+      console.error("Join circle failed:", error);
+      await this.showToast(this.errorMessage(error, "Failed to join circle"));
+    }
+  }
+
+  /** Surface the API's own message when there is one. */
+  private errorMessage(error: unknown, fallback: string): string {
+    const message = (error as { error?: { message?: unknown } })?.error?.message;
+    return typeof message === "string" && message ? message : fallback;
   }
 
   async ngOnInit(): Promise<void> {

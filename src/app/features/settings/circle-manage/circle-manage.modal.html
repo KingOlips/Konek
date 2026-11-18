@@ -1,0 +1,119 @@
+<ion-content class="manage-content">
+  <div class="manage-shell">
+    <header class="manage-head">
+      <div class="circle-avatar" aria-hidden="true">{{ initials }}</div>
+
+      <div class="manage-titles">
+        <p class="manage-eyebrow">Circle</p>
+        <h2 class="manage-name">{{ squad.squad_name }}</h2>
+        <p class="manage-meta">
+          <span class="role-chip" [class.admin]="isAdmin">
+            @if (isAdmin) {
+              <ion-icon name="shield-checkmark-outline" aria-hidden="true"></ion-icon>
+            }
+            {{ isAdmin ? "Admin" : "Member" }}
+          </span>
+          <span class="meta-dot" aria-hidden="true">·</span>
+          <span>{{ memberCount }} {{ memberCount === 1 ? "member" : "members" }}</span>
+        </p>
+      </div>
+
+      <button
+        type="button"
+        class="manage-close"
+        [disabled]="isLeaving"
+        (click)="close()"
+        aria-label="Close circle manager"
+      >
+        <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+      </button>
+    </header>
+
+    <div class="code-card">
+      <div class="code-body">
+        <span class="code-label">Join code</span>
+        <span class="code-value">{{ squad.join_code }}</span>
+      </div>
+      <button type="button" class="code-copy" (click)="copyCode()">
+        <ion-icon name="copy-outline" aria-hidden="true"></ion-icon>
+        <span>Copy</span>
+      </button>
+    </div>
+
+    <div class="members-head">
+      <h3>Members</h3>
+      @if (isAdmin && !isLoading && !loadError) {
+        <span class="members-hint">Tap ••• to manage</span>
+      }
+    </div>
+
+    @if (isLoading) {
+      <div class="members-state" role="status">
+        <ion-spinner name="crescent" aria-hidden="true"></ion-spinner>
+        <p>Loading members…</p>
+      </div>
+    } @else if (loadError) {
+      <div class="members-state" role="alert">
+        <ion-icon name="cloud-offline-outline" aria-hidden="true"></ion-icon>
+        <p>Couldn't load the members of this circle.</p>
+        <button type="button" class="state-retry" (click)="loadMembers()">
+          Try again
+        </button>
+      </div>
+    } @else if (members.length === 0) {
+      <div class="members-state">
+        <p>No members yet.</p>
+      </div>
+    } @else {
+      <div class="member-list">
+        @for (member of members; track member.user_id) {
+          <div class="member-row" [class.is-busy]="busyMemberId === member.user_id">
+            <div class="member-avatar" [class.admin]="member.role === 'admin'">
+              {{ memberInitials(member.username) }}
+            </div>
+
+            <div class="member-body">
+              <span class="member-name">
+                {{ member.username }}
+                @if (isMe(member)) {
+                  <span class="you-chip">You</span>
+                }
+              </span>
+              @if (member.relationship) {
+                <span class="member-sub">{{ relationshipLabel(member.relationship) }}</span>
+              }
+            </div>
+
+            @if (member.role === "admin") {
+              <span class="member-badge">Admin</span>
+            }
+
+            @if (canManage(member)) {
+              <button
+                type="button"
+                class="member-menu"
+                [disabled]="busyMemberId !== null"
+                (click)="openMemberActions(member)"
+                [attr.aria-label]="'Manage ' + member.username"
+              >
+                <ion-icon name="ellipsis-horizontal" aria-hidden="true"></ion-icon>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <div class="manage-footer">
+      <button
+        type="button"
+        class="leave-button"
+        [disabled]="isLeaving"
+        (click)="leaveCircle()"
+      >
+        <ion-icon name="log-out-outline" aria-hidden="true"></ion-icon>
+        <span>{{ isLeaving ? "Leaving…" : "Leave circle" }}</span>
+      </button>
+    </div>
+  </div>
+</ion-content>

@@ -609,6 +609,24 @@ body.dark ion-modal.change-password-modal {
 }
 
 /* ---------------------------------------------------------------------------
+ * Circle management sheet (Settings → Circles)
+ * ------------------------------------------------------------------------ */
+ion-modal.circle-manage-modal {
+  --width: min(480px, 94vw);
+  --height: auto;
+  --max-height: min(88vh, 720px);
+  --border-radius: 22px;
+  --backdrop-opacity: 0.55;
+  --box-shadow: 0 24px 60px rgba(2, 6, 23, 0.3);
+  --background: #ffffff;
+}
+
+body.dark ion-modal.circle-manage-modal {
+  --background: #101722;
+  --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------------------------------------------------------------------------
  * Squad create/join sheets (opened from the chip dropdown)
  * ------------------------------------------------------------------------ */
 ion-modal.squad-form-modal {

@@ -118,6 +118,30 @@
   color: #7a8494;
 }
 
+/* Title + count on one line (Circles section) */
+.group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 4px 8px;
+
+  .group-title {
+    margin: 0;
+  }
+}
+
+.group-count {
+  min-width: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e8eefb;
+  color: #2f6fe0;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
 .group-card {
   border-radius: 16px;
   background: #fff;
@@ -200,6 +224,42 @@
 
 .row-danger .row-title {
   color: #d92d20;
+}
+
+/* Non-interactive rows (loading / empty states) */
+.row-static {
+  cursor: default;
+}
+
+.row-spinner {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: #2f6fe0;
+}
+
+/* Circle rows in the management section */
+.circle-avatar {
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(47, 111, 224, 0.12);
+  color: #2f6fe0;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+
+  &.admin {
+    background: rgba(15, 118, 110, 0.12);
+    color: #0f766e;
+  }
+}
+
+.circle-row .row-title {
+  font-weight: 600;
 }
 
 .row-chevron {
@@ -325,6 +385,25 @@ ion-toggle::part(handle) {
 
   .row-chevron {
     color: #5d6673;
+  }
+
+  .group-count {
+    background: rgba(86, 148, 255, 0.16);
+    color: #8db4ff;
+  }
+
+  .row-spinner {
+    color: #8db4ff;
+  }
+
+  .circle-avatar {
+    background: rgba(86, 148, 255, 0.16);
+    color: #8db4ff;
+
+    &.admin {
+      background: rgba(45, 212, 191, 0.14);
+      color: #5eead4;
+    }
   }
 
   ion-toggle::part(track) {
