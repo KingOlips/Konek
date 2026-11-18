@@ -1,0 +1,27 @@
+<?php
+/**
+ * Copy this file to mailer.local.php and fill in your SMTP credentials.
+ *
+ * Gmail:
+ *   1. Enable 2-Step Verification on the Google account.
+ *   2. Create an App Password (Google Account > Security > App passwords).
+ *   3. Paste the 16-character password below (spaces are fine).
+ *
+ * The file is git-ignored, so credentials never reach the repository.
+ */
+return [
+    "host" => "smtp.gmail.com",
+    "port" => 587,
+    "encryption" => "tls", // tls (587) or ssl (465)
+    "auth" => true,
+    "username" => "your.name@gmail.com",
+    "password" => "your 16-character app password",
+    "from_email" => "your.name@gmail.com",
+    "from_name" => "Konek",
+    // Where the reset-password link should point. Use your LAN IP (for a
+    // phone on the same Wi-Fi) or your deployed frontend URL.
+    "app_url" => "http://localhost:8100",
+    // Public HTTPS origin of the backend, used for the "Verify" button in
+    // reset emails. Leave empty to derive it from the incoming request.
+    "public_url" => "https://your-public-host.example",
+];

@@ -16,12 +16,14 @@ import {
   IonSpinner,
   AlertController,
   LoadingController,
+  ModalController,
   NavController,
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
 import {
   alertCircleOutline,
   arrowForwardOutline,
+  checkmarkOutline,
   eyeOutline,
   eyeOffOutline,
   locationOutline,
@@ -57,6 +59,7 @@ export class RegisterPage {
   private readonly onboarding = inject(OnboardingService);
   private readonly alertCtrl = inject(AlertController);
   private readonly loadingCtrl = inject(LoadingController);
+  private readonly modalCtrl = inject(ModalController);
   private readonly cdr = inject(ChangeDetectorRef);
 
   registerForm: FormGroup;
@@ -69,6 +72,7 @@ export class RegisterPage {
     addIcons({
       alertCircleOutline,
       arrowForwardOutline,
+      checkmarkOutline,
       eyeOutline,
       eyeOffOutline,
       locationOutline,
@@ -93,6 +97,7 @@ export class RegisterPage {
         email: ["", [Validators.required, Validators.email]],
         password: ["", [Validators.required, Validators.minLength(6)]],
         confirmPassword: ["", [Validators.required]],
+        terms: [false, Validators.requiredTrue],
       },
       { validators: RegisterPage.passwordsMatch }
     );
@@ -117,6 +122,20 @@ export class RegisterPage {
     void this.navCtrl.navigateForward("/login", { animated: false });
   }
 
+  /** Open the Terms of Service / Privacy Policy sheet. */
+  async openLegal(section: "terms" | "privacy"): Promise<void> {
+    const { LegalModalComponent } = await import(
+      "../../legal/legal.modal"
+    );
+    const modal = await this.modalCtrl.create({
+      component: LegalModalComponent,
+      componentProps: { section },
+      cssClass: "legal-modal",
+      backdropDismiss: true,
+    });
+    await modal.present();
+  }
+
   async onSubmit(): Promise<void> {
     this.submitted = true;
 
@@ -134,7 +153,14 @@ export class RegisterPage {
 
     try {
       const { username, email, password } = this.registerForm.value;
-      const response = await firstValueFrom(this.authService.register({ username, email, password }));
+      const response = await firstValueFrom(
+        this.authService.register({
+          username,
+          email,
+          password,
+          terms_accepted: this.registerForm.value.terms === true,
+        })
+      );
       await loading.dismiss();
 
       if (!response.success) {
@@ -144,7 +170,9 @@ export class RegisterPage {
 
       const alert = await this.alertCtrl.create({
         header: "Account Created",
-        message: "Welcome to Konek! You are now signed in.",
+        message: response.email_sent
+          ? `Welcome to Konek! A welcome email is on its way to ${email}. You are now signed in.`
+          : "Welcome to Konek! You are now signed in. We couldn't send the welcome email right now, but your account is ready.",
         buttons: [
           {
             text: "Continue",
@@ -205,6 +233,10 @@ export class RegisterPage {
 
   get email() {
     return this.registerForm.get("email");
+  }
+
+  get terms() {
+    return this.registerForm.get("terms");
   }
 }
 

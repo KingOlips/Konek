@@ -7,11 +7,9 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.location.Location;
-import android.os.BatteryManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.Looper;
@@ -39,8 +37,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Foreground service that keeps reporting the user's location and battery
- * while the app is backgrounded or swiped away.
+ * Foreground service that keeps reporting the user's location while the app
+ * is backgrounded or swiped away.
  *
  * Android requires an ongoing notification for this; the notification text is
  * "Updating your location" so the user always knows tracking is active.
@@ -208,14 +206,6 @@ public class KonekLocationService extends Service {
                 body.put("speed", speed);
                 body.put("heading", heading);
 
-                BatteryInfo battery = readBattery();
-                if (battery.level != null) {
-                    body.put("battery_level", battery.level);
-                }
-                if (battery.charging != null) {
-                    body.put("is_charging", battery.charging);
-                }
-
                 HttpURLConnection connection = (HttpURLConnection) new URL(
                         url + "/api_update_location.php"
                 ).openConnection();
@@ -244,25 +234,6 @@ public class KonekLocationService extends Service {
                 Log.w(TAG, "Location upload failed", error);
             }
         });
-    }
-
-    private BatteryInfo readBattery() {
-        Integer level = null;
-        Boolean charging = null;
-        Intent status = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-        if (status != null) {
-            int rawLevel = status.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-            int scale = status.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-            if (rawLevel >= 0 && scale > 0) {
-                level = Math.round(rawLevel * 100f / scale);
-            }
-            int batteryStatus = status.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-            if (batteryStatus != -1) {
-                charging = batteryStatus == BatteryManager.BATTERY_STATUS_CHARGING
-                        || batteryStatus == BatteryManager.BATTERY_STATUS_FULL;
-            }
-        }
-        return new BatteryInfo(level, charging);
     }
 
     private void acquireWakeLock() {
@@ -316,15 +287,5 @@ public class KonekLocationService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
                 .build();
-    }
-
-    private static final class BatteryInfo {
-        final Integer level;
-        final Boolean charging;
-
-        BatteryInfo(Integer level, Boolean charging) {
-            this.level = level;
-            this.charging = charging;
-        }
     }
 }

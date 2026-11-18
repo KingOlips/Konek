@@ -57,6 +57,9 @@ mysql -u root < database/schema.sql
 
 # Existing databases only: add the pings table
 mysql -u root konek_db < database/migrations/2026-11-10_add_pings_table.sql
+
+# Existing databases only: add hashed password-reset tokens
+mysql -u root konek_db < database/migrations/2026-11-17_add_password_resets.sql
 ```
 
 ### 2. Backend Setup
@@ -69,6 +72,34 @@ Copy the backend into XAMPP's document root so it is reachable at
 New-Item -ItemType Directory -Path C:\xampp\htdocs\konek -Force
 Copy-Item -Path backend -Destination C:\xampp\htdocs\konek\ -Recurse -Force
 ```
+
+#### Email delivery
+
+Welcome and password-reset emails are sent over SMTP with PHPMailer. Create
+the local config (git-ignored) and fill in the account details:
+
+```powershell
+Copy-Item backend\config\mailer.local.php.example backend\config\mailer.local.php
+```
+
+For Gmail, enable 2-Step Verification and create a 16-character
+[App Password](https://myaccount.google.com/apppasswords). Set `username` to the
+Gmail address and `password` to the App Password; `from_email` can stay empty
+and defaults to `username`.
+
+`app_url` controls where reset links point. Use `http://localhost:8100` for
+desktop testing, or your computer's LAN address (for example
+`http://192.168.1.24:8100`) so a phone on the same Wi-Fi can open the link.
+`npm start` binds the dev server to all interfaces.
+
+Verify the SMTP account without going through the app:
+
+```powershell
+C:\xampp\php\php.exe backend\tools\send_test_email.php you@example.com
+```
+
+If delivery fails, registration still succeeds and the API returns
+`"email_sent": false`.
 
 ### 3. Frontend Setup
 
@@ -191,6 +222,8 @@ Konek/
 | POST | `/api_login.php` | Login user |
 | POST | `/api_logout.php` | Logout user |
 | POST | `/api_change_password.php` | Change password (authenticated) |
+| POST | `/api_forgot_password.php` | Email a password-reset link |
+| POST | `/api_reset_password.php` | Reset password and sign in with the new token |
 
 ### Location
 | Method | Endpoint | Description |
@@ -228,6 +261,7 @@ Konek/
 Database credentials and the API base URL are configured in source:
 
 - `backend/config/database.php` — XAMPP defaults (`root`, empty password, `konek_db`)
+- `backend/config/mailer.local.php` — local SMTP credentials and reset-link URL
 - `src/environments/environment.ts` — API base URL for development
 - `src/environments/environment.prod.ts` — API base URL for production builds
 
@@ -257,8 +291,10 @@ answers `OPTIONS` preflight requests.
 
 The following was tested end-to-end against XAMPP (Apache + MariaDB):
 
-- Database import (6 tables: `users`, `squads`, `squad_members`, `locations`, `geofences`, `pings`)
+- Database import (7 tables: `users`, `squads`, `squad_members`, `locations`, `geofences`, `pings`, `password_resets`)
 - Register → login → authenticated logout
+- Registration welcome email and password-reset link delivery (SMTP)
+- Forgot password → emailed link → reset → automatic sign-in
 - Change password (wrong current password rejected, new password works, old rejected)
 - Create squad, join squad by code, fetch squads/members
 - Update location and retrieve latest location per squad member

@@ -1,0 +1,91 @@
+﻿<ion-content class="crop-content">
+  <div class="crop-shell">
+    <ion-toolbar class="crop-toolbar">
+      <ion-title>Edit Photo</ion-title>
+      <ion-buttons slot="start">
+        <ion-button fill="clear" (click)="cancel()" aria-label="Cancel">
+          <ion-icon name="close-outline" slot="icon-only"></ion-icon>
+        </ion-button>
+      </ion-buttons>
+      <ion-buttons slot="end">
+        <ion-button fill="clear" (click)="resetCrop()" aria-label="Reset" [disabled]="!imageLoaded">
+          <ion-icon name="arrow-back-outline" slot="icon-only"></ion-icon>
+        </ion-button>
+        <ion-button color="primary" (click)="confirm()" [disabled]="isProcessing || !imageLoaded">
+          @if (isProcessing) {
+            <ion-spinner name="crescent" slot="icon-only"></ion-spinner>
+          } @else {
+            <ion-icon name="checkmark-outline" slot="icon-only"></ion-icon>
+          }
+        </ion-button>
+      </ion-buttons>
+    </ion-toolbar>
+
+    <div class="crop-canvas-wrapper">
+      <image-cropper
+        [imageFile]="sourceFile"
+        [format]="outputFormat"
+        [output]="'blob'"
+        [canvasRotation]="rotation"
+        [transform]="transform"
+        [maintainAspectRatio]="true"
+        [aspectRatio]="aspectRatio"
+        [autoCrop]="false"
+        [roundCropper]="false"
+        [onlyScaleDown]="true"
+        [imageQuality]="cropperQuality"
+        [backgroundColor]="'#ffffff'"
+        (imageLoaded)="onImageLoaded($event)"
+        (loadImageFailed)="onLoadFailed()"
+      ></image-cropper>
+
+      @if (!imageLoaded) {
+        <div class="crop-loading">
+          <ion-spinner name="crescent"></ion-spinner>
+          <p>Loading image...</p>
+        </div>
+      }
+    </div>
+
+    @if (imageLoaded) {
+      <div class="crop-controls">
+        <div class="control-group">
+          <ion-button fill="outline" (click)="rotateLeft()" aria-label="Rotate left">
+            <ion-icon name="refresh-outline" slot="start"></ion-icon>
+            <span>Rotate</span>
+          </ion-button>
+          <ion-button fill="outline" (click)="rotateRight()" aria-label="Rotate right">
+            <span>Rotate</span>
+            <ion-icon name="refresh-outline" slot="end" style="transform: rotate(180deg);"></ion-icon>
+          </ion-button>
+        </div>
+
+        <div class="control-group">
+          <ion-button fill="outline" (click)="zoomOut()" aria-label="Zoom out">
+            <ion-icon name="contract-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+          <ion-range
+            min="1"
+            max="3"
+            step="0.1"
+            pin="true"
+            [value]="scale"
+            (ionChange)="onZoomChange($event)"
+            color="primary"
+          ></ion-range>
+          <ion-button fill="outline" (click)="zoomIn()" aria-label="Zoom in">
+            <ion-icon name="expand-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
+
+        <div class="control-group">
+          <ion-button fill="outline" color="medium" (click)="resetCrop()" aria-label="Reset crop">
+            <ion-icon name="square-outline" slot="start"></ion-icon>
+            <span>Reset</span>
+          </ion-button>
+        </div>
+      </div>
+    }
+  </div>
+</ion-content>
+

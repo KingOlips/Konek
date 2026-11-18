@@ -34,10 +34,6 @@ import { addIcons } from "ionicons";
 import {
   alertCircleOutline,
   arrowBackOutline,
-  batteryChargingOutline,
-  batteryDeadOutline,
-  batteryFullOutline,
-  batteryHalfOutline,
   chatbubbleEllipsesOutline,
   chatbubblesOutline,
   checkmarkCircleOutline,
@@ -62,6 +58,7 @@ import * as maplibregl from "maplibre-gl";
 import type {
   AttributionControl,
   GeoJSONSource,
+  IControl,
   Map as MapLibreMap,
   MapMouseEvent,
   Marker,
@@ -74,7 +71,6 @@ import type { Position } from "@capacitor/geolocation";
 
 import { AuthService, User } from "../../core/services/auth.service";
 import { BackgroundTrackerService } from "../../core/services/background-tracker.service";
-import { BatteryService } from "../../core/services/battery.service";
 import { LocationService } from "../../core/services/location.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
 import { PingService } from "../../core/services/ping.service";
@@ -86,6 +82,24 @@ import {
   SquadMenuPopoverComponent,
   SquadMenuResult,
 } from "./squad-menu-popover/squad-menu-popover.component";
+
+/**
+ * Inline SVGs for the marker movement badges. Keeping them inline avoids
+ * relying on Ionic's icon registry for DOM that MapLibre owns.
+ */
+const MOVEMENT_CAR_ICON = `<svg class="marker-movement-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M5 16v-3l1.7-4.1A2 2 0 0 1 8.6 8h6.8a2 2 0 0 1 1.9 1.3L19 13v3" />
+  <path d="M5 13h14" />
+  <circle cx="7.5" cy="16.5" r="1.5" />
+  <circle cx="16.5" cy="16.5" r="1.5" />
+</svg>`;
+
+const MOVEMENT_WALK_ICON = `<svg class="marker-movement-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <circle cx="13" cy="4" r="1.6" />
+  <path d="m11.4 8.6-2.6 3.6 2.2 2.1L9.4 20" />
+  <path d="m13.4 8.6 2 3.1 2.7 1.4" />
+  <path d="m11.9 14.2 2.4 2.1.9 3.7" />
+</svg>`;
 
 type MapStyle = "street" | "satellite" | "hybrid";
 type SheetSnap = "peek" | "half" | "full";
@@ -213,7 +227,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   private readonly authService = inject(AuthService);
   private readonly backgroundTracker = inject(BackgroundTrackerService);
-  private readonly batteryService = inject(BatteryService);
   private readonly locationService = inject(LocationService);
   private readonly geolocationService = inject(GeolocationService);
   private readonly pingService = inject(PingService);
@@ -260,6 +273,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private headingDeg = 0;
   private resizeObserver: ResizeObserver | null = null;
   private zoomControl: NavigationControl | null = null;
+  private pitchControl: IControl | null = null;
+  private pitchButton: HTMLButtonElement | null = null;
   private attributionControl: AttributionControl | null = null;
   private sizeTimers: ReturnType<typeof setTimeout>[] = [];
   private lastUploadAt = 0;
@@ -401,10 +416,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     addIcons({
       alertCircleOutline,
       arrowBackOutline,
-      batteryChargingOutline,
-      batteryDeadOutline,
-      batteryFullOutline,
-      batteryHalfOutline,
       chatbubbleEllipsesOutline,
       chatbubblesOutline,
       checkmarkCircleOutline,
@@ -432,8 +443,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     // Restore the last viewed squad before the first render so the toolbar
     // chip shows its name immediately instead of a placeholder.
     this.restoreActiveSquad();
-    // Wait for the first battery read so the first uploaded fix includes it.
-    await this.batteryService.init();
     await this.setupLocationTracking();
     await this.geolocationService.startMotionTracking();
     this.startCompassUpdates();
@@ -688,8 +697,9 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.cdr.markForCheck();
     }, 12000);
 
-    // Zoom/compass buttons are desktop-only; phones use pinch gestures.
+    // Zoom/compass buttons work on touch too, so phones keep them.
     this.syncZoomControl();
+    this.addPitchControl();
     this.addAttributionControl();
   }
 
@@ -731,22 +741,69 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
    * the control instead of leaving a stale copy behind.
    */
   private syncZoomControl(): void {
-    if (!this.map) return;
+    if (!this.map || this.zoomControl) return;
 
-    const shouldShow = !this.isMobileLayout();
-    if (shouldShow && !this.zoomControl) {
-      const control = new maplibregl.NavigationControl({
-        showCompass: true,
-        showZoom: true,
-        visualizePitch: true,
-      });
-      this.zoomControl = control;
-      this.map.addControl(control, "top-left");
-    } else if (!shouldShow && this.zoomControl) {
-      this.map.removeControl(this.zoomControl);
-      this.zoomControl = null;
-    }
+    const control = new maplibregl.NavigationControl({
+      showCompass: true,
+      showZoom: true,
+      visualizePitch: true,
+    });
+    this.zoomControl = control;
+    this.map.addControl(control, "top-left");
   }
+
+  /**
+   * One-tap 2D/3D toggle, stacked under the zoom/compass control. MapLibre's
+   * NavigationControl can reset the pitch (compass tap) but cannot enter 3D,
+   * so this gives phones an explicit way to tilt the map.
+   */
+  private addPitchControl(): void {
+    if (!this.map || this.pitchControl) return;
+
+    const control: IControl = {
+      onAdd: () => {
+        const group = document.createElement("div");
+        group.className = "maplibregl-ctrl maplibregl-ctrl-group konek-pitch-ctrl";
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.title = "Toggle 2D / 3D";
+        button.setAttribute("aria-label", "Toggle 2D / 3D view");
+        button.innerHTML = `
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z" />
+            <path d="m4 7.5 8 4.5 8-4.5" />
+            <path d="M12 12v9" />
+          </svg>`;
+        button.addEventListener("click", () => this.toggle3D());
+        group.appendChild(button);
+
+        this.pitchButton = button;
+        return group;
+      },
+      onRemove: () => {
+        this.pitchButton = null;
+      },
+    };
+
+    this.pitchControl = control;
+    this.map.addControl(control, "top-left");
+    this.map.on("pitchend", this.syncPitchButton);
+    this.syncPitchButton();
+  }
+
+  private toggle3D(): void {
+    if (!this.map) return;
+    const nextPitch = this.map.getPitch() > 5 ? 0 : 55;
+    this.map.easeTo({ pitch: nextPitch, duration: 500 });
+  }
+
+  private readonly syncPitchButton = (): void => {
+    const pitched = (this.map?.getPitch() ?? 0) > 5;
+    this.pitchButton?.classList.toggle("is-3d", pitched);
+  };
 
   private addAttributionControl(): void {
     if (!this.map) return;
@@ -1184,9 +1241,9 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.cdr.markForCheck();
       this.startLocationHeartbeat();
 
-      // Keep uploading location + battery after the app is backgrounded or
-      // swiped away. Android-only; no-op on web/iOS. Respect the Settings
-      // toggle when the user has turned tracking off.
+      // Keep uploading location after the app is backgrounded or swiped
+      // away. Android-only; no-op on web/iOS. Respect the Settings toggle
+      // when the user has turned tracking off.
       if (this.backgroundTrackingEnabled()) {
         void this.backgroundTracker.start(10000);
       }
@@ -1286,17 +1343,17 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     this.locationUploadInFlight = true;
     const now = Date.now();
-    const battery = this.batteryService.getBatteryInfo();
     this.locationService
       .updateLocation({
         latitude: fix.latitude,
         longitude: fix.longitude,
         accuracy: fix.accuracy,
         altitude: fix.altitude,
-        speed: fix.speed,
+        // A heartbeat re-sends an older fix, so its speed no longer describes
+        // what the member is doing now. Omitting it clears a stale "Driving"
+        // badge until the next real GPS fix arrives.
+        speed: addHistory ? fix.speed : undefined,
         heading: fix.heading,
-        battery_level: battery.level ?? undefined,
-        is_charging: battery.charging ?? undefined,
       })
       .subscribe({
         next: () => {
@@ -1335,6 +1392,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   ): void {
     if (!this.map) return;
 
+    const user = this.authService.getCurrentUser() ?? this.currentUser;
+    const photoUrl = this.authService.pictureUrl(user?.profile_picture);
+    const initials = this.initialsOf(user?.username);
+
     if (!this.userMarker) {
       const el = document.createElement("div");
       el.className = "user-marker";
@@ -1342,11 +1403,11 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       el.innerHTML = `
         <div class="marker-pulse"></div>
         <div class="marker-halo"></div>
-        <div class="marker-core">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-            <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>
-          </svg>
-        </div>
+        <div class="marker-core">${
+          photoUrl
+            ? `<img class="marker-photo" src="${this.escapeHtml(photoUrl)}" alt="" />`
+            : `<span>${initials}</span>`
+        }</div>
         <div class="marker-heading"></div>`;
       el.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -1359,6 +1420,27 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         .addTo(this.map);
     } else {
       this.userMarker.setLngLat([lng, lat]);
+      // Keep the avatar in sync without rebuilding the node on every GPS fix.
+      const core = this.userMarkerEl?.querySelector(".marker-core");
+      const existingImg = core?.querySelector<HTMLImageElement>("img.marker-photo");
+      if (core) {
+        if (photoUrl) {
+          if (existingImg) {
+            if (existingImg.getAttribute("src") !== photoUrl) {
+              existingImg.src = photoUrl;
+            }
+          } else {
+            core.innerHTML = `<img class="marker-photo" src="${this.escapeHtml(photoUrl)}" alt="" />`;
+          }
+        } else if (existingImg) {
+          core.innerHTML = `<span>${initials}</span>`;
+        } else {
+          const label = core.querySelector("span");
+          if (label && label.textContent !== initials) {
+            label.textContent = initials;
+          }
+        }
+      }
     }
 
     const arrow = this.userMarkerEl?.querySelector(
@@ -1707,6 +1789,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const online = this.isMemberOnline(member);
     const admin = member.role === "admin";
     const photo = this.memberPictureUrl(member);
+    const movement = this.memberMovement(member);
     // Preserve MapLibre's own classes (maplibregl-marker, anchor class) while
     // refreshing the role/online state on every location poll.
     el.classList.add("squad-marker");
@@ -1718,7 +1801,40 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
           ? `<img class="marker-photo" src="${this.escapeHtml(photo)}" alt="" />`
           : `<span>${this.initialsOf(member.username)}</span>`
       }</div>
-      ${online ? '<div class="marker-status"></div>' : ""}`;
+      ${online ? '<div class="marker-status"></div>' : ""}
+      ${
+        movement
+          ? `<div class="marker-movement is-${movement.state}" aria-hidden="true">
+               ${movement.icon}
+               <span class="marker-movement-label">${movement.label}</span>
+               <span class="marker-movement-speed">${movement.speedKmh} km/h</span>
+             </div>`
+          : ""
+      }`;
+  }
+
+  /**
+   * Movement badge shown beside a marker. Only online members who are actually
+   * moving get one, so a parked or offline friend stays visually quiet.
+   */
+  private memberMovement(
+    member: SquadMemberLocation
+  ):
+    | { state: "driving" | "moving"; label: string; speedKmh: number; icon: string }
+    | null {
+    if (!this.isMemberOnline(member)) return null;
+
+    const speed = member.speed;
+    if (typeof speed !== "number" || !Number.isFinite(speed)) return null;
+
+    const speedKmh = Math.max(1, Math.round(speed * 3.6));
+    if (speed > 5) {
+      return { state: "driving", label: "Driving", speedKmh, icon: MOVEMENT_CAR_ICON };
+    }
+    if (speed > 0.5) {
+      return { state: "moving", label: "Moving", speedKmh, icon: MOVEMENT_WALK_ICON };
+    }
+    return null;
   }
 
   private initialsOf(username: string | undefined): string {
@@ -2128,28 +2244,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     if (meters === null || meters === undefined) return "—";
     if (meters < 1000) return `${Math.round(meters)} m`;
     return `${(meters / 1000).toFixed(1)} km`;
-  }
-
-  get detailHasBattery(): boolean {
-    const level = this.liveSelectedMember?.battery_level;
-    return level !== null && level !== undefined;
-  }
-
-  get detailBatteryLabel(): string {
-    if (!this.detailHasBattery) return "Not available";
-    const member = this.liveSelectedMember;
-    return member?.is_charging
-      ? `${member.battery_level}% Â· charging`
-      : `${member?.battery_level}%`;
-  }
-
-  get detailBatteryIcon(): string {
-    if (this.liveSelectedMember?.is_charging) return "battery-charging-outline";
-    const level = this.liveSelectedMember?.battery_level ?? null;
-    if (level === null) return "battery-dead-outline";
-    if (level >= 80) return "battery-full-outline";
-    if (level >= 30) return "battery-half-outline";
-    return "battery-dead-outline";
   }
 
   centerOnSelection(): void {
@@ -3057,6 +3151,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.map.off("load", this.onMapLoad);
       this.map.off("click", this.onMapClick);
       this.map.off("error", this.onMapError);
+      this.map.off("pitchend", this.syncPitchButton);
       this.squadMarkers.forEach((marker) => marker.remove());
       this.userMarker?.remove();
       this.geofencePopup?.remove();
@@ -3064,6 +3159,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.map = null;
     }
     this.zoomControl = null;
+    this.pitchControl = null;
+    this.pitchButton = null;
     this.attributionControl = null;
     this.squadMarkers.clear();
     this.squadMarkerEls.clear();

@@ -426,22 +426,6 @@
             </div>
           } @else {
             <div class="detail-row">
-              <span
-                class="row-icon"
-                [class.is-low]="
-                  detailHasBattery &&
-                  (liveSelectedMember?.battery_level ?? 100) < 20
-                "
-              >
-                <ion-icon [name]="detailBatteryIcon"></ion-icon>
-              </span>
-              <span class="row-label">Battery</span>
-              <span class="row-value" [class.is-muted]="!detailHasBattery">
-                {{ detailBatteryLabel }}
-              </span>
-            </div>
-
-            <div class="detail-row">
               <span class="row-icon"><ion-icon name="navigate-outline"></ion-icon></span>
               <span class="row-label">Distance away</span>
               <span class="row-value">{{ detailDistanceLabel }}</span>

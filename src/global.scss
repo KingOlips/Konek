@@ -1,4 +1,4 @@
-/*
+﻿/*
  * App Global CSS
  * ----------------------------------------------------------------------------
  * Put style rules here that you want to apply globally. These styles are for
@@ -97,6 +97,20 @@
   border-top: 1px solid rgba(15, 23, 42, 0.06) !important;
 }
 
+/* Custom one-tap 2D/3D button that stacks under the zoom/compass control. */
+.konek-pitch-ctrl button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #1f2937;
+}
+
+.konek-pitch-ctrl button.is-3d {
+  color: #2f6fe0;
+  background: #eef4ff;
+}
+
 .maplibregl-ctrl-group button:hover {
   background: #f4f7fb;
 }
@@ -126,6 +140,13 @@
   position: absolute;
   width: 44px;
   height: 44px;
+}
+
+.user-marker .marker-core {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  overflow: hidden;
 }
 
 .marker-pulse {
@@ -224,7 +245,8 @@
 }
 
 /* Profile photo fills the marker circle when the member has one. */
-.squad-marker .marker-core .marker-photo {
+.squad-marker .marker-core .marker-photo,
+.user-marker .marker-core .marker-photo {
   display: block;
   width: 100%;
   height: 100%;
@@ -253,6 +275,68 @@
   border: 2px solid #fff;
   z-index: 3;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+}
+
+/**
+ * Floating movement badge: a compact "thought bubble" pill pinned to the
+ * right of a marker while the member is driving or moving. Stationary and
+ * offline members get no badge, which keeps the map quiet.
+ */
+.squad-marker .marker-movement {
+  --movement-bg: rgba(255, 255, 255, 0.97);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 10px);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px 0 7px;
+  border-radius: 999px;
+  background: var(--movement-bg);
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+  z-index: 4;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+/* Small diamond tail pointing back at the marker. */
+.squad-marker .marker-movement::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--movement-bg);
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.squad-marker .marker-movement-icon {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+}
+
+.squad-marker .marker-movement.is-driving .marker-movement-icon {
+  color: #2563eb;
+}
+
+.squad-marker .marker-movement.is-moving .marker-movement-icon {
+  color: #16a34a;
+}
+
+.squad-marker .marker-movement-speed {
+  color: #64748b;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Popups */
@@ -305,6 +389,24 @@
     border-color: #1e1e1e;
   }
 
+  .squad-marker .marker-movement {
+    --movement-bg: rgba(31, 41, 55, 0.97);
+    color: #f4f5f7;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .squad-marker .marker-movement.is-driving .marker-movement-icon {
+    color: #7cb0ff;
+  }
+
+  .squad-marker .marker-movement.is-moving .marker-movement-icon {
+    color: #6ee7a0;
+  }
+
+  .squad-marker .marker-movement-speed {
+    color: #a1a1aa;
+  }
+
   .maplibregl-ctrl-group {
     background: rgba(248, 250, 252, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.5) !important;
@@ -317,6 +419,15 @@
 
   .maplibregl-ctrl-group button:hover {
     background: #ffffff;
+  }
+
+  .konek-pitch-ctrl button {
+    color: #e4e4e7;
+  }
+
+  .konek-pitch-ctrl button.is-3d {
+    color: #8db4ff;
+    background: #1e3a5f;
   }
 
   .maplibregl-ctrl-group button + button {
@@ -417,6 +528,69 @@ ion-modal.forgot-password-modal {
 }
 
 body.dark ion-modal.forgot-password-modal {
+  --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------------------------------------------------------------------------
+ * Complete-profile popup (mandatory first-run Google sign-up)
+ * ------------------------------------------------------------------------ */
+ion-modal.complete-profile-modal {
+  --width: min(430px, 92vw);
+  --height: auto;
+  --max-height: min(92vh, 640px);
+  --border-radius: 22px;
+  --backdrop-opacity: 0.6;
+  --box-shadow: 0 24px 60px rgba(2, 6, 23, 0.3);
+}
+
+body.dark ion-modal.complete-profile-modal {
+  --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------------------------------------------------------------------------
+ * Terms & Privacy sheet (opened from sign-up forms)
+ * ------------------------------------------------------------------------ */
+ion-modal.legal-modal {
+  --width: min(560px, 94vw);
+  --height: min(88vh, 720px);
+  --border-radius: 22px;
+  --backdrop-opacity: 0.55;
+  --box-shadow: 0 24px 60px rgba(2, 6, 23, 0.3);
+}
+
+body.dark ion-modal.legal-modal {
+  --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------------------------------------------------------------------------
+ * Picture crop/edit modal (opened after picking a profile picture)
+ * ------------------------------------------------------------------------ */
+ion-modal.picture-crop-modal {
+  --width: min(95vw, 600px);
+  --height: 92vh;
+  --max-height: 92vh;
+  --border-radius: 22px;
+  --backdrop-opacity: 0.6;
+  --box-shadow: 0 24px 60px rgba(2, 6, 23, 0.35);
+}
+
+body.dark ion-modal.picture-crop-modal {
+  --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+}
+
+/* ---------------------------------------------------------------------------
+ * Change/set password popup (opened from Settings)
+ * ------------------------------------------------------------------------ */
+ion-modal.change-password-modal {
+  --width: min(430px, 92vw);
+  --height: auto;
+  --max-height: min(88vh, 600px);
+  --border-radius: 22px;
+  --backdrop-opacity: 0.5;
+  --box-shadow: 0 24px 60px rgba(2, 6, 23, 0.3);
+}
+
+body.dark ion-modal.change-password-modal {
   --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
 }
 

@@ -83,7 +83,15 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "options": {
-            "port": 8100
+            "port": 8100,
+            "host": "0.0.0.0",
+            "allowedHosts": [
+              "localhost",
+              "127.0.0.1",
+              "192.168.1.24",
+              "100.91.57.81",
+              "yuji.tail58cd54.ts.net"
+            ]
           },
           "configurations": {
             "production": {

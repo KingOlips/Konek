@@ -1,4 +1,12 @@
-﻿import { ChangeDetectorRef, Component, inject, OnInit } from "@angular/core";
+﻿import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  ViewChild,
+} from "@angular/core";
 import {
   FormBuilder,
   FormGroup,
@@ -6,9 +14,8 @@ import {
   Validators,
 } from "@angular/forms";
 import { Router } from "@angular/router";
+import { Capacitor } from "@capacitor/core";
 import { firstValueFrom } from "rxjs";
-import { HttpClient } from "@angular/common/http";
-import { environment } from "../../../../environments/environment";
 import {
   IonContent,
   IonInput,
@@ -36,6 +43,7 @@ import {
 } from "ionicons/icons";
 import { AuthService } from "../../../core/services/auth.service";
 import { BiometricService } from "../../../core/services/biometric.service";
+import { GoogleAuthService } from "../../../core/services/google-auth.service";
 import { OnboardingService } from "../../../core/services/onboarding.service";
 
 @Component({
@@ -52,19 +60,26 @@ import { OnboardingService } from "../../../core/services/onboarding.service";
     IonSpinner,
   ],
 })
-export class LoginPage implements OnInit {
+export class LoginPage implements OnInit, AfterViewInit {
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly navCtrl = inject(NavController);
   private readonly modalCtrl = inject(ModalController);
   private readonly authService = inject(AuthService);
   private readonly biometricService = inject(BiometricService);
+  private readonly googleAuth = inject(GoogleAuthService);
   private readonly onboarding = inject(OnboardingService);
   private readonly alertCtrl = inject(AlertController);
-  private readonly http = inject(HttpClient);
   private readonly loadingCtrl = inject(LoadingController);
   private readonly cdr = inject(ChangeDetectorRef);
 
+  /** Browser build: Google's official rendered button is used instead of One Tap. */
+  readonly isWebPlatform = !Capacitor.isNativePlatform();
+
+  @ViewChild("webGoogleButton")
+  private webGoogleButton?: ElementRef<HTMLElement>;
+
+  webGoogleError = "";
   loginForm!: FormGroup;
   isLoading = false;
   showPassword = false;
@@ -93,6 +108,33 @@ export class LoginPage implements OnInit {
       password: ["", [Validators.required, Validators.minLength(6)]],
     });
     void this.promptSavedBiometricLogin();
+  }
+
+  ngAfterViewInit(): void {
+    if (this.isWebPlatform) {
+      void this.setupWebGoogleButton();
+    }
+  }
+
+  /**
+   * Web: render Google's official button. One Tap is suppressed by Google
+   * after a dismissal, and the only guaranteed UI is a rendered button.
+   */
+  private async setupWebGoogleButton(): Promise<void> {
+    const host = this.webGoogleButton?.nativeElement;
+    if (!host) return;
+
+    try {
+      await this.googleAuth.renderWebButton(host, (idToken) => {
+        void this.completeGoogleSignIn(async () => idToken);
+      });
+    } catch (error: any) {
+      console.error("Google button failed to render:", error);
+      this.webGoogleError =
+        error?.message ??
+        "Google Sign-In is unavailable right now. Please try again later.";
+      this.cdr.markForCheck();
+    }
   }
 
   /**
@@ -175,9 +217,29 @@ export class LoginPage implements OnInit {
       backdropDismiss: true,
     });
     await modal.present();
+
+    // The popup switches to its "Set a new password" step when the email
+    // verification link arrives; once that completes, go straight to the map.
+    const { data, role } = await modal.onWillDismiss();
+    if (role === "confirm" && data?.reset) {
+      await this.navigateToMap();
+    }
   }
 
+  /** Android: open the native account chooser, then exchange the token. */
   async onGoogleLogin(): Promise<void> {
+    await this.completeGoogleSignIn(() => this.googleAuth.signIn());
+  }
+
+  /**
+   * Shared Google completion: show the loading overlay, exchange the ID token
+   * for a Konek session, and route to the map on success.
+   */
+  private async completeGoogleSignIn(
+    getIdToken: () => Promise<string>
+  ): Promise<void> {
+    if (this.isLoading) return;
+
     this.isLoading = true;
     const loading = await this.loadingCtrl.create({
       message: "Signing in with Google...",
@@ -186,39 +248,18 @@ export class LoginPage implements OnInit {
     await loading.present();
 
     try {
-      // Try native Google Auth first
-      let idToken: string | null = null;
-      try {
-        const { auth } = await import("capacitor-auth-manager");
-        const result = await auth.signIn("google");
-        if (result && result.user) {
-          // Get the ID token from the signed-in user
-          idToken = await auth.getIdToken();
-        }
-      } catch (nativeError) {
-        console.log("Native Google Auth not available:", nativeError);
-      }
+      const idToken = await getIdToken();
+      const response = await firstValueFrom(
+        this.authService.signInWithGoogle(idToken)
+      );
+      await loading.dismiss();
 
-      // If native failed, try web Google Identity Services
-      if (!idToken) {
-        // For web, we would need to implement Google Identity Services
-        // For now, show an alert that Google Sign-In needs to be configured
-        await loading.dismiss();
-        const alert = await this.alertCtrl.create({
-          header: "Google Sign-In",
-          message: "Google Sign-In requires configuration in Google Cloud Console. Please use username/password for now, or set up Google OAuth credentials.",
-          buttons: ["OK"],
-        });
-        await alert.present();
+      // Brand-new Google users must pick a username and password before the
+      // Konek account exists.
+      if (response.action_required === "complete_profile") {
+        await this.presentCompleteProfileModal(response);
         return;
       }
-
-      // Send ID token to backend
-      const response: any = await firstValueFrom(
-        this.http.post(`${environment.apiUrl}/api_google_login.php`, { id_token: idToken })
-      );
-
-      await loading.dismiss();
 
       if (!response.success) {
         await this.showError(response.message || "Google login failed");
@@ -230,17 +271,64 @@ export class LoginPage implements OnInit {
     } catch (error: any) {
       await loading.dismiss();
       console.error("Google login error:", error);
-      const offline =
-        !error?.status || error?.status === 0 || error?.message === "Failed to fetch";
-      await this.showError(
-        offline
-          ? "Can't reach the Konek server. Check your internet connection and try again in a moment."
-          : (error?.error?.message ?? "Google login failed. Please try again.")
-      );
+      await this.showError(this.googleErrorMessage(error));
     } finally {
       this.isLoading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /**
+   * Mandatory first-run form for Google sign-ups. The modal cannot be
+   * dismissed casually: the account does not exist until it is submitted.
+   */
+  private async presentCompleteProfileModal(
+    response: { temp_token?: string; email?: string; suggested_username?: string }
+  ): Promise<void> {
+    const { CompleteProfileModalComponent } = await import(
+      "../complete-profile/complete-profile.modal"
+    );
+    const modal = await this.modalCtrl.create({
+      component: CompleteProfileModalComponent,
+      componentProps: {
+        tempToken: response.temp_token ?? "",
+        email: response.email ?? "",
+        suggestedUsername: response.suggested_username ?? "",
+      },
+      backdropDismiss: false,
+      canDismiss: false,
+      cssClass: "complete-profile-modal",
+    });
+
+    await modal.present();
+    const { data } = await modal.onWillDismiss<{ completed?: boolean }>();
+
+    if (data?.completed) {
+      await this.navigateToMap();
+    }
+  }
+
+  /** Human-readable message for the many failure shapes Google can produce. */
+  private googleErrorMessage(error: any): string {
+    const message = String(error?.message ?? "");
+    const isHttpError =
+      error?.name === "HttpErrorResponse" || typeof error?.status === "number";
+    const cancelled =
+      error?.code === "auth/user-cancelled" || /cancel/i.test(message);
+    const noCredential = /no google account|no credentials/i.test(message);
+    const offline = isHttpError && error?.status === 0;
+
+    if (cancelled) return "Google Sign-In was cancelled.";
+    if (offline) {
+      return "Can't reach the Konek server. Check your internet connection and try again in a moment.";
+    }
+    if (noCredential) {
+      return "No Google account is available on this device. Add a Google account in Android settings and make sure Google Play Services is up to date, then try again.";
+    }
+    return (
+      error?.error?.message ??
+      (message || "Google login failed. Please try again.")
+    );
   }
 
   async onSubmit(): Promise<void> {

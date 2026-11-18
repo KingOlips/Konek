@@ -22,6 +22,8 @@ export interface User {
   profile_picture?: string | null;
   auth_token: string;
   active_status: number;
+  /** 1 when a real password is set; 0 for Google accounts still completing signup. */
+  password_set?: number;
   created_at: string;
   squads?: Squad[];
 }
@@ -36,12 +38,38 @@ export interface Credentials {
   username: string;
   email?: string;
   password: string;
+  /** Required at registration; the server rejects accounts without consent. */
+  terms_accepted?: boolean;
 }
 
 export interface AuthResponse {
   success: boolean;
   message: string;
   data?: User;
+  /** Present on registration: whether the welcome email was accepted by SMTP. */
+  email_sent?: boolean;
+  /**
+   * Present when a brand-new Google account must finish signing up by picking
+   * a username and password before the Konek account is created.
+   */
+  action_required?: "complete_profile";
+  temp_token?: string;
+  suggested_username?: string;
+  email?: string;
+  /**
+   * Cross-device password reset: identifies the pending request this screen is
+   * watching. The screen switches to the password form once the email link is
+   * verified on any device.
+   */
+  session_id?: string;
+}
+
+/** Result of polling a cross-device password reset session. */
+export interface ResetSessionStatus {
+  success: boolean;
+  status: "pending" | "verified" | "expired";
+  token?: string;
+  message?: string;
 }
 
 export interface ApiResponse<T> {
@@ -98,11 +126,11 @@ export class AuthService {
     return this.sessionReady;
   }
 
-    register(credentials: Credentials): Observable<AuthResponse> {
+  register(credentials: Credentials): Observable<AuthResponse> {
     return this.authenticate("api_register.php", credentials);
   }
 
-    login(credentials: Credentials): Observable<AuthResponse> {
+  login(credentials: Credentials): Observable<AuthResponse> {
     return this.authenticate("api_login.php", credentials);
   }
 
@@ -110,37 +138,111 @@ export class AuthService {
     return this.http.post<AuthResponse>(`${environment.apiUrl}/api_forgot_password.php`, { email });
   }
 
+  /**
+   * Check whether the reset email has been verified. The device that requested
+   * the reset polls this, so verification can happen on any other device (for
+   * example the phone that receives the email).
+   */
+  resetSessionStatus(sessionId: string): Observable<ResetSessionStatus> {
+    return this.http.get<ResetSessionStatus>(
+      `${environment.apiUrl}/api_reset_session.php`,
+      { params: { session_id: sessionId } }
+    );
+  }
+
+  /**
+   * Mark a reset token verified from the native app when an App Link opens
+   * Konek directly, skipping the HTTPS landing page. This lets a desktop that
+   * started the reset receive the verified event too.
+   */
+  verifyResetToken(token: string): Observable<ApiResponse<void>> {
+    return this.http.get<ApiResponse<void>>(
+      `${environment.apiUrl}/api_verify_reset.php`,
+      { params: { token } }
+    );
+  }
+
+  /**
+   * Exchange a verified Google ID token for a Konek session. The backend
+   * validates the token, links or creates the account, and returns the same
+   * payload as a password login. Brand-new Google users get
+   * `action_required: "complete_profile"` instead of a session.
+   */
+  signInWithGoogle(idToken: string): Observable<AuthResponse> {
+    return this.http
+      .post<AuthResponse>(`${environment.apiUrl}/api_google_login.php`, {
+        id_token: idToken,
+      })
+      .pipe(this.withSession("Google login"));
+  }
+
+  /** Create the Konek account for a verified Google signup. */
+  completeGoogleProfile(
+    tempToken: string,
+    username: string,
+    password: string,
+    termsAccepted: boolean
+  ): Observable<AuthResponse> {
+    return this.http
+      .post<AuthResponse>(
+        `${environment.apiUrl}/api_complete_google_profile.php`,
+        {
+          temp_token: tempToken,
+          username,
+          password,
+          terms_accepted: termsAccepted,
+        }
+      )
+      .pipe(this.withSession("Google signup"));
+  }
+
   resetPassword(token: string, password: string): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${environment.apiUrl}/api_reset_password.php`, { token, password });
+    return this.http
+      .post<AuthResponse>(`${environment.apiUrl}/api_reset_password.php`, { token, password })
+      .pipe(this.withSession("Reset password"));
   }
 
   private authenticate(endpoint: string, credentials: Credentials): Observable<AuthResponse> {
     const url = `${environment.apiUrl}/${endpoint}`;
     const headers = new HttpHeaders({ "Content-Type": "application/json" });
 
-    return this.http.post<AuthResponse>(url, credentials, { headers }).pipe(
-      switchMap((response) => {
-        if (!response.success || !response.data) {
-          return from(Promise.resolve(response));
-        }
-        const user = response.data;
-        return from(this.persistSession(user.auth_token, user)).pipe(
-          tap(() => {
-            this.currentUserSubject.next(user);
-            this.isAuthenticatedSubject.next(true);
-            this.haptic("success");
-          }),
-          map(() => response)
-        );
-      }),
-      catchError((error) => {
-        console.error(`${endpoint} failed:`, error);
-        return throwError(() => error);
-      })
-    );
+    return this.http
+      .post<AuthResponse>(url, credentials, { headers })
+      .pipe(this.withSession(endpoint));
   }
 
-  changePassword(currentPassword: string, newPassword: string): Observable<ApiResponse<void>> {
+  /**
+   * Persist the session returned by registration/login/password-reset so the
+   * app is signed in as soon as the response arrives.
+   */
+  private withSession(label: string) {
+    return (source: Observable<AuthResponse>): Observable<AuthResponse> =>
+      source.pipe(
+        switchMap((response) => {
+          if (!response.success || !response.data) {
+            return from(Promise.resolve(response));
+          }
+          const user = response.data;
+          return from(this.persistSession(user.auth_token, user)).pipe(
+            tap(() => {
+              this.currentUserSubject.next(user);
+              this.isAuthenticatedSubject.next(true);
+              this.haptic("success");
+            }),
+            map(() => response)
+          );
+        }),
+        catchError((error) => {
+          console.error(`${label} failed:`, error);
+          return throwError(() => error);
+        })
+      );
+  }
+
+  changePassword(
+    currentPassword: string | null,
+    newPassword: string
+  ): Observable<ApiResponse<void>> {
     const token = this.currentUserSubject.value?.auth_token;
     const headers = new HttpHeaders({
       "Content-Type": "application/json",
@@ -149,7 +251,7 @@ export class AuthService {
 
     return this.http.post<ApiResponse<void>>(
       `${environment.apiUrl}/api_change_password.php`,
-      { current_password: currentPassword, new_password: newPassword },
+      { current_password: currentPassword ?? "", new_password: newPassword },
       { headers }
     );
   }

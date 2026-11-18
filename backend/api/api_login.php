@@ -40,9 +40,13 @@ if (empty($username) || empty($password)) {
 try {
     $db = getDBConnection();
     
-    // Prepare statement to prevent SQL injection
-    $stmt = $db->prepare("SELECT id, username, email, contact_number, profile_picture, password_hash, active_status FROM users WHERE username = :username LIMIT 1");
+    // Prepare statement to prevent SQL injection. The login field accepts
+    // either a username or the account's email address. Two distinct
+    // placeholders are required because PDO runs in native prepare mode,
+    // where a named parameter cannot be reused in the same statement.
+    $stmt = $db->prepare("SELECT id, username, email, contact_number, profile_picture, password_hash, active_status, password_set FROM users WHERE username = :username OR email = :email LIMIT 1");
     $stmt->bindParam(":username", $username, PDO::PARAM_STR);
+    $stmt->bindParam(":email", $username, PDO::PARAM_STR);
     $stmt->execute();
     
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -89,6 +93,7 @@ try {
     
     // Return success response with user data (excluding password hash)
     unset($user["password_hash"]);
+    $user["password_set"] = (int) $user["password_set"];
     $user["auth_token"] = $authToken;
     $user["squads"] = $squads;
     

@@ -1,0 +1,126 @@
+<ion-content class="legal-content">
+  <div class="legal-shell">
+    <header class="legal-head">
+      <div class="legal-head-main">
+        <span class="legal-badge" aria-hidden="true">
+          <ion-icon name="shield-checkmark-outline"></ion-icon>
+        </span>
+        <div>
+          <p class="legal-eyebrow">Konek</p>
+          <h1>Terms &amp; Privacy</h1>
+        </div>
+      </div>
+
+      <button type="button" class="legal-close" (click)="close()" aria-label="Close">
+        <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+      </button>
+    </header>
+
+    <p class="legal-updated">Last updated: November 18, 2026</p>
+
+    <section id="terms-of-service" class="legal-section">
+      <h2>Terms of Service</h2>
+
+      <h3>1. Your account</h3>
+      <p>
+        You need an account to use Konek. Give accurate information, keep your
+        password private, and don't share your account. You are responsible for
+        activity that happens under your account.
+      </p>
+
+      <h3>2. Location sharing</h3>
+      <p>
+        Konek shows your location to the circle (squad) you are in while location
+        sharing is on. Only join circles you trust. You can stop sharing at any
+        time from the map or Settings.
+      </p>
+
+      <h3>3. Acceptable use</h3>
+      <p>
+        Don't use Konek to track someone without their consent, harass or stalk
+        another person, impersonate anyone, or break the law. We may suspend or
+        remove accounts that do.
+      </p>
+
+      <h3>4. Content</h3>
+      <p>
+        You keep ownership of the profile picture and other content you add.
+        Only upload content you have the right to use, and nothing harmful or
+        offensive.
+      </p>
+
+      <h3>5. Service availability</h3>
+      <p>
+        Konek is provided as-is. Features may change, and location updates can be
+        delayed by your device, network, or battery settings. Don't rely on Konek
+        as your only safety tool in an emergency.
+      </p>
+
+      <h3>6. Ending your account</h3>
+      <p>
+        You can stop using Konek at any time. To delete your account and its
+        server data, contact us at
+        <a href="mailto:konek.application@gmail.com">konek.application@gmail.com</a>.
+      </p>
+    </section>
+
+    <section id="privacy-policy" class="legal-section">
+      <h2>Privacy Policy</h2>
+
+      <h3>What we collect</h3>
+      <ul>
+        <li>Account details: username, email address, and a hashed password.</li>
+        <li>Optional details: contact number and profile picture.</li>
+        <li>Google sign-in identifier, if you choose Google.</li>
+        <li>Circle membership and roles.</li>
+        <li>Location updates and geofence activity while sharing is on.</li>
+      </ul>
+
+      <h3>How we use it</h3>
+      <ul>
+        <li>Sign you in and keep your account secure.</li>
+        <li>Show your position to the circles you belong to.</li>
+        <li>Send safety alerts, welcome mail, and password-reset links.</li>
+        <li>Operate, troubleshoot, and improve Konek.</li>
+      </ul>
+
+      <h3>Who sees your data</h3>
+      <p>
+        Your username, profile picture, and current location are visible to
+        members of your circles. We don't sell your data. We only share it with
+        service providers that help deliver the app (for example, an email
+        provider used to send account mail).
+      </p>
+
+      <h3>Retention</h3>
+      <p>
+        Location history stays on the Konek server while your account is active
+        so your circles can see recent activity. You can clear history stored on
+        your device from Settings. Deleting your account removes your server
+        data.
+      </p>
+
+      <h3>Your choices</h3>
+      <p>
+        You control when location sharing is on and which circles you join. You
+        can update your profile in Settings, and you can ask us to delete your
+        account and data at any time.
+      </p>
+
+      <h3>Contact</h3>
+      <p>
+        Questions about your data? Email
+        <a href="mailto:konek.application@gmail.com">konek.application@gmail.com</a>.
+      </p>
+    </section>
+
+    <p class="legal-footnote">
+      By creating a Konek account you confirm that you have read and agree to
+      these terms and this privacy policy.
+    </p>
+
+    <ion-button expand="block" class="legal-action" (click)="close()">
+      <span>Done</span>
+    </ion-button>
+  </div>
+</ion-content>

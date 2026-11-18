@@ -55,8 +55,14 @@
         <button type="button" class="row row-button" (click)="changePassword()">
           <span class="row-icon"><ion-icon name="shield-outline"></ion-icon></span>
           <div class="row-body">
-            <span class="row-title">Change password</span>
-            <span class="row-sub">Update your account password</span>
+            <span class="row-title">{{
+              currentUser?.password_set === 0 ? "Set a password" : "Change password"
+            }}</span>
+            <span class="row-sub">{{
+              currentUser?.password_set === 0
+                ? "Add a password so you can sign in without Google"
+                : "Update your account password"
+            }}</span>
           </div>
           <ion-icon class="row-chevron" name="chevron-forward-outline"></ion-icon>
         </button>

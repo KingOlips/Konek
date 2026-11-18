@@ -22,7 +22,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 /**
  * Starts and stops the Android foreground location service.
  *
- * The service keeps uploading location + battery to the PHP API even when the
+ * The service keeps uploading location to the PHP API even when the
  * WebView is backgrounded or the task is swiped away, and shows the ongoing
  * "Updating your location" notification required by Android.
  */

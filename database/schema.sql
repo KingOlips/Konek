@@ -12,11 +12,15 @@ CREATE TABLE `users` (
     `contact_number` VARCHAR(20) DEFAULT NULL,
     `profile_picture` VARCHAR(255) DEFAULT NULL,
     `password_hash` VARCHAR(255) NOT NULL,
+    `google_id` VARCHAR(255) DEFAULT NULL,
+    `password_set` TINYINT(1) NOT NULL DEFAULT 1,
+    `terms_accepted_at` DATETIME DEFAULT NULL,
     `auth_token` VARCHAR(64) DEFAULT NULL UNIQUE,
     `active_status` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_email` (`email`),
+    UNIQUE KEY `unique_google_id` (`google_id`),
     INDEX `idx_username` (`username`),
     INDEX `idx_auth_token` (`auth_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -102,6 +106,22 @@ CREATE TABLE IF NOT EXISTS `pings` (
     FOREIGN KEY (`target_user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     INDEX `idx_ping_target_unread` (`target_user_id`, `read_at`, `created_at`),
     INDEX `idx_ping_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Password reset tokens
+-- Only a SHA-256 hash of the emailed token is stored, so a database leak cannot
+-- be used to reset passwords. Each row expires 30 minutes after creation.
+CREATE TABLE IF NOT EXISTS `password_resets` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `user_id` INT UNSIGNED NOT NULL,
+    `token_hash` CHAR(64) NOT NULL,
+    `expires_at` DATETIME NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `unique_token_hash` (`token_hash`),
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    INDEX `idx_reset_user` (`user_id`),
+    INDEX `idx_reset_expires` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Sample data for testing (optional)

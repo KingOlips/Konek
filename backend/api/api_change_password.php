@@ -23,13 +23,13 @@ $authToken = requireBearerToken();
 
 $input = json_decode(file_get_contents("php://input"), true);
 
-if (!is_array($input) || empty($input["current_password"]) || empty($input["new_password"])) {
+if (!is_array($input) || empty($input["new_password"])) {
     http_response_code(400);
-    echo json_encode(["success" => false, "message" => "Current and new password are required"]);
+    echo json_encode(["success" => false, "message" => "New password is required"]);
     exit();
 }
 
-$currentPassword = (string) $input["current_password"];
+$currentPassword = isset($input["current_password"]) ? (string) $input["current_password"] : "";
 $newPassword = (string) $input["new_password"];
 
 if (strlen($newPassword) < 6) {
@@ -47,7 +47,7 @@ if (strlen($newPassword) > 200) {
 try {
     $db = getDBConnection();
 
-    $stmt = $db->prepare("SELECT id, password_hash FROM users WHERE auth_token = :auth_token LIMIT 1");
+    $stmt = $db->prepare("SELECT id, password_hash, password_set FROM users WHERE auth_token = :auth_token LIMIT 1");
     $stmt->bindParam(":auth_token", $authToken, PDO::PARAM_STR);
     $stmt->execute();
     $user = $stmt->fetch();
@@ -58,15 +58,25 @@ try {
         exit();
     }
 
-    if (!password_verify($currentPassword, $user["password_hash"])) {
-        http_response_code(400);
-        echo json_encode(["success" => false, "message" => "Current password is incorrect"]);
-        exit();
+    // Accounts that have not set a password yet (Google-created accounts still
+    // completing their profile) may set one without proving the placeholder.
+    if ((int) $user["password_set"] === 1) {
+        if ($currentPassword === "") {
+            http_response_code(400);
+            echo json_encode(["success" => false, "message" => "Current password is required"]);
+            exit();
+        }
+
+        if (!password_verify($currentPassword, $user["password_hash"])) {
+            http_response_code(400);
+            echo json_encode(["success" => false, "message" => "Current password is incorrect"]);
+            exit();
+        }
     }
 
     $newHash = password_hash($newPassword, PASSWORD_ARGON2ID);
 
-    $update = $db->prepare("UPDATE users SET password_hash = :password_hash WHERE id = :id");
+    $update = $db->prepare("UPDATE users SET password_hash = :password_hash, password_set = 1 WHERE id = :id");
     $update->bindParam(":password_hash", $newHash, PDO::PARAM_STR);
     $update->bindParam(":id", $user["id"], PDO::PARAM_INT);
     $update->execute();

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.konek.app",
+      "sha256_cert_fingerprints": [
+        "40:3A:2F:F8:7A:95:B8:9B:39:21:80:FA:DD:07:18:A1:00:59:C7:C5:4B:0A:D7:FC:D8:22:64:A0:A9:B4:00:A2"
+      ]
+    }
+  }
+]

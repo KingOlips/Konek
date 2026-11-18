@@ -14,6 +14,7 @@ import {
   IonToggle,
   AlertController,
   LoadingController,
+  ModalController,
   ToastController,
   ActionSheetController,
 } from "@ionic/angular";
@@ -67,6 +68,7 @@ export class SettingsPage implements OnInit {
   private readonly loadingCtrl = inject(LoadingController);
   private readonly toastCtrl = inject(ToastController);
   private readonly actionSheetCtrl = inject(ActionSheetController);
+  private readonly modalCtrl = inject(ModalController);
   private readonly cdr = inject(ChangeDetectorRef);
 
   currentUser: User | null = null;
@@ -320,64 +322,39 @@ export class SettingsPage implements OnInit {
   }
 
   async changePassword(): Promise<void> {
-    const alert = await this.alertCtrl.create({
-      header: "Change Password",
-      inputs: [
-        {
-          name: "currentPassword",
-          type: "password",
-          placeholder: "Current password",
-        },
-        {
-          name: "newPassword",
-          type: "password",
-          placeholder: "New password (min 6 chars)",
-        },
-        {
-          name: "confirmPassword",
-          type: "password",
-          placeholder: "Confirm new password",
-        },
-      ],
-      buttons: [
-        { text: "Cancel", role: "cancel" },
-        {
-          text: "Update",
-          handler: async (data) => {
-            if (data.newPassword !== data.confirmPassword) {
-              this.showToast("Passwords do not match");
-              return false;
-            }
-            if ((data.newPassword ?? "").length < 6) {
-              this.showToast("Password must be at least 6 characters");
-              return false;
-            }
-            if (data.currentPassword === data.newPassword) {
-              this.showToast("Choose a different password");
-              return false;
-            }
+    // Lazy-load so the settings bundle stays small.
+    const { ChangePasswordModalComponent } = await import(
+      "./change-password/change-password.modal"
+    );
 
-            try {
-              const response = await firstValueFrom(
-                this.authService.changePassword(data.currentPassword, data.newPassword)
-              );
-              if (!response.success) {
-                this.showToast(response.message || "Failed to update password");
-                return false;
-              }
-              this.showToast("Password updated successfully");
-              return true;
-            } catch (error: any) {
-              this.showToast(
-                error?.error?.message ?? "Failed to update password"
-              );
-              return false;
-            }
-          },
-        },
-      ],
+    const modal = await this.modalCtrl.create({
+      component: ChangePasswordModalComponent,
+      componentProps: {
+        passwordSet: this.currentUser?.password_set ?? 1,
+      },
+      cssClass: "change-password-modal",
+      backdropDismiss: true,
     });
-    await alert.present();
+
+    await modal.present();
+    const { data, role } = await modal.onWillDismiss<{ updated?: boolean }>();
+
+    if (role !== "confirm" || !data?.updated) return;
+
+    this.showToast("Password updated successfully");
+
+    // Refresh the cached profile so password_set and future prompts stay in sync.
+    this.authService.getProfile().subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          this.currentUser = this.authService.getCurrentUser();
+          this.cdr.markForCheck();
+        }
+      },
+      error: () => {
+        // The password itself is already saved; a stale profile is harmless.
+      },
+    });
   }
 
   async logout(): Promise<void> {

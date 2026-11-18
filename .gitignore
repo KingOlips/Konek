@@ -73,3 +73,6 @@ Thumbs.db
 /backend/uploads/profile_pictures/*
 !/backend/uploads/profile_pictures/.htaccess
 !/backend/uploads/profile_pictures/index.html
+
+# Local SMTP credentials (copy mailer.local.php.example to mailer.local.php)
+/backend/config/mailer.local.php

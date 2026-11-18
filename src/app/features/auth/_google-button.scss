@@ -61,3 +61,12 @@
     border-color: var(--auth-primary);
   }
 }
+
+/* Host for Google's official rendered button (web builds). */
+.google-button-host {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+}

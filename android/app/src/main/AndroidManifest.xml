@@ -10,6 +10,10 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
 
+        <meta-data
+            android:name="com.google.android.gms.auth.api.signin.client_id"
+            android:value="874151616337-65odpjfqpr4d6okpct0clmgsfrm4ktvg.apps.googleusercontent.com" />
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
@@ -21,6 +25,30 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- "Verify" button in the password reset email opens the app
+                 directly on the phone that owns the mailbox. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="konek" android:host="verify-reset" />
+                <!-- Kept so reset emails sent before the rename still work. -->
+                <data android:scheme="konek" android:host="reset-password" />
+            </intent-filter>
+
+            <!-- HTTPS App Link for the reset email. Gmail strips custom
+                 schemes, so the email button is this URL; assetlinks.json at
+                 /.well-known/assetlinks.json tells Android to open Konek. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="yuji.tail58cd54.ts.net"
+                    android:pathPrefix="/konek/backend/api/reset_verify.php" />
             </intent-filter>
 
         </activity>

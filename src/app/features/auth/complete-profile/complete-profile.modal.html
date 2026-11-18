@@ -1,0 +1,183 @@
+<ion-content class="modal-content">
+  <div class="modal-shell">
+    <header class="modal-head">
+      <div>
+        <p class="modal-eyebrow">Almost there</p>
+        <h2>Create your Konek account</h2>
+      </div>
+
+      <span class="head-badge" aria-hidden="true">
+        <ion-icon name="shield-checkmark-outline"></ion-icon>
+      </span>
+    </header>
+
+    <p class="modal-lead">
+      You're signed in with <strong>{{ email }}</strong>. Choose a username and a
+      password so you can also sign in without Google.
+    </p>
+
+    <div class="account-chip">
+      <ion-icon name="mail-outline" aria-hidden="true"></ion-icon>
+      <span>{{ email }}</span>
+    </div>
+
+    @if (serverError) {
+      <p class="server-error" role="alert">
+        <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+        <span>{{ serverError }}</span>
+      </p>
+    }
+
+    <form [formGroup]="profileForm" (ngSubmit)="onSubmit()" class="modal-form" novalidate>
+      <div class="field" [class.field-invalid]="username?.invalid && submitted">
+        <span class="field-label">Username</span>
+        <div class="field-control">
+          <ion-icon name="person-outline" class="field-icon" aria-hidden="true"></ion-icon>
+          <ion-input
+            formControlName="username"
+            type="text"
+            autocomplete="username"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-label="Username"
+            placeholder="Pick a username"
+          ></ion-input>
+        </div>
+
+        @if (username?.invalid && submitted) {
+          <p class="field-error" role="alert">
+            <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+            <span>
+              @if (username.hasError("required")) {
+                Username is required
+              } @else if (username.hasError("minlength")) {
+                Username must be at least 3 characters
+              } @else if (username.hasError("maxlength")) {
+                Username must be at most 50 characters
+              } @else if (username.hasError("pattern")) {
+                Letters, numbers, and underscores only
+              }
+            </span>
+          </p>
+        } @else {
+          <p class="field-hint">Letters, numbers, and underscores only.</p>
+        }
+      </div>
+
+      <div class="field" [class.field-invalid]="password?.invalid && submitted">
+        <span class="field-label">Password</span>
+        <div class="field-control">
+          <ion-icon name="shield-checkmark-outline" class="field-icon" aria-hidden="true"></ion-icon>
+          <ion-input
+            formControlName="password"
+            [type]="showPassword ? 'text' : 'password'"
+            autocomplete="new-password"
+            aria-label="Password"
+            placeholder="At least 6 characters"
+          ></ion-input>
+          <button
+            type="button"
+            class="field-toggle"
+            (click)="togglePasswordVisibility()"
+            [attr.aria-label]="showPassword ? 'Hide password' : 'Show password'"
+          >
+            <ion-icon [name]="showPassword ? 'eye-off-outline' : 'eye-outline'" aria-hidden="true"></ion-icon>
+          </button>
+        </div>
+
+        @if (password?.invalid && submitted) {
+          <p class="field-error" role="alert">
+            <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+            <span>
+              @if (password.hasError("required")) {
+                Password is required
+              } @else if (password.hasError("minlength")) {
+                Password must be at least 6 characters
+              }
+            </span>
+          </p>
+        }
+      </div>
+
+      <div class="field" [class.field-invalid]="confirmPassword?.invalid && submitted">
+        <span class="field-label">Confirm password</span>
+        <div class="field-control">
+          <ion-icon name="shield-checkmark-outline" class="field-icon" aria-hidden="true"></ion-icon>
+          <ion-input
+            formControlName="confirmPassword"
+            [type]="showConfirmPassword ? 'text' : 'password'"
+            autocomplete="new-password"
+            aria-label="Confirm password"
+            placeholder="Repeat your password"
+          ></ion-input>
+          <button
+            type="button"
+            class="field-toggle"
+            (click)="toggleConfirmPasswordVisibility()"
+            [attr.aria-label]="showConfirmPassword ? 'Hide password' : 'Show password'"
+          >
+            <ion-icon [name]="showConfirmPassword ? 'eye-off-outline' : 'eye-outline'" aria-hidden="true"></ion-icon>
+          </button>
+        </div>
+
+        @if (confirmPassword?.invalid && submitted) {
+          <p class="field-error" role="alert">
+            <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+            <span>
+              @if (confirmPassword.hasError("required")) {
+                Please confirm your password
+              } @else if (confirmPassword.hasError("mismatch")) {
+                Passwords do not match
+              }
+            </span>
+          </p>
+        }
+      </div>
+
+      <div class="terms-row" [class.terms-invalid]="terms?.invalid && submitted">
+        <label class="terms-check">
+          <input type="checkbox" formControlName="terms" />
+          <span class="terms-box" aria-hidden="true">
+            <ion-icon name="checkmark-outline"></ion-icon>
+          </span>
+          <span class="terms-text">
+            I agree to the
+            <button type="button" class="terms-link" (click)="openLegal('terms')">
+              Terms of Service
+            </button>
+            and
+            <button type="button" class="terms-link" (click)="openLegal('privacy')">
+              Privacy Policy
+            </button>
+          </span>
+        </label>
+
+        @if (terms?.invalid && submitted) {
+          <p class="field-error" role="alert">
+            <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+            <span>Please accept the Terms and Privacy Policy to continue</span>
+          </p>
+        }
+      </div>
+
+      <ion-button
+        expand="block"
+        type="submit"
+        class="submit-button"
+        [disabled]="isLoading"
+      >
+        @if (isLoading) {
+          <ion-spinner name="crescent" aria-hidden="true"></ion-spinner>
+          <span>Creating account...</span>
+        } @else {
+          <span>Create account</span>
+          <ion-icon name="arrow-forward-outline" slot="end" aria-hidden="true"></ion-icon>
+        }
+      </ion-button>
+
+      <p class="modal-note">
+        Your username and password let you sign in even if you lose access to Google.
+      </p>
+    </form>
+  </div>
+</ion-content>

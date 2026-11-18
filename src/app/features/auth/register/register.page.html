@@ -205,6 +205,44 @@
             }
           </div>
 
+          <!-- Terms & Privacy -->
+          <div
+            class="terms-row"
+            [class.terms-invalid]="terms?.invalid && submitted"
+          >
+            <label class="terms-check">
+              <input type="checkbox" formControlName="terms" />
+              <span class="terms-box" aria-hidden="true">
+                <ion-icon name="checkmark-outline"></ion-icon>
+              </span>
+              <span class="terms-text">
+                I agree to the
+                <button
+                  type="button"
+                  class="terms-link"
+                  (click)="openLegal('terms')"
+                >
+                  Terms of Service
+                </button>
+                and
+                <button
+                  type="button"
+                  class="terms-link"
+                  (click)="openLegal('privacy')"
+                >
+                  Privacy Policy
+                </button>
+              </span>
+            </label>
+
+            @if (terms?.invalid && submitted) {
+              <p class="field-error" role="alert">
+                <ion-icon name="alert-circle-outline" aria-hidden="true"></ion-icon>
+                <span>Please accept the Terms and Privacy Policy to continue</span>
+              </p>
+            }
+          </div>
+
           <ion-button
             expand="block"
             type="submit"

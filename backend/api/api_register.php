@@ -9,6 +9,7 @@
 
 require_once __DIR__ . "/../config/database.php";
 require_once __DIR__ . "/../config/cors.php";
+require_once __DIR__ . "/../lib/mailer.php";
 
 
 
@@ -31,11 +32,22 @@ if (!$input || !isset($input["username"]) || !isset($input["password"])) {
 $username = trim($input["username"]);
 $password = $input["password"];
 $email = isset($input["email"]) ? trim((string) $input["email"]) : "";
+$termsAccepted = isset($input["terms_accepted"]) && $input["terms_accepted"] === true;
 
 // Validation
 if (empty($username) || empty($password)) {
     http_response_code(400);
     echo json_encode(["success" => false, "message" => "Username and password cannot be empty"]);
+    exit();
+}
+
+// Consent is required on the server too, not just in the form.
+if (!$termsAccepted) {
+    http_response_code(400);
+    echo json_encode([
+        "success" => false,
+        "message" => "You must accept the Terms of Service and Privacy Policy to create an account",
+    ]);
     exit();
 }
 
@@ -45,7 +57,13 @@ if (strlen($username) < 3) {
     exit();
 }
 
-if ($email !== "" && (strlen($email) > 255 || !filter_var($email, FILTER_VALIDATE_EMAIL))) {
+if ($email === "") {
+    http_response_code(400);
+    echo json_encode(["success" => false, "message" => "Email is required"]);
+    exit();
+}
+
+if (strlen($email) > 255 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
     http_response_code(400);
     echo json_encode(["success" => false, "message" => "Enter a valid email address"]);
     exit();
@@ -78,26 +96,23 @@ try {
     }
 
     // Check if email already exists
-    if ($email !== "") {
-        $emailStmt = $db->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
-        $emailStmt->bindParam(":email", $email, PDO::PARAM_STR);
-        $emailStmt->execute();
+    $emailStmt = $db->prepare("SELECT id FROM users WHERE email = :email LIMIT 1");
+    $emailStmt->bindParam(":email", $email, PDO::PARAM_STR);
+    $emailStmt->execute();
 
-        if ($emailStmt->fetch()) {
-            http_response_code(409);
-            echo json_encode(["success" => false, "message" => "Email is already registered"]);
-            exit();
-        }
+    if ($emailStmt->fetch()) {
+        http_response_code(409);
+        echo json_encode(["success" => false, "message" => "Email is already registered"]);
+        exit();
     }
 
     // Hash password
     $passwordHash = password_hash($password, PASSWORD_ARGON2ID);
 
     // Insert new user
-    $emailValue = $email === "" ? null : $email;
-    $insertStmt = $db->prepare("INSERT INTO users (username, email, password_hash, active_status) VALUES (:username, :email, :password_hash, 1)");
+    $insertStmt = $db->prepare("INSERT INTO users (username, email, password_hash, active_status, terms_accepted_at) VALUES (:username, :email, :password_hash, 1, NOW())");
     $insertStmt->bindParam(":username", $username, PDO::PARAM_STR);
-    $insertStmt->bindValue(":email", $emailValue, $emailValue === null ? PDO::PARAM_NULL : PDO::PARAM_STR);
+    $insertStmt->bindParam(":email", $email, PDO::PARAM_STR);
     $insertStmt->bindParam(":password_hash", $passwordHash, PDO::PARAM_STR);
     $insertStmt->execute();
     
@@ -109,21 +124,38 @@ try {
     $updateStmt->bindParam(":auth_token", $authToken, PDO::PARAM_STR);
     $updateStmt->bindParam(":id", $userId, PDO::PARAM_INT);
     $updateStmt->execute();
-    
+
+    // The account exists at this point; a mail failure must never undo it.
+    $emailSent = false;
+    try {
+        $emailSent = konekSendWelcomeEmail($email, $username);
+    } catch (Throwable $e) {
+        error_log("Welcome email error: " . $e->getMessage());
+    }
+
+    // Read the timestamp back so registration matches login/profile responses
+    // even when PHP and MySQL use different time zones.
+    $createdStmt = $db->prepare("SELECT created_at FROM users WHERE id = :id LIMIT 1");
+    $createdStmt->bindParam(":id", $userId, PDO::PARAM_INT);
+    $createdStmt->execute();
+    $createdAt = $createdStmt->fetchColumn() ?: date("Y-m-d H:i:s");
+
     // Return success response
     http_response_code(201);
     echo json_encode([
         "success" => true,
         "message" => "Registration successful",
+        "email_sent" => $emailSent,
         "data" => [
             "id" => (int)$userId,
             "username" => $username,
-            "email" => $email === "" ? null : $email,
+            "email" => $email,
             "contact_number" => null,
             "profile_picture" => null,
             "auth_token" => $authToken,
             "active_status" => 1,
-            "created_at" => date("Y-m-d H:i:s"),
+            "password_set" => 1,
+            "created_at" => $createdAt,
             "squads" => []
         ]
     ]);

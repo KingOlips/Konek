@@ -9,5 +9,5 @@ export const environment = {
   apiUrl: "https://yuji.tail58cd54.ts.net/konek/backend/api",
   // Google OAuth Client ID (configure in Google Cloud Console)
   // For development, add your Web Client ID from Google Cloud Console
-  googleClientId: "YOUR_GOOGLE_CLIENT_ID",
+  googleClientId: "874151616337-65odpjfqpr4d6okpct0clmgsfrm4ktvg.apps.googleusercontent.com",
 };

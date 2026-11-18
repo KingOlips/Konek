@@ -25,7 +25,7 @@ const KonekBackgroundTracker =
 /**
  * Android-only bridge to the native foreground location service.
  *
- * The service keeps uploading location + battery to the PHP API while the app
+ * The service keeps uploading location to the PHP API while the app
  * is backgrounded or swiped away, and shows the ongoing
  * "Updating your location" notification Android requires.
  *

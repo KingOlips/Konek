@@ -1,4 +1,4 @@
-import {
+﻿import {
   ChangeDetectorRef,
   Component,
   ElementRef,
@@ -25,6 +25,7 @@ import {
   IonSpinner,
   IonTitle,
   IonToolbar,
+  ModalController,
   ToastController,
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
@@ -66,6 +67,7 @@ export class ProfilePage implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly toastCtrl = inject(ToastController);
+  private readonly modalCtrl = inject(ModalController);
   private readonly cdr = inject(ChangeDetectorRef);
 
   @ViewChild("pictureInput") pictureInput?: ElementRef<HTMLInputElement>;
@@ -76,7 +78,7 @@ export class ProfilePage implements OnInit, OnDestroy {
   isSaving = false;
   isUploadingPicture = false;
 
-  /** File picked from the device, waiting for the user to confirm the upload. */
+  /** Cropped file ready for upload (set after crop modal confirms). */
   pendingPicture: File | null = null;
   /** Local (object URL) preview of the pending picture. */
   previewUrl: string | null = null;
@@ -112,7 +114,6 @@ export class ProfilePage implements OnInit, OnDestroy {
     this.fillForm(this.currentUser);
     this.cdr.markForCheck();
 
-    // Refresh from the server so the page always shows the latest values.
     try {
       const response = await firstValueFrom(this.authService.getProfile());
       if (response.success) {
@@ -132,7 +133,6 @@ export class ProfilePage implements OnInit, OnDestroy {
     this.revokePreview();
   }
 
-  /** Up to two initials shown when there is no profile picture. */
   get initials(): string {
     const name = (this.currentUser?.username ?? "").trim();
     if (!name) return "?";
@@ -140,7 +140,6 @@ export class ProfilePage implements OnInit, OnDestroy {
     return (parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2)).toUpperCase();
   }
 
-  /** Pending local preview if one exists, otherwise the saved picture. */
   get avatarImageUrl(): string | null {
     return this.previewUrl ?? this.authService.pictureUrl(this.currentUser?.profile_picture);
   }
@@ -157,7 +156,6 @@ export class ProfilePage implements OnInit, OnDestroy {
     return this.profileForm.get("contact_number");
   }
 
-  /** Open the device's file picker (PC, laptop, tablet, or phone). */
   openPicturePicker(): void {
     this.pictureInput?.nativeElement.click();
   }
@@ -165,7 +163,6 @@ export class ProfilePage implements OnInit, OnDestroy {
   onPictureSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0] ?? null;
-    // Reset so picking the same file again still fires a change event.
     input.value = "";
     if (!file) return;
 
@@ -175,10 +172,33 @@ export class ProfilePage implements OnInit, OnDestroy {
       return;
     }
 
-    this.revokePreview();
-    this.pendingPicture = file;
-    this.previewUrl = URL.createObjectURL(file);
-    this.cdr.markForCheck();
+    this.openCropModal(file);
+  }
+
+  private async openCropModal(file: File): Promise<void> {
+    const { PictureCropModalComponent } = await import("./picture-crop.modal");
+    const modal = await this.modalCtrl.create({
+      component: PictureCropModalComponent,
+      componentProps: {
+        sourceFile: file,
+        aspectRatio: 1,
+        outputFormat: "jpeg",
+        outputQuality: 0.9,
+        maxDimension: 1024,
+      },
+      cssClass: "picture-crop-modal",
+      backdropDismiss: false,
+    });
+
+    await modal.present();
+    const { data, role } = await modal.onWillDismiss<{ file: File }>();
+
+    if (role === "confirm" && data?.file) {
+      this.revokePreview();
+      this.pendingPicture = data.file;
+      this.previewUrl = URL.createObjectURL(data.file);
+      this.cdr.markForCheck();
+    }
   }
 
   async savePicture(): Promise<void> {
@@ -249,7 +269,6 @@ export class ProfilePage implements OnInit, OnDestroy {
     }
   }
 
-  /** Client-side guard; the server re-validates the actual file bytes. */
   private static validatePicture(file: File): string | null {
     const type = (file.type || "").toLowerCase();
     const extensionOk = ALLOWED_PICTURE_EXTENSIONS.test(file.name);
@@ -295,3 +314,4 @@ export class ProfilePage implements OnInit, OnDestroy {
     await toast.present();
   }
 }
+

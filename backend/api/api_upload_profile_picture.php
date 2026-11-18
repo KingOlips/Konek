@@ -153,7 +153,7 @@ try {
     }
 
     $fetch = $db->prepare("
-        SELECT id, username, email, contact_number, profile_picture, active_status, created_at
+        SELECT id, username, email, contact_number, profile_picture, active_status, password_set, created_at
         FROM users
         WHERE id = :id
         LIMIT 1
@@ -173,6 +173,7 @@ try {
             "contact_number" => $user["contact_number"],
             "profile_picture" => $user["profile_picture"],
             "active_status" => (int) $user["active_status"],
+            "password_set" => (int) $user["password_set"],
             "created_at" => $user["created_at"],
             "auth_token" => $authToken,
         ],
