@@ -75,7 +75,10 @@ export class ProfilePage implements OnInit, OnDestroy {
   @ViewChild("pictureInput") pictureInput?: ElementRef<HTMLInputElement>;
 
   readonly profileForm: FormGroup;
-  currentUser: User | null = null;
+  /** Always read from the auth service so it reflects login/logout immediately. */
+  get currentUser(): User | null {
+    return this.authService.getCurrentUser();
+  }
   submitted = false;
   isSaving = false;
   isUploadingPicture = false;
@@ -116,16 +119,16 @@ export class ProfilePage implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    this.currentUser = this.authService.getCurrentUser();
-    this.fillForm(this.currentUser);
+    const user = this.authService.getCurrentUser();
+    this.fillForm(user);
     this.cdr.markForCheck();
 
     try {
       const response = await firstValueFrom(this.authService.getProfile());
       if (response.success) {
-        this.currentUser = this.authService.getCurrentUser();
+        const refreshedUser = this.authService.getCurrentUser();
         if (!this.profileForm.dirty) {
-          this.fillForm(this.currentUser);
+          this.fillForm(refreshedUser);
         }
       }
     } catch (error) {
@@ -257,7 +260,6 @@ export class ProfilePage implements OnInit, OnDestroy {
         return;
       }
       this.clearPendingPicture();
-      this.currentUser = this.authService.getCurrentUser();
       await this.showToast("Profile picture updated");
     } catch (error: any) {
       await this.showToast(error?.error?.message ?? "Failed to upload picture");
@@ -298,7 +300,6 @@ export class ProfilePage implements OnInit, OnDestroy {
         return;
       }
 
-      this.currentUser = this.authService.getCurrentUser();
       this.profileForm.markAsPristine();
       this.submitted = false;
       await this.showToast("Profile updated successfully");

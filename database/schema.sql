@@ -42,6 +42,7 @@ CREATE TABLE `squad_members` (
     `user_id` INT UNSIGNED NOT NULL,
     `joined_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `role` ENUM('member', 'admin') NOT NULL DEFAULT 'member',
+    `relationship` ENUM('dad', 'mom', 'son', 'daughter', 'child', 'grandparent', 'partner', 'friend', 'other') NULL DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_squad_user` (`squad_id`, `user_id`),
     FOREIGN KEY (`squad_id`) REFERENCES `squads`(`id`) ON DELETE CASCADE,

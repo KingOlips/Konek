@@ -2,6 +2,8 @@
  * Shared location/squad models for the Konek app.
  */
 
+import type { MemberRelationship } from "./squad.models";
+
 export interface ApiEnvelope<T> {
   success: boolean;
   message?: string;
@@ -36,6 +38,8 @@ export interface SquadMemberLocation {
   heading?: number | null;
   timestamp: string;
   role: "member" | "admin";
+  /** Optional family/friend label, separate from the permission role. */
+  relationship?: MemberRelationship | null;
   squad_id: number;
   squad_name: string;
 }

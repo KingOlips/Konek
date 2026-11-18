@@ -6,6 +6,7 @@ import { ApiEnvelope, Geofence, SquadMemberLocation } from "../models/location.m
 import {
   CreateSquadRequest,
   JoinSquadRequest,
+  MemberRelationship,
   Squad,
   SquadMember,
 } from "../models/squad.models";
@@ -57,6 +58,23 @@ export class SquadService {
       user_id: userId,
       role,
     });
+  }
+
+  /** Set or clear a member's family/friend label inside a circle. */
+  updateMemberRelationship(
+    squadId: number,
+    userId: number,
+    relationship: MemberRelationship | null
+  ): Observable<MemberRelationship | null> {
+    return this.request<MemberRelationship | null>(
+      "PUT",
+      "api_update_member_relationship.php",
+      {
+        squad_id: squadId,
+        user_id: userId,
+        relationship,
+      }
+    );
   }
 
   removeMember(squadId: number, userId: number): Observable<void> {

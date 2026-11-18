@@ -282,6 +282,12 @@
                     ></ion-icon>
                   }
                 </span>
+                @if (member.relationship) {
+                  <span class="member-relationship">
+                    <ion-icon [name]="relationshipIcon(member.relationship)" class="rel-icon"></ion-icon>
+                    {{ relationshipLabel(member.relationship) }}
+                  </span>
+                }
                 <span class="member-sub is-online">{{ memberSubLabel(member) }}</span>
               </span>
               <span class="member-end">
@@ -321,6 +327,12 @@
                     ></ion-icon>
                   }
                 </span>
+                @if (member.relationship) {
+                  <span class="member-relationship">
+                    <ion-icon [name]="relationshipIcon(member.relationship)" class="rel-icon"></ion-icon>
+                    {{ relationshipLabel(member.relationship) }}
+                  </span>
+                }
                 <span class="member-sub">{{ memberSubLabel(member) }}</span>
               </span>
               <span class="member-end"></span>
@@ -401,6 +413,13 @@
               @if (!selectedIsSelf) {
                 <span class="role-badge" [class.is-admin]="detailIsAdmin">
                   {{ detailRoleLabel }}
+                </span>
+              }
+              @if (!selectedIsSelf && selectedMemberRelationship) {
+                <span class="relationship-badge" (click)="openRelationshipEditor($event)">
+                  <ion-icon [name]="relationshipIcon(selectedMemberRelationship)" slot="start"></ion-icon>
+                  {{ relationshipLabel(selectedMemberRelationship) }}
+                  <ion-icon name="pencil-outline" slot="end" class="edit-icon"></ion-icon>
                 </span>
               }
               <span class="status" [class.online]="detailStatusOnline">

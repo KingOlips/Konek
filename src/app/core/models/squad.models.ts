@@ -2,6 +2,18 @@
  * Squad-related models shared by the squad service and UI.
  */
 
+/** Family/friend label a member can carry inside a circle. */
+export type MemberRelationship =
+  | "dad"
+  | "mom"
+  | "son"
+  | "daughter"
+  | "child"
+  | "grandparent"
+  | "partner"
+  | "friend"
+  | "other";
+
 export interface Squad {
   id: number;
   squad_name: string;
@@ -18,6 +30,8 @@ export interface SquadMember {
   user_id: number;
   username: string;
   role: "member" | "admin";
+  /** Optional family/friend label, separate from the permission role. */
+  relationship?: MemberRelationship | null;
   joined_at: string;
 }
 

@@ -87,6 +87,7 @@ try {
             u.username,
             u.profile_picture,
             sm.role,
+            sm.relationship,
             sm.joined_at,
             l.latitude,
             l.longitude,
@@ -117,6 +118,7 @@ try {
             "username" => $m["username"],
             "profile_picture" => $m["profile_picture"],
             "role" => $m["role"],
+            "relationship" => $m["relationship"],
             "joined_at" => $m["joined_at"],
             "last_location" => $m["latitude"] !== null ? [
                 "latitude" => (float)$m["latitude"],

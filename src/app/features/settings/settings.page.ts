@@ -71,7 +71,10 @@ export class SettingsPage implements OnInit {
   private readonly modalCtrl = inject(ModalController);
   private readonly cdr = inject(ChangeDetectorRef);
 
-  currentUser: User | null = null;
+  /** Always read from the auth service so it reflects login/logout immediately. */
+  get currentUser(): User | null {
+    return this.authService.getCurrentUser();
+  }
   biometricAvailable = false;
   biometricEnabled = false;
   darkMode = false;
@@ -114,7 +117,6 @@ export class SettingsPage implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    this.currentUser = this.authService.getCurrentUser();
     this.biometricAvailable = await this.biometricService.isAvailable();
     this.biometricEnabled = await this.biometricService.isEnabled();
     this.historyCount = (await this.locationService.getHistory()).length;
@@ -347,7 +349,6 @@ export class SettingsPage implements OnInit {
     this.authService.getProfile().subscribe({
       next: (response) => {
         if (response.success && response.data) {
-          this.currentUser = this.authService.getCurrentUser();
           this.cdr.markForCheck();
         }
       },

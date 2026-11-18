@@ -101,6 +101,7 @@ try {
             $batterySelect
             l.timestamp,
             sm.role,
+            sm.relationship,
             s.id as squad_id,
             s.squad_name
         FROM squad_members sm
@@ -150,6 +151,7 @@ try {
             "is_charging" => isset($loc["is_charging"]) && $loc["is_charging"] !== null ? (bool)$loc["is_charging"] : null,
             "timestamp" => $loc["timestamp"],
             "role" => $loc["role"],
+            "relationship" => $loc["relationship"],
             "squad_id" => (int)$loc["squad_id"],
             "squad_name" => $loc["squad_name"],
         ];

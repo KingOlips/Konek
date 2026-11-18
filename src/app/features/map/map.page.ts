@@ -10,7 +10,7 @@ import {
 } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { RouterLink } from "@angular/router";
-import { firstValueFrom } from "rxjs";
+import { Subscription, firstValueFrom } from "rxjs";
 import {
   ActionSheetController,
   AlertController,
@@ -32,6 +32,7 @@ import {
 } from "@ionic/angular";
 import { addIcons } from "ionicons";
 import {
+  addOutline,
   alertCircleOutline,
   arrowBackOutline,
   chatbubbleEllipsesOutline,
@@ -44,6 +45,7 @@ import {
   locateOutline,
   logOutOutline,
   navigateOutline,
+  pencilOutline,
   peopleOutline,
   personAddOutline,
   personCircleOutline,
@@ -58,7 +60,6 @@ import * as maplibregl from "maplibre-gl";
 import type {
   AttributionControl,
   GeoJSONSource,
-  IControl,
   Map as MapLibreMap,
   MapMouseEvent,
   Marker,
@@ -77,7 +78,8 @@ import { PingService } from "../../core/services/ping.service";
 import { SquadService } from "../../core/services/squad.service";
 import { Geofence, SquadMemberLocation } from "../../core/models/location.models";
 import { IncomingPing, PingType } from "../../core/models/ping.models";
-import { Squad } from "../../core/models/squad.models";
+import { MemberRelationship, Squad } from "../../core/models/squad.models";
+import { RelationshipPopoverComponent } from "./relationship-popover/relationship-popover.component";
 import {
   SquadMenuPopoverComponent,
   SquadMenuResult,
@@ -208,6 +210,7 @@ function registerEsriTileProtocol(): void {
     IonFabButton,
     IonBadge,
     IonSpinner,
+    RelationshipPopoverComponent,
   ],
 })
 export class MapPage implements OnInit, AfterViewInit, OnDestroy {
@@ -273,8 +276,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private headingDeg = 0;
   private resizeObserver: ResizeObserver | null = null;
   private zoomControl: NavigationControl | null = null;
-  private pitchControl: IControl | null = null;
-  private pitchButton: HTMLButtonElement | null = null;
   private attributionControl: AttributionControl | null = null;
   private sizeTimers: ReturnType<typeof setTimeout>[] = [];
   private lastUploadAt = 0;
@@ -304,6 +305,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   /** In-flight squad list fetch shared by every caller. */
   private squadsLoadPromise: Promise<void> | null = null;
   private selectedMember: SquadMemberLocation | null = null;
+  /** Relationship label for the currently selected member (used by the edit popover). */
+  selectedMemberRelationship: MemberRelationship | null = null;
 
   /** localStorage entry remembering which squad the user was viewing. */
   private static readonly ACTIVE_SQUAD_KEY = "konek_active_squad";
@@ -385,7 +388,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     coffee: "☕",
   };
 
-  currentUser: User | null = null;
+  /** Always read from the auth service so it reflects login/logout immediately. */
+  get currentUser(): User | null {
+    return this.authService.getCurrentUser();
+  }
   squadMembers: SquadMemberLocation[] = [];
   squads: Squad[] = [];
   isTracking = false;
@@ -439,7 +445,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    this.currentUser = this.authService.getCurrentUser();
     // Restore the last viewed squad before the first render so the toolbar
     // chip shows its name immediately instead of a placeholder.
     this.restoreActiveSquad();
@@ -699,7 +704,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     // Zoom/compass buttons work on touch too, so phones keep them.
     this.syncZoomControl();
-    this.addPitchControl();
     this.addAttributionControl();
   }
 
@@ -745,65 +749,12 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
     const control = new maplibregl.NavigationControl({
       showCompass: true,
-      showZoom: true,
-      visualizePitch: true,
+      showZoom: false,
+      visualizePitch: false,
     });
     this.zoomControl = control;
     this.map.addControl(control, "top-left");
   }
-
-  /**
-   * One-tap 2D/3D toggle, stacked under the zoom/compass control. MapLibre's
-   * NavigationControl can reset the pitch (compass tap) but cannot enter 3D,
-   * so this gives phones an explicit way to tilt the map.
-   */
-  private addPitchControl(): void {
-    if (!this.map || this.pitchControl) return;
-
-    const control: IControl = {
-      onAdd: () => {
-        const group = document.createElement("div");
-        group.className = "maplibregl-ctrl maplibregl-ctrl-group konek-pitch-ctrl";
-
-        const button = document.createElement("button");
-        button.type = "button";
-        button.title = "Toggle 2D / 3D";
-        button.setAttribute("aria-label", "Toggle 2D / 3D view");
-        button.innerHTML = `
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none"
-               stroke="currentColor" stroke-width="2" stroke-linecap="round"
-               stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z" />
-            <path d="m4 7.5 8 4.5 8-4.5" />
-            <path d="M12 12v9" />
-          </svg>`;
-        button.addEventListener("click", () => this.toggle3D());
-        group.appendChild(button);
-
-        this.pitchButton = button;
-        return group;
-      },
-      onRemove: () => {
-        this.pitchButton = null;
-      },
-    };
-
-    this.pitchControl = control;
-    this.map.addControl(control, "top-left");
-    this.map.on("pitchend", this.syncPitchButton);
-    this.syncPitchButton();
-  }
-
-  private toggle3D(): void {
-    if (!this.map) return;
-    const nextPitch = this.map.getPitch() > 5 ? 0 : 55;
-    this.map.easeTo({ pitch: nextPitch, duration: 500 });
-  }
-
-  private readonly syncPitchButton = (): void => {
-    const pitched = (this.map?.getPitch() ?? 0) > 5;
-    this.pitchButton?.classList.toggle("is-3d", pitched);
-  };
 
   private addAttributionControl(): void {
     if (!this.map) return;
@@ -1965,6 +1916,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.rememberSquadPanelState();
     this.selectedMember = member;
+    this.selectedMemberRelationship = member.relationship ?? null;
     this.selectedIsSelf = false;
     this.detailSheetOpen = true;
     this.memberSheetSnap = "half";
@@ -1991,6 +1943,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   closeDetailSheet(): void {
     this.detailSheetOpen = false;
     this.selectedMember = null;
+    this.selectedMemberRelationship = null;
     this.selectedIsSelf = false;
     this.memberSheetSnap = "peek";
     this.memberPanel?.nativeElement.style.removeProperty("transform");
@@ -2007,6 +1960,99 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     // Bring the squad sheet back out of hiding (mobile) and re-sync the FABs.
     this.applySheetSnap();
     this.cdr.markForCheck();
+  }
+
+  /** Open a popover to edit the selected member's relationship label. */
+  async openRelationshipEditor(event: Event): Promise<void> {
+    if (!this.selectedMember || this.selectedIsSelf) return;
+    event.stopPropagation();
+
+    const popover = await this.popoverCtrl.create({
+      component: RelationshipPopoverComponent,
+      componentProps: {
+        currentRelationship: this.selectedMemberRelationship,
+        memberName: this.selectedMember.username,
+        isAdmin: this.detailIsAdmin,
+        currentUserId: this.currentUser?.id,
+        targetUserId: this.selectedMember.user_id,
+      },
+      event,
+      side: "bottom",
+      alignment: "center",
+      size: "auto",
+    });
+    await popover.present();
+    const { data } = await popover.onWillDismiss<MemberRelationship | null>();
+    if (data !== undefined) {
+      // User confirmed a selection (including null to clear)
+      await this.updateSelectedMemberRelationship(data);
+    }
+  }
+
+  /** Send the relationship change to the backend and update local state. */
+  private async updateSelectedMemberRelationship(
+    relationship: MemberRelationship | null
+  ): Promise<void> {
+    if (!this.selectedMember || !this.activeSquadId) return;
+    try {
+      const result = await firstValueFrom(
+        this.squadService.updateMemberRelationship(
+          this.activeSquadId,
+          this.selectedMember.user_id,
+          relationship
+        )
+      );
+      if (result !== undefined) {
+        this.selectedMemberRelationship = result;
+        // Also update the cached squadMembers array so the panel reflects it.
+        const idx = this.squadMembers.findIndex(
+          (m) => m.user_id === this.selectedMember!.user_id
+        );
+        if (idx !== -1) {
+          this.squadMembers[idx].relationship = result;
+        }
+        this.cdr.markForCheck();
+        void this.showUpdateToast(
+          result === null ? "Relationship cleared" : `Relationship set to ${this.relationshipLabel(result)}`
+        );
+      }
+    } catch (error) {
+      console.error("Failed to update relationship:", error);
+      void this.showUpdateToast("Failed to update relationship", "alert-circle-outline");
+    }
+  }
+
+  /** Human-readable label for a relationship value. */
+  relationshipLabel(rel: MemberRelationship | null): string {
+    if (!rel) return "None";
+    const labels: Record<MemberRelationship, string> = {
+      dad: "Dad",
+      mom: "Mom",
+      son: "Son",
+      daughter: "Daughter",
+      child: "Child",
+      grandparent: "Grandparent",
+      partner: "Partner / Spouse",
+      friend: "Friend",
+      other: "Other",
+    };
+    return labels[rel] ?? rel;
+  }
+
+  /** Ionicons name for a relationship value. */
+  relationshipIcon(rel: MemberRelationship): string {
+    const icons: Record<MemberRelationship, string> = {
+      dad: "male-outline",
+      mom: "female-outline",
+      son: "person-outline",
+      daughter: "person-outline",
+      child: "person-outline",
+      grandparent: "person-circle-outline",
+      partner: "heart-outline",
+      friend: "person-add-outline",
+      other: "walk-outline",
+    };
+    return icons[rel] ?? "person-outline";
   }
 
   /** Refresh the selected friend's position (or the user's own fix). */
@@ -3151,7 +3197,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.map.off("load", this.onMapLoad);
       this.map.off("click", this.onMapClick);
       this.map.off("error", this.onMapError);
-      this.map.off("pitchend", this.syncPitchButton);
       this.squadMarkers.forEach((marker) => marker.remove());
       this.userMarker?.remove();
       this.geofencePopup?.remove();
@@ -3159,8 +3204,6 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.map = null;
     }
     this.zoomControl = null;
-    this.pitchControl = null;
-    this.pitchButton = null;
     this.attributionControl = null;
     this.squadMarkers.clear();
     this.squadMarkerEls.clear();
