@@ -15,6 +15,7 @@ import {
 } from "@angular/forms";
 import { firstValueFrom } from "rxjs";
 import {
+  AlertController,
   IonBackButton,
   IonButton,
   IonButtons,
@@ -68,6 +69,7 @@ export class ProfilePage implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly toastCtrl = inject(ToastController);
   private readonly modalCtrl = inject(ModalController);
+  private readonly alertCtrl = inject(AlertController);
   private readonly cdr = inject(ChangeDetectorRef);
 
   @ViewChild("pictureInput") pictureInput?: ElementRef<HTMLInputElement>;
@@ -82,6 +84,10 @@ export class ProfilePage implements OnInit, OnDestroy {
   pendingPicture: File | null = null;
   /** Local (object URL) preview of the pending picture. */
   previewUrl: string | null = null;
+
+  /** Set by the crop modal so closing it mid-edit asks before discarding. */
+  private cropDirty = false;
+  private discardPromptOpen = false;
 
   constructor() {
     addIcons({
@@ -177,6 +183,8 @@ export class ProfilePage implements OnInit, OnDestroy {
 
   private async openCropModal(file: File): Promise<void> {
     const { PictureCropModalComponent } = await import("./picture-crop.modal");
+    this.cropDirty = false;
+
     const modal = await this.modalCtrl.create({
       component: PictureCropModalComponent,
       componentProps: {
@@ -185,19 +193,52 @@ export class ProfilePage implements OnInit, OnDestroy {
         outputFormat: "jpeg",
         outputQuality: 0.9,
         maxDimension: 1024,
+        // The editor reports adjustments so we can guard accidental closes.
+        onDirtyChange: (dirty: boolean) => {
+          this.cropDirty = dirty;
+        },
       },
       cssClass: "picture-crop-modal",
-      backdropDismiss: false,
+      backdropDismiss: true,
+      canDismiss: (_data: unknown, role?: string) => this.canLeaveCrop(role),
     });
 
     await modal.present();
     const { data, role } = await modal.onWillDismiss<{ file: File }>();
+    this.cropDirty = false;
 
     if (role === "confirm" && data?.file) {
       this.revokePreview();
       this.pendingPicture = data.file;
       this.previewUrl = URL.createObjectURL(data.file);
       this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Guard every way out of the editor (close, backdrop tap, hardware back,
+   * Escape) so adjusted photos are not thrown away by accident.
+   */
+  private async canLeaveCrop(role?: string): Promise<boolean> {
+    if (role === "confirm" || !this.cropDirty) return true;
+    if (this.discardPromptOpen) return false;
+
+    this.discardPromptOpen = true;
+    try {
+      const alert = await this.alertCtrl.create({
+        header: "Discard this photo?",
+        message: "Your crop, zoom, and rotation changes will be lost.",
+        buttons: [
+          { text: "Keep editing", role: "cancel" },
+          { text: "Discard", role: "destructive" },
+        ],
+        cssClass: "crop-discard-alert",
+      });
+      await alert.present();
+      const { role: choice } = await alert.onDidDismiss();
+      return choice === "destructive";
+    } finally {
+      this.discardPromptOpen = false;
     }
   }
 
