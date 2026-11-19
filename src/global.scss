@@ -97,20 +97,7 @@
   border-top: 1px solid rgba(15, 23, 42, 0.06) !important;
 }
 
-/* Custom one-tap 2D/3D button that stacks under the zoom/compass control. */
-.konek-pitch-ctrl button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: #1f2937;
-}
-
-.konek-pitch-ctrl button.is-3d {
-  color: #2f6fe0;
-  background: #eef4ff;
-}
-
+/* Keep the compass/zoom control hover state in line with the app. */
 .maplibregl-ctrl-group button:hover {
   background: #f4f7fb;
 }
@@ -125,11 +112,11 @@
   color: #2f6fe0;
 }
 
-/* On phones the squad sheet docks at the bottom, so keep the compact
+/* On phones the circle sheet docks at the bottom, so keep the compact
  * attribution just above its peek edge instead of behind it. */
 @media (max-width: 767px) {
   .map-content .maplibregl-ctrl-bottom-left {
-    bottom: calc(var(--squad-peek-height, 82px) + 6px);
+    bottom: calc(var(--circle-peek-height, 82px) + 6px);
   }
 }
 
@@ -211,14 +198,14 @@
   pointer-events: none;
 }
 
-/* Squad member markers */
-.squad-marker {
+/* Circle member markers */
+.circle-marker {
   position: absolute;
   width: 38px;
   height: 38px;
 }
 
-.squad-marker .marker-ring {
+.circle-marker .marker-ring {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -232,7 +219,7 @@
   z-index: -1;
 }
 
-.squad-marker .marker-core {
+.circle-marker .marker-core {
   inset: 0;
   border: 2px solid #3880ff;
   background: #fff;
@@ -245,7 +232,7 @@
 }
 
 /* Profile photo fills the marker circle when the member has one. */
-.squad-marker .marker-core .marker-photo,
+.circle-marker .marker-core .marker-photo,
 .user-marker .marker-core .marker-photo {
   display: block;
   width: 100%;
@@ -254,12 +241,12 @@
   object-fit: cover;
 }
 
-.squad-marker.is-admin .marker-core {
+.circle-marker.is-admin .marker-core {
   border-color: #f0a020;
   color: #b97400;
 }
 
-.squad-marker.is-admin .marker-ring {
+.circle-marker.is-admin .marker-ring {
   border-color: rgba(240, 160, 32, 0.5);
   background: rgba(240, 160, 32, 0.12);
 }
@@ -282,7 +269,7 @@
  * right of a marker while the member is driving or moving. Stationary and
  * offline members get no badge, which keeps the map quiet.
  */
-.squad-marker .marker-movement {
+.circle-marker .marker-movement {
   --movement-bg: rgba(255, 255, 255, 0.97);
   position: absolute;
   top: 50%;
@@ -307,7 +294,7 @@
 }
 
 /* Small diamond tail pointing back at the marker. */
-.squad-marker .marker-movement::before {
+.circle-marker .marker-movement::before {
   content: "";
   position: absolute;
   top: 50%;
@@ -319,21 +306,21 @@
   transform: translateY(-50%) rotate(45deg);
 }
 
-.squad-marker .marker-movement-icon {
+.circle-marker .marker-movement-icon {
   flex: 0 0 auto;
   width: 13px;
   height: 13px;
 }
 
-.squad-marker .marker-movement.is-driving .marker-movement-icon {
+.circle-marker .marker-movement.is-driving .marker-movement-icon {
   color: #2563eb;
 }
 
-.squad-marker .marker-movement.is-moving .marker-movement-icon {
+.circle-marker .marker-movement.is-moving .marker-movement-icon {
   color: #16a34a;
 }
 
-.squad-marker .marker-movement-speed {
+.circle-marker .marker-movement-speed {
   color: #64748b;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -376,12 +363,12 @@
     background: #14161a;
   }
 
-  .squad-marker .marker-core {
+  .circle-marker .marker-core {
     background: #1e1e1e;
     color: #9cc4ff;
   }
 
-  .squad-marker.is-admin .marker-core {
+  .circle-marker.is-admin .marker-core {
     color: #ffc76b;
   }
 
@@ -389,21 +376,21 @@
     border-color: #1e1e1e;
   }
 
-  .squad-marker .marker-movement {
+  .circle-marker .marker-movement {
     --movement-bg: rgba(31, 41, 55, 0.97);
     color: #f4f5f7;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
   }
 
-  .squad-marker .marker-movement.is-driving .marker-movement-icon {
+  .circle-marker .marker-movement.is-driving .marker-movement-icon {
     color: #7cb0ff;
   }
 
-  .squad-marker .marker-movement.is-moving .marker-movement-icon {
+  .circle-marker .marker-movement.is-moving .marker-movement-icon {
     color: #6ee7a0;
   }
 
-  .squad-marker .marker-movement-speed {
+  .circle-marker .marker-movement-speed {
     color: #a1a1aa;
   }
 
@@ -419,15 +406,6 @@
 
   .maplibregl-ctrl-group button:hover {
     background: #ffffff;
-  }
-
-  .konek-pitch-ctrl button {
-    color: #e4e4e7;
-  }
-
-  .konek-pitch-ctrl button.is-3d {
-    color: #8db4ff;
-    background: #1e3a5f;
   }
 
   .maplibregl-ctrl-group button + button {
@@ -483,7 +461,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .marker-pulse,
-  .squad-marker .marker-ring {
+  .circle-marker .marker-ring {
     animation: none;
   }
 }
@@ -609,29 +587,65 @@ body.dark ion-modal.change-password-modal {
 }
 
 /* ---------------------------------------------------------------------------
+ * Sign-out confirmation popup (opened from Settings)
+ * ------------------------------------------------------------------------ */
+ion-modal.sign-out-modal {
+  --width: min(400px, 92vw);
+  --height: auto;
+  --max-height: min(88vh, 520px);
+  --border-radius: 22px;
+  --backdrop-opacity: 0.5;
+  --box-shadow: 0 24px 60px rgba(2, 6, 23, 0.3);
+}
+
+body.dark ion-modal.sign-out-modal {
+  --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------------------------------------------------------------------------
  * Circle management + role picker sheets (Settings → Circle management)
  * Bottom-anchored sheets: the component owns a sticky header and footer, so
  * the middle scrolls while the actions stay reachable.
  * ------------------------------------------------------------------------ */
 ion-modal.circle-manage-modal {
-  --width: min(560px, 100%);
-  --height: auto;
-  --max-height: 90vh;
-  --border-radius: 26px 26px 0 0;
+  --width: 100%;
+  --height: 100%;
+  --max-height: 100%;
+  --border-radius: 0;
   --backdrop-opacity: 0.45;
-  --box-shadow: 0 -20px 50px rgba(2, 6, 23, 0.3);
+  --box-shadow: none;
   --background: #ffffff;
 }
 
 ion-modal.circle-manage-modal::part(content) {
   position: absolute;
-  inset: auto 0 0;
-  margin-inline: auto;
+  inset: 0;
+  margin: 0;
 }
 
 body.dark ion-modal.circle-manage-modal {
   --background: #0f1622;
-  --box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.65);
+}
+
+/* Tablets and desktop: a large centred sheet instead of an edge-to-edge view. */
+@media (min-width: 768px) {
+  ion-modal.circle-manage-modal {
+    --width: min(720px, 94vw);
+    --height: min(90vh, 900px);
+    --max-height: 90vh;
+    --border-radius: 26px;
+    --box-shadow: 0 24px 60px rgba(2, 6, 23, 0.3);
+  }
+
+  ion-modal.circle-manage-modal::part(content) {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+  }
+
+  body.dark ion-modal.circle-manage-modal {
+    --box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+  }
 }
 
 ion-modal.member-role-modal {
@@ -663,9 +677,9 @@ body ion-modal.member-role-modal.show-modal.modal-default {
 }
 
 /* ---------------------------------------------------------------------------
- * Squad create/join sheets (opened from the chip dropdown)
+ * Circle create/join sheets (opened from the chip dropdown)
  * ------------------------------------------------------------------------ */
-ion-modal.squad-form-modal {
+ion-modal.circle-form-modal {
   --width: min(100%, 520px);
   --height: auto;
   --max-height: 92vh;
@@ -677,13 +691,13 @@ ion-modal.squad-form-modal {
 
 /* Ionic centers modals by default; anchor the sheet to the bottom edge and
  * keep it centred horizontally at its max width. */
-ion-modal.squad-form-modal::part(content) {
+ion-modal.circle-form-modal::part(content) {
   position: absolute;
   inset: auto 0 0;
   margin-inline: auto;
 }
 
-body.dark ion-modal.squad-form-modal {
+body.dark ion-modal.circle-form-modal {
   --background: #1f232b;
   --box-shadow: 0 -16px 44px rgba(0, 0, 0, 0.6);
 }
@@ -691,7 +705,7 @@ body.dark ion-modal.squad-form-modal {
 /* Phones: use the whole screen instead of a bottom sheet, so the form and
  * keyboard never fight for space. */
 @media (max-width: 767px) {
-  ion-modal.squad-form-modal {
+  ion-modal.circle-form-modal {
     --width: 100%;
     --height: 100%;
     --max-height: 100%;
@@ -699,7 +713,7 @@ body.dark ion-modal.squad-form-modal {
     --box-shadow: none;
   }
 
-  ion-modal.squad-form-modal::part(content) {
+  ion-modal.circle-form-modal::part(content) {
     position: absolute;
     inset: 0;
     margin: 0;
@@ -773,11 +787,11 @@ body.dark ion-toast.update-toast.ping-alert-toast::part(icon) {
 }
 
 /* ---------------------------------------------------------------------------
- * Squad chip dropdown (map toolbar)
+ * Circle chip dropdown (map toolbar)
  * The Angular component supplies the contents; these rules shape the IonPopover
  * shell so it drops straight out of the expanded chip with no modal styling.
  * ------------------------------------------------------------------------ */
-ion-popover.squad-menu-popover {
+ion-popover.circle-menu-popover {
   --background: #ffffff;
   --box-shadow: none;
   --backdrop-opacity: 0.2;
@@ -788,7 +802,7 @@ ion-popover.squad-menu-popover {
 /* Same border and surface as the chip: the two elements read as one card.
  * The top edge is borderless because the chip's bottom border is transparent,
  * and the shadow is pushed below so it never darkens the chip above. */
-ion-popover.squad-menu-popover::part(content) {
+ion-popover.circle-menu-popover::part(content) {
   box-sizing: border-box;
   overflow: hidden;
   border: 1px solid rgba(17, 24, 39, 0.1);
@@ -803,17 +817,17 @@ ion-popover.squad-menu-popover::part(content) {
 
 /* Chip-shaped hole in the backdrop, supplied by MapPage before presenting so
  * the chip never dims during the popover's fade-in. */
-ion-popover.squad-menu-popover::part(backdrop) {
-  clip-path: var(--squad-chip-hole, none);
+ion-popover.circle-menu-popover::part(backdrop) {
+  clip-path: var(--circle-chip-hole, none);
 }
 
-body.dark ion-popover.squad-menu-popover {
+body.dark ion-popover.circle-menu-popover {
   /* Match the chip surface exactly so the card looks continuous. */
   --background: #1f232b;
   --backdrop-opacity: 0.35;
 }
 
-body.dark ion-popover.squad-menu-popover::part(content) {
+body.dark ion-popover.circle-menu-popover::part(content) {
   border-color: rgba(255, 255, 255, 0.12);
   box-shadow: 0 18px 24px -12px rgba(0, 0, 0, 0.6);
 }

@@ -10,18 +10,18 @@ import {
 } from "ionicons/icons";
 
 /**
- * Custom bottom-sheet modal for joining an existing squad. The field is
+ * Custom bottom-sheet modal for joining an existing circle. The field is
  * auto-capitalized and grouped into four-character blocks while the dismissed
  * value stays a clean alphanumeric join code for the API.
  */
 @Component({
-  selector: "app-join-squad-modal",
+  selector: "app-join-circle-modal",
   standalone: true,
   imports: [FormsModule, IonButton, IonIcon, IonInput],
-  templateUrl: "./join-squad-modal.component.html",
-  styleUrls: ["../squad-form-modal.shared.scss"],
+  templateUrl: "./join-circle-modal.component.html",
+  styleUrls: ["../circle-form-modal.shared.scss"],
 })
-export class JoinSquadModalComponent implements AfterViewInit {
+export class JoinCircleModalComponent implements AfterViewInit {
   private readonly modalCtrl = inject(ModalController);
 
   @ViewChild("codeInput") private codeInput?: IonInput;

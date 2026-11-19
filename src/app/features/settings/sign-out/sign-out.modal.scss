@@ -1,0 +1,134 @@
+:host {
+  --modal-surface: #ffffff;
+  --modal-ink: #0f172a;
+  --modal-muted: #64748b;
+  --modal-line: #e2e8f0;
+  --modal-danger: #dc2626;
+  --modal-danger-deep: #b91c1c;
+  display: block;
+}
+
+:host-context(.dark) {
+  --modal-surface: #0d1424;
+  --modal-ink: #f1f5f9;
+  --modal-muted: #8b9cb5;
+  --modal-line: #233049;
+  --modal-danger: #f87171;
+  --modal-danger-deep: #dc2626;
+}
+
+.modal-content {
+  --background: var(--modal-surface);
+  --color: var(--modal-ink);
+  --padding-start: 0;
+  --padding-end: 0;
+  --padding-top: 0;
+  --padding-bottom: 0;
+}
+
+.modal-shell {
+  padding: 22px 22px calc(20px + env(safe-area-inset-bottom));
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.modal-eyebrow {
+  margin: 0 0 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--modal-muted);
+}
+
+.modal-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--modal-ink);
+}
+
+.modal-close {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--modal-muted);
+  cursor: pointer;
+
+  ion-icon {
+    font-size: 19px;
+  }
+
+  &:hover {
+    color: var(--modal-ink);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--modal-danger);
+    outline-offset: 2px;
+  }
+}
+
+.modal-lead {
+  margin: 14px 0 22px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--modal-muted);
+}
+
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  ion-button {
+    height: 50px;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    text-transform: none;
+  }
+}
+
+.cancel-button {
+  --border-radius: 14px;
+  --background: transparent;
+  --background-hover: rgba(100, 116, 139, 0.08);
+  --background-activated: rgba(100, 116, 139, 0.14);
+  --color: var(--modal-muted);
+  --border-width: 1px;
+  --border-style: solid;
+  --border-color: var(--modal-line);
+}
+
+.confirm-button {
+  --border-radius: 14px;
+  --background: linear-gradient(135deg, var(--modal-danger) 0%, var(--modal-danger-deep) 100%);
+  --background-activated: linear-gradient(135deg, var(--modal-danger-deep) 0%, #991b1b 100%);
+  --background-hover: linear-gradient(135deg, var(--modal-danger-deep) 0%, #991b1b 100%);
+  --box-shadow: 0 14px 30px -12px rgba(220, 38, 38, 0.55);
+  --color: #ffffff;
+
+  ion-icon {
+    margin-right: 6px;
+    font-size: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-close {
+    transition: none;
+  }
+}

@@ -8,8 +8,12 @@
   --r-primary: #2f6fe0;
   --r-primary-rgb: 47, 111, 224;
   --r-danger: #d92d20;
-  --r-admin: #0f766e;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--r-surface);
 }
 
 :host-context(.dark) {
@@ -22,16 +26,21 @@
   --r-primary: #6da2ff;
   --r-primary-rgb: 109, 162, 255;
   --r-danger: #ff8b95;
-  --r-admin: #5eead4;
 }
 
 .role-sheet {
-  padding: 8px 20px calc(20px + env(safe-area-inset-bottom));
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 88vh;
+  padding: 8px 20px 0;
   background: var(--r-surface);
   color: var(--r-ink);
 }
 
 .grabber {
+  flex: 0 0 auto;
   display: block;
   width: 38px;
   height: 4px;
@@ -41,9 +50,11 @@
 }
 
 .role-head {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 12px;
+  padding-bottom: 4px;
 }
 
 .role-avatar {
@@ -53,10 +64,22 @@
   width: 44px;
   height: 44px;
   border-radius: 14px;
+  overflow: hidden;
   color: #ffffff;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.4px;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  &.has-photo {
+    box-shadow: 0 0 0 1px var(--r-line);
+  }
 }
 
 .role-titles {
@@ -104,8 +127,19 @@
   }
 }
 
+/* The option list scrolls while the header and actions stay reachable. */
+.role-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 -4px;
+  padding: 0 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .role-label {
-  margin: 18px 0 8px;
+  margin: 14px 0 8px;
   color: var(--r-muted);
   font-size: 10.5px;
   font-weight: 700;
@@ -117,6 +151,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding-bottom: 12px;
 }
 
 .role-option {
@@ -124,7 +159,7 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px;
+  padding: 11px 12px;
   border: 1.5px solid var(--r-line);
   border-radius: 15px;
   background: var(--r-surface-soft);
@@ -160,11 +195,6 @@
   ion-icon {
     font-size: 20px;
   }
-
-  &.admin {
-    background: rgba(15, 118, 110, 0.12);
-    color: var(--r-admin);
-  }
 }
 
 .option-copy {
@@ -179,12 +209,6 @@
   color: var(--r-ink);
   font-size: 14.5px;
   font-weight: 600;
-}
-
-.option-sub {
-  color: var(--r-muted);
-  font-size: 11.5px;
-  line-height: 1.35;
 }
 
 .option-radio {
@@ -211,10 +235,17 @@
   }
 }
 
+/* Sticky action area below the scroll region. */
+.role-foot {
+  flex: 0 0 auto;
+  padding: 10px 0 calc(20px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--r-line);
+  background: var(--r-surface);
+}
+
 .role-save {
   width: 100%;
   height: 48px;
-  margin-top: 16px;
   border: 0;
   border-radius: 14px;
   background: var(--r-primary);
@@ -271,6 +302,12 @@
 .role-remove:focus-visible {
   outline: 2px solid var(--r-primary);
   outline-offset: 2px;
+}
+
+@media (max-width: 420px) {
+  .role-sheet {
+    padding-inline: 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

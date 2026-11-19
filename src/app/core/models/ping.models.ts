@@ -1,5 +1,5 @@
 /**
- * Squad ping models shared by the map page and the ping API.
+ * Circle ping models shared by the map page and the ping API.
  *
  * A ping is fire-and-forget: the sender only stores it, and the recipient
  * receives it through foreground polling (push delivery is a later upgrade).

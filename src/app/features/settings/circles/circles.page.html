@@ -1,7 +1,7 @@
 <ion-header>
   <ion-toolbar>
     <ion-buttons slot="start">
-      <ion-back-button defaultHref="/settings" text=""></ion-back-button>
+      <ion-back-button [defaultHref]="backHref" text=""></ion-back-button>
     </ion-buttons>
     <ion-title>Circle management</ion-title>
     <ion-buttons slot="end">
@@ -26,7 +26,6 @@
       <div class="circle-skeletons" aria-hidden="true">
         @for (item of [1, 2, 3]; track item) {
           <div class="skeleton-card">
-            <div class="skeleton-avatar"></div>
             <div class="skeleton-lines">
               <div class="skeleton-line name"></div>
               <div class="skeleton-line meta"></div>
@@ -67,14 +66,6 @@
       <div class="circle-list">
         @for (circle of circles; track circle.id) {
           <button type="button" class="circle-card" (click)="openCircle(circle)">
-            <span
-              class="circle-avatar"
-              [style.background]="gradient(circle.squad_name)"
-              aria-hidden="true"
-            >
-              {{ initials(circle.squad_name) }}
-            </span>
-
             <span class="circle-main">
               <span class="circle-name">{{ circle.squad_name }}</span>
               <span class="circle-meta">
@@ -102,7 +93,7 @@
       </div>
 
       <p class="list-hint">
-        Tap a circle to see its members, change roles, copy its invite code, or leave it.
+        Tap a circle to see its members, copy its invite code, or leave it. Members can label their relationship; admins can label anyone.
       </p>
     }
   </div>

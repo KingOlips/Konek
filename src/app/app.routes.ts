@@ -46,7 +46,9 @@ export const routes: Routes = [
   {
     path: "circles",
     loadComponent: () =>
-      import("./features/squads/squads.page").then((m) => m.SquadsPage),
+      import("./features/settings/circles/circles.page").then(
+        (m) => m.CircleManagementPage
+      ),
     canActivate: [authGuard],
   },
   {
@@ -66,6 +68,14 @@ export const routes: Routes = [
     loadComponent: () =>
       import("./features/settings/circles/circles.page").then(
         (m) => m.CircleManagementPage
+      ),
+    canActivate: [authGuard],
+  },
+  {
+    path: "notifications",
+    loadComponent: () =>
+      import("./features/notifications/notifications.page").then(
+        (m) => m.NotificationsPage
       ),
     canActivate: [authGuard],
   },

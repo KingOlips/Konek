@@ -22,21 +22,22 @@ import {
   copyOutline,
   ellipsisHorizontal,
   logOutOutline,
+  pencilOutline,
   shieldCheckmarkOutline,
 } from "ionicons/icons";
-import { SquadService } from "../../../core/services/squad.service";
+import { CircleService } from "../../../core/services/circle.service";
 import { AuthService } from "../../../core/services/auth.service";
 import {
   MemberRelationship,
-  Squad,
-  SquadMember,
-} from "../../../core/models/squad.models";
+  Circle,
+  CircleMember,
+} from "../../../core/models/circle.models";
 import { avatarGradient, initialsFor } from "../../../core/utils/avatar";
 import type { MemberRelationshipOption, MemberRelationshipResult } from "./member-role.modal";
 
 /** What the circles page learns when this sheet closes. */
 export interface CircleManageResult {
-  /** True when membership or roles changed and the list needs a refresh. */
+  /** True when a relationship or membership changed and the list needs a refresh. */
   changed: boolean;
   /** True when the current user left the circle. */
   left?: boolean;
@@ -48,7 +49,8 @@ export interface CircleManageResult {
  *
  * Header shows the circle identity, the body holds the invite code and the
  * member list, and the footer keeps "Leave" and "Done" reachable however long
- * the list is. Admins can open the role picker on any other member.
+ * the list is. Members can label their own relationship; admins can label
+ * anyone.
  */
 @Component({
   selector: "app-circle-manage-modal",
@@ -61,14 +63,14 @@ export class CircleManageModalComponent implements OnInit {
   private readonly modalCtrl = inject(ModalController);
   private readonly alertCtrl = inject(AlertController);
   private readonly toastCtrl = inject(ToastController);
-  private readonly squadService = inject(SquadService);
+  private readonly circleService = inject(CircleService);
   private readonly authService = inject(AuthService);
   private readonly cdr = inject(ChangeDetectorRef);
 
   /** Circle being managed; supplied by the circles page. */
-  @Input() squad!: Squad;
+  @Input() circle!: Circle;
 
-  members: SquadMember[] = [];
+  members: CircleMember[] = [];
   isLoading = true;
   loadError = false;
   isLeaving = false;
@@ -85,6 +87,7 @@ export class CircleManageModalComponent implements OnInit {
       copyOutline,
       ellipsisHorizontal,
       logOutOutline,
+      pencilOutline,
       shieldCheckmarkOutline,
     });
   }
@@ -98,37 +101,32 @@ export class CircleManageModalComponent implements OnInit {
   // ---------------------------------------------------------------------------
 
   get isAdmin(): boolean {
-    return (this.squad?.user_role ?? this.squad?.role) === "admin";
+    return (this.circle?.user_role ?? this.circle?.role) === "admin";
   }
 
   get memberCount(): number {
     // Once the list is loaded it is the source of truth (it can be 0 for the
     // last member leaving); before that fall back to the circle summary.
     if (!this.isLoading && !this.loadError) return this.members.length;
-    return this.squad?.member_count || this.members.length || 1;
+    return this.circle?.member_count || this.members.length || 1;
   }
 
   get adminCount(): number {
     return this.members.filter((member) => member.role === "admin").length;
   }
 
-  get initials(): string {
-    return initialsFor(this.squad?.squad_name ?? "");
-  }
-
-  get gradient(): string {
-    return avatarGradient(this.squad?.squad_name ?? "");
-  }
-
-  isMe(member: SquadMember): boolean {
+  isMe(member: CircleMember): boolean {
     return member.user_id === this.authService.getCurrentUser()?.id;
   }
 
-  /** Admins can manage everyone except themselves. */
-  canManage(member: SquadMember): boolean {
+  /** Members can label themselves; admins can label anyone. */
+  canEditRelationship(member: CircleMember): boolean {
+    return this.isMe(member) || this.isAdmin;
+  }
+
+  /** Only admins remove others, and another admin must be demoted first. */
+  canRemoveMember(member: CircleMember): boolean {
     if (!this.isAdmin || this.isMe(member)) return false;
-    // Another admin must be demoted before they can be removed, so only offer
-    // the picker while more than one admin exists.
     return member.role !== "admin" || this.adminCount > 1;
   }
 
@@ -141,7 +139,7 @@ export class CircleManageModalComponent implements OnInit {
   }
 
   /** Get avatar URL for a member: profile picture if available, otherwise gradient. */
-  memberAvatarUrl(member: SquadMember): string | null {
+  memberAvatarUrl(member: CircleMember): string | null {
     if (member.profile_picture) {
       return this.authService.pictureUrl(member.profile_picture);
     }
@@ -158,7 +156,7 @@ export class CircleManageModalComponent implements OnInit {
       daughter: "Daughter",
       child: "Child",
       grandparent: "Grandparent",
-      partner: "Partner",
+      partner: "Partner / Spouse",
       friend: "Friend",
       other: "Other",
     };
@@ -170,7 +168,7 @@ export class CircleManageModalComponent implements OnInit {
   // ---------------------------------------------------------------------------
 
   async loadMembers(): Promise<void> {
-    if (!this.squad) return;
+    if (!this.circle) return;
 
     this.isLoading = true;
     this.loadError = false;
@@ -178,7 +176,7 @@ export class CircleManageModalComponent implements OnInit {
 
     try {
       this.members =
-        (await firstValueFrom(this.squadService.getSquadMembers(this.squad.id))) ??
+        (await firstValueFrom(this.circleService.getCircleMembers(this.circle.id))) ??
         [];
     } catch (error) {
       console.error("Failed to load circle members:", error);
@@ -193,9 +191,9 @@ export class CircleManageModalComponent implements OnInit {
   // Member actions
   // ---------------------------------------------------------------------------
 
-  /** Open the role picker for a member (admin only). */
-  async openRolePicker(member: SquadMember): Promise<void> {
-    if (!this.canManage(member) || this.busyMemberId !== null) return;
+  /** Open the relationship picker for a member (self, or admin for anyone). */
+  async openRolePicker(member: CircleMember): Promise<void> {
+    if (!this.canEditRelationship(member) || this.busyMemberId !== null) return;
 
     const { MemberRoleModalComponent } = await import("./member-role.modal");
 
@@ -205,7 +203,8 @@ export class CircleManageModalComponent implements OnInit {
         memberName: member.username,
         relationshipLabel: this.relationshipLabel(member.relationship),
         initialRelationship: member.relationship ?? null,
-        canRemove: member.role !== "admin",
+        avatarUrl: this.memberAvatarUrl(member),
+        canRemove: this.canRemoveMember(member),
       },
       cssClass: "member-role-modal",
       backdropDismiss: true,
@@ -222,7 +221,7 @@ export class CircleManageModalComponent implements OnInit {
     }
   }
 
-  private async setRelationship(member: SquadMember, relationship: MemberRelationshipOption): Promise<void> {
+  private async setRelationship(member: CircleMember, relationship: MemberRelationshipOption): Promise<void> {
     if (this.busyMemberId !== null || member.relationship === relationship) return;
 
     this.busyMemberId = member.user_id;
@@ -230,7 +229,7 @@ export class CircleManageModalComponent implements OnInit {
 
     try {
       await firstValueFrom(
-        this.squadService.updateMemberRelationship(this.squad.id, member.user_id, relationship)
+        this.circleService.updateMemberRelationship(this.circle.id, member.user_id, relationship)
       );
       member.relationship = relationship;
       this.changed = true;
@@ -248,10 +247,10 @@ export class CircleManageModalComponent implements OnInit {
     }
   }
 
-  private async confirmRemoveMember(member: SquadMember): Promise<void> {
+  private async confirmRemoveMember(member: CircleMember): Promise<void> {
     const alert = await this.alertCtrl.create({
       header: "Remove member?",
-      message: `${member.username} will stop sharing location with "${this.squad.squad_name}" and lose access to its members.`,
+      message: `${member.username} will stop sharing location with "${this.circle.squad_name}" and lose access to its members.`,
       buttons: [
         { text: "Cancel", role: "cancel" },
         {
@@ -264,7 +263,7 @@ export class CircleManageModalComponent implements OnInit {
     await alert.present();
   }
 
-  private async removeMember(member: SquadMember): Promise<void> {
+  private async removeMember(member: CircleMember): Promise<void> {
     if (this.busyMemberId !== null) return;
 
     this.busyMemberId = member.user_id;
@@ -272,7 +271,7 @@ export class CircleManageModalComponent implements OnInit {
 
     try {
       await firstValueFrom(
-        this.squadService.removeMember(this.squad.id, member.user_id)
+        this.circleService.removeMember(this.circle.id, member.user_id)
       );
       this.members = this.members.filter((m) => m.user_id !== member.user_id);
       this.changed = true;
@@ -291,7 +290,7 @@ export class CircleManageModalComponent implements OnInit {
   // ---------------------------------------------------------------------------
 
   async copyCode(): Promise<void> {
-    const code = this.squad?.join_code ?? "";
+    const code = this.circle?.join_code ?? "";
     if (!code) return;
 
     try {
@@ -300,6 +299,58 @@ export class CircleManageModalComponent implements OnInit {
     } catch {
       await this.showToast(`Invite code: ${code}`);
     }
+  }
+
+  /** Admin-only: rename the circle from the sheet header. */
+  async renameCircle(): Promise<void> {
+    if (!this.isAdmin || !this.circle) return;
+
+    const alert = await this.alertCtrl.create({
+      header: "Rename circle",
+      inputs: [
+        {
+          name: "squad_name",
+          type: "text",
+          value: this.circle.squad_name,
+          placeholder: "Circle name",
+          attributes: { maxlength: 100 },
+        },
+      ],
+      buttons: [
+        { text: "Cancel", role: "cancel" },
+        {
+          text: "Save",
+          handler: async (data) => {
+            const name = String(data?.squad_name ?? "").trim();
+            if (!name) {
+              await this.showToast("Circle name is required");
+              return false;
+            }
+            if (name === this.circle.squad_name) {
+              return true;
+            }
+
+            try {
+              const updated = await firstValueFrom(
+                this.circleService.updateCircle(this.circle.id, name)
+              );
+              this.circle.squad_name = updated.squad_name;
+              this.changed = true;
+              this.cdr.markForCheck();
+              await this.showToast("Circle renamed");
+              return true;
+            } catch (error) {
+              console.error("Failed to rename circle:", error);
+              await this.showToast(
+                this.errorMessage(error, "Failed to rename circle")
+              );
+              return true;
+            }
+          },
+        },
+      ],
+    });
+    await alert.present();
   }
 
   async leaveCircle(): Promise<void> {
@@ -326,7 +377,7 @@ export class CircleManageModalComponent implements OnInit {
 
     const alert = await this.alertCtrl.create({
       header: "Leave circle?",
-      message: `You'll stop sharing location with "${this.squad.squad_name}" and won't see its members on the map.`,
+      message: `You'll stop sharing location with "${this.circle.squad_name}" and won't see its members on the map.`,
       buttons: [
         { text: "Cancel", role: "cancel" },
         {
@@ -344,7 +395,7 @@ export class CircleManageModalComponent implements OnInit {
     this.cdr.markForCheck();
 
     try {
-      await firstValueFrom(this.squadService.leaveSquad(this.squad.id));
+      await firstValueFrom(this.circleService.leaveCircle(this.circle.id));
       await this.modalCtrl.dismiss(
         { changed: true, left: true } satisfies CircleManageResult,
         "confirm"

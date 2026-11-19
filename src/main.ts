@@ -17,7 +17,7 @@ bootstrapApplication(AppComponent, {
   providers: [
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
     // Allow Ionic overlays (alert/toast/loading) to render the developer
-    // HTML used in messages like the About dialog and the squad member list.
+    // HTML used in messages like the About dialog and the circle member list.
     // Ionic runs these through its allowlist sanitizer first.
     provideIonicAngular({ innerHTMLTemplatesEnabled: true }),
     provideRouter(routes, withPreloading(PreloadAllModules), withComponentInputBinding()),

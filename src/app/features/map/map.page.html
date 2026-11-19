@@ -17,9 +17,9 @@
       </ion-buttons>
 
       <ion-title>
-        <span class="squad-chip">
+        <span class="circle-chip">
           <ion-icon name="person-outline"></ion-icon>
-          <span class="squad-name">{{ detailTitle }}</span>
+          <span class="circle-name">{{ detailTitle }}</span>
         </span>
       </ion-title>
 
@@ -53,28 +53,35 @@
       <ion-title>
         <button
           type="button"
-          class="squad-chip"
+          class="circle-chip"
           aria-haspopup="menu"
           aria-label="Circle options"
-          [class.chip-open]="squadChipOpen"
-          [attr.aria-expanded]="squadChipOpen"
-          (click)="presentSquadOptions($event)"
+          [class.chip-open]="circleChipOpen"
+          [attr.aria-expanded]="circleChipOpen"
+          (click)="presentCircleOptions($event)"
         >
           <ion-icon name="people-outline"></ion-icon>
-          <span class="squad-name">{{ activeSquadName }}</span>
+          <span class="circle-name">{{ activeCircleName }}</span>
           <ion-icon class="chip-caret" name="chevron-down-outline"></ion-icon>
         </button>
       </ion-title>
 
       <ion-buttons slot="end">
-        <ion-button
-          class="nav-icon-button"
-          fill="clear"
-          aria-label="Messages"
-          (click)="openMessages()"
-        >
-          <ion-icon name="chatbubbles-outline" slot="icon-only"></ion-icon>
-        </ion-button>
+        <div class="notification-wrap">
+          <ion-button
+            class="nav-icon-button"
+            fill="clear"
+            aria-label="Notifications"
+            routerLink="/notifications"
+          >
+            <ion-icon name="notifications-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+          @if (unreadNotifications > 0) {
+            <ion-badge color="danger" class="notification-count">
+              {{ unreadNotifications > 9 ? "9+" : unreadNotifications }}
+            </ion-badge>
+          }
+        </div>
       </ion-buttons>
     }
   </ion-toolbar>
@@ -88,22 +95,22 @@
     #mapFabs
     class="map-fabs"
     [class.map-ui-hidden]="!mapReady || !initialLoadDone"
-    [class.panel-open]="showSquadList"
+    [class.panel-open]="showCircleList"
     [class.member-open]="detailSheetOpen"
-    [class.sheet-full]="squadSheetSnap === 'full' || sheetNearFull"
+    [class.sheet-full]="circleSheetSnap === 'full' || sheetNearFull"
     vertical="bottom"
     horizontal="end"
     slot="fixed"
   >
     <ion-fab-button
-      class="squad-fab"
+      class="circle-fab"
       size="small"
       aria-label="Circle members"
-      (click)="toggleSquadList()"
+      (click)="toggleCircleList()"
     >
       <ion-icon name="people-outline"></ion-icon>
-      @if (squadMembers.length > 0) {
-        <ion-badge color="danger" class="squad-count">{{ squadMembers.length }}</ion-badge>
+      @if (circleMembers.length > 0) {
+        <ion-badge color="danger" class="circle-count">{{ circleMembers.length }}</ion-badge>
       }
     </ion-fab-button>
 
@@ -120,35 +127,35 @@
     </ion-fab-button>
   </ion-fab>
 
-  <!-- Drag tab for the squad sidebar. It lives outside the panel so it is
+  <!-- Drag tab for the circle sidebar. It lives outside the panel so it is
        still clickable while the panel is closed: one click opens, one closes. -->
   <button
     type="button"
     class="panel-handle"
     [class.map-ui-hidden]="!mapReady || !initialLoadDone"
-    [class.open]="showSquadList"
-    [class.hidden]="isSquadFormModalOpen"
-    [attr.aria-expanded]="showSquadList"
-    aria-controls="squadPanel"
+    [class.open]="showCircleList"
+    [class.hidden]="isCircleFormModalOpen"
+    [attr.aria-expanded]="showCircleList"
+    aria-controls="circlePanel"
     aria-label="Toggle circle panel"
-    (click)="toggleSquadList()"
+    (click)="toggleCircleList()"
   ></button>
 
   <!-- Circle list: sidebar on desktop, draggable bottom sheet on mobile -->
   <div
-    #squadPanel
-    id="squadPanel"
-    class="squad-panel"
+    #circlePanel
+    id="circlePanel"
+    class="circle-panel"
     [class.map-ui-hidden]="!mapReady || !initialLoadDone"
-    [class.open]="showSquadList"
+    [class.open]="showCircleList"
   >
     <div
       class="sheet-grabber"
-      [class.hidden]="isSquadFormModalOpen"
+      [class.hidden]="isCircleFormModalOpen"
       role="button"
       tabindex="0"
-      [attr.aria-expanded]="squadSheetSnap !== 'peek'"
-      aria-controls="squadPanel"
+      [attr.aria-expanded]="circleSheetSnap !== 'peek'"
+      aria-controls="circlePanel"
       aria-label="Toggle circle list"
       (pointerdown)="onSheetDragStart($event)"
       (click)="onSheetGrabberClick()"
@@ -164,62 +171,37 @@
       (click)="onSheetHeaderClick($event)"
     >
       <div class="panel-header-main">
-        <div class="panel-squad-name">{{ activeSquadName }}</div>
-        <p class="panel-squad-meta">
-          @if (isLoadingSquad && squadMembers.length === 0) {
+        <div class="panel-circle-name">{{ activeCircleName }}</div>
+        <p class="panel-circle-meta">
+          @if (isLoadingCircle && circleMembers.length === 0) {
             Loading members…
           } @else {
-            {{ squadMembers.length }} member{{ squadMembers.length === 1 ? '' : 's' }}
-            @if (squadMembers.length > 0) {
+            {{ circleMembers.length }} member{{ circleMembers.length === 1 ? '' : 's' }}
+            @if (circleMembers.length > 0) {
               <span class="meta-sep">·</span>
               <span class="meta-online">{{ onlineCount }} online</span>
             }
           }
         </p>
-
-        @if (activeSquadJoinCode) {
-          <div class="panel-invite">
-            <span class="invite-label">Invite code</span>
-            <div class="invite-code-row">
-              <span class="invite-code">{{ activeSquadJoinCode }}</span>
-              <button
-                type="button"
-                class="invite-btn"
-                (click)="copySquadCode()"
-                aria-label="Copy invite code"
-              >
-                <ion-icon name="copy-outline" aria-hidden="true"></ion-icon>
-              </button>
-              <button
-                type="button"
-                class="invite-btn invite-btn-primary"
-                (click)="shareSquadCode()"
-                aria-label="Share invite code with friends"
-              >
-                <ion-icon name="share-social-outline" aria-hidden="true"></ion-icon>
-              </button>
-            </div>
-          </div>
-        }
       </div>
       <div class="panel-actions">
         <button
           type="button"
           class="panel-icon-btn"
-          [disabled]="isLoadingSquad"
+          [disabled]="isLoadingCircle"
           aria-label="Refresh circle locations"
-          (click)="refreshSquadLocations()"
+          (click)="refreshCircleLocations()"
         >
           <ion-icon
             name="refresh-outline"
-            [class.spinning]="isLoadingSquad"
+            [class.spinning]="isLoadingCircle"
           ></ion-icon>
         </button>
         <button
           type="button"
           class="panel-icon-btn"
           aria-label="Close circle panel"
-          (click)="closeSquadPanel()"
+          (click)="closeCirclePanel()"
         >
           <ion-icon name="close-outline"></ion-icon>
         </button>
@@ -227,8 +209,8 @@
     </div>
 
     <div class="panel-content">
-      @if (isLoadingSquad) {
-        <div class="loading-squad">
+      @if (isLoadingCircle) {
+        <div class="loading-circle">
           @for (i of [1,2,3,4]; track i) {
             <div class="skeleton-item">
               <div class="skeleton-avatar"></div>
@@ -239,8 +221,8 @@
             </div>
           }
         </div>
-      } @else if (squadMembers.length === 0) {
-        <div class="empty-squad">
+      } @else if (circleMembers.length === 0) {
+        <div class="empty-circle">
           <div class="empty-illustration">
             <ion-icon name="people-outline"></ion-icon>
           </div>
@@ -342,12 +324,12 @@
       }
     </div>
 
-    @if (hasActiveSquad) {
+    @if (hasActiveCircle) {
       <div class="panel-footer">
         <button
           type="button"
           class="panel-leave-btn"
-          (click)="leaveActiveSquad()"
+          (click)="leaveActiveCircle()"
         >
           <ion-icon name="log-out-outline" aria-hidden="true"></ion-icon>
           Leave circle
@@ -416,10 +398,9 @@
                 </span>
               }
               @if (!selectedIsSelf && selectedMemberRelationship) {
-                <span class="relationship-badge" (click)="openRelationshipEditor($event)">
+                <span class="relationship-badge is-readonly">
                   <ion-icon [name]="relationshipIcon(selectedMemberRelationship)" slot="start"></ion-icon>
                   {{ relationshipLabel(selectedMemberRelationship) }}
-                  <ion-icon name="pencil-outline" slot="end" class="edit-icon"></ion-icon>
                 </span>
               }
               <span class="status" [class.online]="detailStatusOnline">

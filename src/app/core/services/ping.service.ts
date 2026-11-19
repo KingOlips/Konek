@@ -10,7 +10,7 @@ import {
 import { environment } from "../../../environments/environment";
 
 /**
- * Squad pings. Sending never notifies the sender's device; the recipient picks
+ * Circle pings. Sending never notifies the sender's device; the recipient picks
  * the ping up with `getPendingPings()` while the map is open.
  */
 @Injectable({

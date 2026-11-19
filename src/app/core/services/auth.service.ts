@@ -12,7 +12,7 @@ import {
 } from "rxjs";
 import { Preferences } from "@capacitor/preferences";
 import { environment } from "../../../environments/environment";
-import { Squad } from "../models/squad.models";
+import { Circle } from "../models/circle.models";
 
 export interface User {
   id: number;
@@ -25,7 +25,8 @@ export interface User {
   /** 1 when a real password is set; 0 for Google accounts still completing signup. */
   password_set?: number;
   created_at: string;
-  squads?: Squad[];
+  /** Login payload uses the backend's legacy `squads` key. */
+  squads?: Circle[];
 }
 
 export interface ProfileUpdate {
@@ -96,7 +97,7 @@ export class AuthService {
   readonly isAuthenticated$ = this.isAuthenticatedSubject.asObservable();
 
   /** Resolves once the persisted session has been read from storage. */
-  private readonly sessionReady: Promise<void>;
+  private sessionReady: Promise<void>;
 
   constructor() {
     this.sessionReady = this.loadStoredSession();
@@ -124,6 +125,11 @@ export class AuthService {
   /** Wait until the stored session has been loaded (used by the auth guard). */
   async whenReady(): Promise<void> {
     return this.sessionReady;
+  }
+    /** Reload session from storage; call after login/logout so whenReady() waits for fresh data. */
+  async reloadSession(): Promise<void> {
+    this.sessionReady = this.loadStoredSession();
+    await this.sessionReady;
   }
 
   register(credentials: Credentials): Observable<AuthResponse> {
@@ -229,6 +235,7 @@ export class AuthService {
               this.isAuthenticatedSubject.next(true);
               this.haptic("success");
             }),
+            tap(() => { this.sessionReady = this.loadStoredSession(); }),
             map(() => response)
           );
         }),
@@ -362,8 +369,8 @@ export class AuthService {
   }
 
   private async clearStoredSession(): Promise<void> {
-    // Drop the remembered map squad so the next account never sees the
-    // previous user's squad name flash before the list loads.
+    // Drop the remembered map circle so the next account never sees the
+    // previous user's circle name flash before the list loads.
     try {
       localStorage.removeItem("konek_active_squad");
     } catch {

@@ -125,5 +125,24 @@ CREATE TABLE IF NOT EXISTS `password_resets` (
     INDEX `idx_reset_expires` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- In-app notification inbox
+-- One row per notification addressed to a user. `read_at` is set when the
+-- notification is opened. Email delivery (welcome, password reset) is
+-- separate and never blocks the inbox.
+CREATE TABLE IF NOT EXISTS `notifications` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `user_id` INT UNSIGNED NOT NULL,
+    `type` VARCHAR(32) NOT NULL DEFAULT 'system',
+    `title` VARCHAR(160) NOT NULL,
+    `message` TEXT DEFAULT NULL,
+    `data` TEXT DEFAULT NULL,
+    `read_at` TIMESTAMP NULL DEFAULT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    INDEX `idx_notification_user_read` (`user_id`, `read_at`, `created_at`),
+    INDEX `idx_notification_user_created` (`user_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Sample data for testing (optional)
 -- INSERT INTO `squads` (`squad_name`, `join_code`) VALUES ('Demo Squad', 'KONEK123');

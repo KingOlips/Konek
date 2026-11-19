@@ -1,0 +1,42 @@
+<div class="circle-menu">
+  <div class="circle-menu-header">
+    <span class="circle-menu-label">Circle</span>
+    <span class="circle-menu-name">{{ circleName }}</span>
+  </div>
+
+  @if (circles.length > 0) {
+    <div class="circle-menu-list" role="listbox" aria-label="Switch circle">
+      @for (circle of circles; track circle.id) {
+        <button
+          type="button"
+          class="circle-menu-row"
+          [class.is-active]="circle.id === activeCircleId"
+          role="option"
+          [attr.aria-selected]="circle.id === activeCircleId"
+          (click)="selectCircle(circle)"
+        >
+          <span class="circle-menu-row-name">{{ circle.squad_name }}</span>
+          @if (circle.id === activeCircleId) {
+            <ion-icon
+              class="circle-menu-check"
+              name="checkmark-outline"
+              aria-hidden="true"
+            ></ion-icon>
+          }
+        </button>
+      }
+    </div>
+  }
+
+  <div class="circle-menu-actions">
+    <button type="button" class="circle-menu-action" (click)="pick('create')">
+      <ion-icon name="add-outline" aria-hidden="true"></ion-icon>
+      <span>Create a circle</span>
+    </button>
+
+    <button type="button" class="circle-menu-action" (click)="pick('join')">
+      <ion-icon name="key-outline" aria-hidden="true"></ion-icon>
+      <span>Join a circle</span>
+    </button>
+  </div>
+</div>

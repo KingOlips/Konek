@@ -1,0 +1,113 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/map" text=""></ion-back-button>
+    </ion-buttons>
+    <ion-title>Notifications</ion-title>
+    <ion-buttons slot="end">
+      <ion-button
+        fill="clear"
+        aria-label="Mark all notifications as read"
+        [disabled]="unreadCount === 0 || isMarkingAll || isLoading"
+        (click)="markAllRead()"
+      >
+        <ion-icon name="checkmark-done-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="notifications-content">
+  <ion-refresher slot="fixed" (ionRefresh)="doRefresh($event)">
+    <ion-refresher-content pullingText="Pull to refresh"></ion-refresher-content>
+  </ion-refresher>
+
+  <div class="notifications-wrap">
+    @if (isLoading) {
+      <div class="notif-skeletons" aria-hidden="true">
+        @for (item of [1, 2, 3, 4]; track item) {
+          <div class="notif-skeleton">
+            <span class="skeleton-icon"></span>
+            <span class="skeleton-lines">
+              <span class="skeleton-line title"></span>
+              <span class="skeleton-line body"></span>
+              <span class="skeleton-line time"></span>
+            </span>
+          </div>
+        }
+      </div>
+    } @else if (loadError && notifications.length === 0) {
+      <div class="state">
+        <div class="state-icon error">
+          <ion-icon name="cloud-offline-outline" aria-hidden="true"></ion-icon>
+        </div>
+        <h2>Couldn't load notifications</h2>
+        <p>{{ loadErrorMessage }}</p>
+        <ion-button class="state-cta" (click)="loadNotifications()">
+          <ion-icon name="refresh-outline" slot="start" aria-hidden="true"></ion-icon>
+          Try again
+        </ion-button>
+      </div>
+    } @else if (notifications.length === 0) {
+      <div class="state">
+        <div class="state-icon">
+          <ion-icon name="notifications-off-outline" aria-hidden="true"></ion-icon>
+        </div>
+        <h2>No notifications yet</h2>
+        <p>
+          Welcome messages, circle updates, and important account notices will
+          appear here.
+        </p>
+      </div>
+    } @else {
+      <div class="inbox-head">
+        <h2>Inbox</h2>
+        @if (unreadCount > 0) {
+          <span class="unread-pill">{{ unreadCount }} new</span>
+        }
+      </div>
+
+      <div class="notif-list">
+        @for (item of notifications; track item.id) {
+          <article
+            class="notif-card"
+            [class.is-unread]="!item.read_at"
+            [class.is-busy]="isBusy(item)"
+            role="button"
+            tabindex="0"
+            [attr.aria-label]="item.title"
+            (click)="openNotification(item)"
+            (keydown.enter)="openNotification(item)"
+          >
+            <span class="notif-icon" [attr.data-type]="item.type" aria-hidden="true">
+              <ion-icon [name]="iconFor(item.type)"></ion-icon>
+            </span>
+
+            <span class="notif-body">
+              <span class="notif-title-row">
+                <span class="notif-title">{{ item.title }}</span>
+                @if (!item.read_at) {
+                  <span class="unread-dot" aria-label="Unread"></span>
+                }
+              </span>
+              @if (item.message) {
+                <span class="notif-message">{{ item.message }}</span>
+              }
+              <span class="notif-time">{{ relativeTime(item) }}</span>
+            </span>
+
+            <button
+              type="button"
+              class="notif-delete"
+              [disabled]="isBusy(item)"
+              [attr.aria-label]="'Delete ' + item.title"
+              (click)="deleteNotification(item, $event)"
+            >
+              <ion-icon name="trash-outline" aria-hidden="true"></ion-icon>
+            </button>
+          </article>
+        }
+      </div>
+    }
+  </div>
+</ion-content>

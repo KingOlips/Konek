@@ -5,10 +5,10 @@ import { Preferences } from "@capacitor/preferences";
 import { AuthService } from "./auth.service";
 import {
   ApiEnvelope,
+  CircleMemberLocation,
   LocationExportData,
   LocationHistoryEntry,
   LocationUpdate,
-  SquadMemberLocation,
 } from "../models/location.models";
 import { environment } from "../../../environments/environment";
 
@@ -35,12 +35,12 @@ export class LocationService {
     );
   }
 
-  /** Latest fix for every member of the squad. */
-  getSquadLocations(squadId?: number): Observable<SquadMemberLocation[]> {
+  /** Latest fix for every member of the circle. */
+  getCircleLocations(circleId?: number): Observable<CircleMemberLocation[]> {
     return from(this.authHeaders()).pipe(
       switchMap((headers) => {
-        const query = squadId ? `?squad_id=${squadId}` : "";
-        return this.http.get<ApiEnvelope<SquadMemberLocation[]>>(
+        const query = circleId ? `?squad_id=${circleId}` : "";
+        return this.http.get<ApiEnvelope<CircleMemberLocation[]>>(
           `${environment.apiUrl}/api_get_squad_locations.php${query}`,
           { headers }
         );

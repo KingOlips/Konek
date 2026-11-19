@@ -30,21 +30,24 @@ import {
   PopoverController,
   ToastController,
 } from "@ionic/angular";
+import type { ViewWillEnter } from "@ionic/angular";
 import { addIcons } from "ionicons";
 import {
+  addCircleOutline,
   addOutline,
   alertCircleOutline,
   arrowBackOutline,
-  chatbubbleEllipsesOutline,
-  chatbubblesOutline,
   checkmarkCircleOutline,
   chevronDownOutline,
   closeOutline,
-  copyOutline,
+  ellipsisHorizontalOutline,
+  happyOutline,
   layersOutline,
   locateOutline,
   logOutOutline,
+  manOutline,
   navigateOutline,
+  notificationsOutline,
   pencilOutline,
   peopleOutline,
   personAddOutline,
@@ -52,9 +55,9 @@ import {
   personOutline,
   refreshOutline,
   settingsOutline,
-  shareSocialOutline,
   shieldCheckmarkOutline,
   timeOutline,
+  womanOutline,
 } from "ionicons/icons";
 import * as maplibregl from "maplibre-gl";
 import type {
@@ -74,16 +77,17 @@ import { AuthService, User } from "../../core/services/auth.service";
 import { BackgroundTrackerService } from "../../core/services/background-tracker.service";
 import { LocationService } from "../../core/services/location.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
+import { LocationTrackingService } from "../../core/services/location-tracking.service";
 import { PingService } from "../../core/services/ping.service";
-import { SquadService } from "../../core/services/squad.service";
-import { Geofence, SquadMemberLocation } from "../../core/models/location.models";
+import { CircleService } from "../../core/services/circle.service";
+import { NotificationService } from "../../core/services/notification.service";
+import { Geofence, CircleMemberLocation } from "../../core/models/location.models";
 import { IncomingPing, PingType } from "../../core/models/ping.models";
-import { MemberRelationship, Squad } from "../../core/models/squad.models";
-import { RelationshipPopoverComponent } from "./relationship-popover/relationship-popover.component";
+import { MemberRelationship, Circle } from "../../core/models/circle.models";
 import {
-  SquadMenuPopoverComponent,
-  SquadMenuResult,
-} from "./squad-menu-popover/squad-menu-popover.component";
+  CircleMenuPopoverComponent,
+  CircleMenuResult,
+} from "./circle-menu-popover/circle-menu-popover.component";
 
 /**
  * Inline SVGs for the marker movement badges. Keeping them inline avoids
@@ -209,16 +213,17 @@ function registerEsriTileProtocol(): void {
     IonFab,
     IonFabButton,
     IonBadge,
-    IonSpinner,
-    RelationshipPopoverComponent,
+    IonSpinner
   ],
 })
-export class MapPage implements OnInit, AfterViewInit, OnDestroy {
+export class MapPage
+  implements OnInit, AfterViewInit, OnDestroy, ViewWillEnter
+{
   @ViewChild("mapContainer", { static: true })
   mapContainer!: ElementRef<HTMLDivElement>;
 
-  @ViewChild("squadPanel")
-  squadPanel?: ElementRef<HTMLDivElement>;
+  @ViewChild("circlePanel")
+  circlePanel?: ElementRef<HTMLDivElement>;
 
   @ViewChild("memberPanel")
   memberPanel?: ElementRef<HTMLDivElement>;
@@ -232,8 +237,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly backgroundTracker = inject(BackgroundTrackerService);
   private readonly locationService = inject(LocationService);
   private readonly geolocationService = inject(GeolocationService);
+  private readonly locationTrackingService = inject(LocationTrackingService);
   private readonly pingService = inject(PingService);
-  private readonly squadService = inject(SquadService);
+  private readonly circleService = inject(CircleService);
+  private readonly notificationService = inject(NotificationService);
   private readonly alertCtrl = inject(AlertController);
   private readonly actionSheetCtrl = inject(ActionSheetController);
   private readonly loadingCtrl = inject(LoadingController);
@@ -245,8 +252,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private map: MapLibreMap | null = null;
   private userMarker: Marker | null = null;
   private userMarkerEl: HTMLDivElement | null = null;
-  private squadMarkers = new Map<string, Marker>();
-  private squadMarkerEls = new Map<string, HTMLDivElement>();
+  private circleMarkers = new Map<string, Marker>();
+  private circleMarkerEls = new Map<string, HTMLDivElement>();
   private geofencePopup: Popup | null = null;
   /** GeoJSON data kept outside the style so it survives theme reloads. */
   private accuracyData: Feature<Polygon> | null = null;
@@ -266,6 +273,12 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private pingPollTimer: ReturnType<typeof setInterval> | null = null;
   /** True while a ping request is in flight, so ticks never stack up. */
   private pingPollInFlight = false;
+  /** Unread inbox count shown on the toolbar bell. */
+  unreadNotifications = 0;
+  private notificationPollTimer: ReturnType<typeof setInterval> | null = null;
+  private notificationPollInFlight = false;
+  /** Shared in-flight member-location refresh, so pulls never stack. */
+  private circleRefreshPromise: Promise<boolean> | null = null;
   /** Ping ids already shown this session, so a slow mark-read never re-toasts. */
   private readonly shownPingIds = new Set<number>();
   /** Wheel-scroll animation state for the desktop ping row. */
@@ -294,22 +307,28 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private activeToast: HTMLIonToastElement | null = null;
   private isActive = true;
+  /** Master switch mirrored from Settings; false pauses all own-location sharing. */
+  private trackingEnabled = true;
+  private trackingSubscription: Subscription | null = null;
+  private authSubscription: Subscription | null = null;
+  private lastUserId: number | null = null;
+  private trackingStarting = false;
   private hasCentered = false;
   private geofences: Geofence[] = [];
   private insideGeofence = new Map<string, boolean>();
-  private activeSquadId: number | null = null;
-  /** Last known name of the active squad, kept for the instant chip label. */
-  private activeSquadNameCache: string | null = null;
-  /** True once the squad list has been fetched at least once. */
-  private squadsLoaded = false;
-  /** In-flight squad list fetch shared by every caller. */
-  private squadsLoadPromise: Promise<void> | null = null;
-  private selectedMember: SquadMemberLocation | null = null;
+  private activeCircleId: number | null = null;
+  /** Last known name of the active circle, kept for the instant chip label. */
+  private activeCircleNameCache: string | null = null;
+  /** True once the circle list has been fetched at least once. */
+  private circlesLoaded = false;
+  /** In-flight circle list fetch shared by every caller. */
+  private circlesLoadPromise: Promise<void> | null = null;
+  private selectedMember: CircleMemberLocation | null = null;
   /** Relationship label for the currently selected member (used by the edit popover). */
   selectedMemberRelationship: MemberRelationship | null = null;
 
-  /** localStorage entry remembering which squad the user was viewing. */
-  private static readonly ACTIVE_SQUAD_KEY = "konek_active_squad";
+  /** localStorage entry remembering which circle the user was viewing. */
+  private static readonly ACTIVE_CIRCLE_KEY = "konek_active_squad";
 
   /** Last map viewport, so the map reopens where the user left it. */
   private static readonly LAST_VIEW_KEY = "konek_last_map_center";
@@ -342,7 +361,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private restoredMapView = false;
 
   /** Mobile bottom-sheet snap state. Ignored on desktop. */
-  squadSheetSnap: "peek" | "half" | "full" = "peek";
+  circleSheetSnap: "peek" | "half" | "full" = "peek";
   isSheetDragging = false;
   /** True while a drag has pulled the sheet above the half point (near/full). */
   sheetNearFull = false;
@@ -358,8 +377,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private memberDragStartOffset = 0;
   private memberCurrentOffset = 0;
   private memberDragMoved = false;
-  private previousSquadListOpen = false;
-  private previousSquadSnap: SheetSnap = "peek";
+  private previousCircleListOpen = false;
+  private previousCircleSnap: SheetSnap = "peek";
 
   readonly pingOptions: ReadonlyArray<{
     type: PingType;
@@ -392,18 +411,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   get currentUser(): User | null {
     return this.authService.getCurrentUser();
   }
-  squadMembers: SquadMemberLocation[] = [];
-  squads: Squad[] = [];
+  circleMembers: CircleMemberLocation[] = [];
+  circles: Circle[] = [];
   isTracking = false;
   mapStyle: MapStyle = "street";
-  showSquadList = false;
-  /** True while the create/join squad modal is on screen. */
-  isSquadFormModalOpen = false;
-  /** True when the mobile squad sheet is at (or near) its full snap. */
+  showCircleList = false;
+  /** True while the create/join circle modal is on screen. */
+  isCircleFormModalOpen = false;
+  /** True when the mobile circle sheet is at (or near) its full snap. */
   toolbarHidden = false;
-  isLoadingSquad = false;
+  isLoadingCircle = false;
   mapReady = false;
-  /** True once the first squad/member fetch has finished (gates the splash). */
+  /** True once the first circle/member fetch has finished (gates the splash). */
   initialLoadDone = false;
   connectionStatus: "connected" | "connecting" | "disconnected" = "connecting";
   /** GPS accuracy (metres) of the user's latest fix, for the self sheet. */
@@ -416,46 +435,80 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   /** True while a ping is being sent, so a double tap cannot send twice. */
   isSendingPing = false;
   /** True while the toolbar chip is expanded under its dropdown. */
-  squadChipOpen = false;
+  circleChipOpen = false;
 
   constructor() {
     addIcons({
+      addCircleOutline,
       alertCircleOutline,
       arrowBackOutline,
-      chatbubbleEllipsesOutline,
-      chatbubblesOutline,
       checkmarkCircleOutline,
       chevronDownOutline,
       closeOutline,
-      copyOutline,
+      ellipsisHorizontalOutline,
+      happyOutline,
       layersOutline,
       locateOutline,
       logOutOutline,
+      manOutline,
       navigateOutline,
+      notificationsOutline,
       peopleOutline,
       personAddOutline,
       personCircleOutline,
       personOutline,
       refreshOutline,
       settingsOutline,
-      shareSocialOutline,
       shieldCheckmarkOutline,
       timeOutline,
+      womanOutline,
     });
   }
 
   async ngOnInit(): Promise<void> {
-    // Restore the last viewed squad before the first render so the toolbar
+    // Restore the last viewed circle before the first render so the toolbar
     // chip shows its name immediately instead of a placeholder.
-    this.restoreActiveSquad();
-    await this.setupLocationTracking();
+    this.restoreActiveCircle();
+
+    // The Settings toggle is the master switch: only watch/upload while it is
+    // on. Keep listening so toggling it off stops sharing without a reload.
+    this.trackingEnabled = this.locationTrackingService.enabled;
+    await this.applyTrackingPreference(this.trackingEnabled);
+    this.trackingSubscription = this.locationTrackingService.enabled$.subscribe(
+      (enabled) => {
+        if (enabled === this.trackingEnabled) return;
+        void this.applyTrackingPreference(enabled);
+      }
+    );
+
+    // Watch for user changes (login/logout/switch) and reset map state.
+    this.authSubscription = this.authService.currentUser$.subscribe((user) => {
+      if (this.lastUserId !== null && this.lastUserId !== user?.id) {
+        // Different user logged in — wipe all map data for the old account.
+        this.resetMapState();
+      }
+      this.lastUserId = user?.id ?? null;
+    });
+
     await this.geolocationService.startMotionTracking();
     this.startCompassUpdates();
-    await this.loadSquadMembers();
+    await this.loadCircleMembers();
     this.initialLoadDone = true;
     this.cdr.markForCheck();
-    this.scheduleSquadPoll();
+    this.scheduleCirclePoll();
     this.startPingPolling();
+    this.startNotificationPolling();
+  }
+
+  /** Refresh badges and positions when returning from another screen. */
+  ionViewWillEnter(): void {
+    void this.refreshUnreadNotifications();
+    void this.refreshCircleLocations(false);
+    // Recover if the initial permission prompt was dismissed; toggling the
+    // master switch off must not restart the watch.
+    if (this.trackingEnabled && !this.watchId) {
+      void this.setupLocationTracking();
+    }
   }
 
   /**
@@ -487,7 +540,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.initMap();
     // Data may finish loading before the map exists (both run from ngOnInit);
     // paint whatever already arrived so the first frame is complete.
-    this.updateSquadMarkers();
+    this.updateCircleMarkers();
     if (this.lastKnownFix) {
       this.updateUserMarker(
         this.lastKnownFix.latitude,
@@ -517,13 +570,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }, 500);
   }
 
-  /** Refresh the squad on the accelerometer-driven cadence (5s moving / 30s still). */
-  private scheduleSquadPoll(): void {
+  /** Refresh the circle on the accelerometer-driven cadence (5s moving / 30s still). */
+  private scheduleCirclePoll(): void {
     if (!this.isActive) return;
     const delay = this.geolocationService.getPollInterval();
     this.pollTimer = setTimeout(async () => {
-      await this.refreshSquadLocations(false);
-      this.scheduleSquadPoll();
+      await this.refreshCircleLocations(false);
+      this.scheduleCirclePoll();
     }, delay);
   }
 
@@ -545,6 +598,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private readonly onVisibilityChange = (): void => {
     if (document.visibilityState === "visible") {
       void this.pollIncomingPings();
+      void this.refreshUnreadNotifications();
+      // Coming back to the app after a while should show fresh positions, not
+      // whatever the last poll left on the map.
+      void this.refreshCircleLocations(false);
     }
   };
 
@@ -593,6 +650,41 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       console.error("Failed to poll pings:", error);
     } finally {
       this.pingPollInFlight = false;
+    }
+  }
+
+  private startNotificationPolling(): void {
+    if (this.notificationPollTimer) return;
+    void this.refreshUnreadNotifications();
+    this.notificationPollTimer = setInterval(() => {
+      void this.refreshUnreadNotifications();
+    }, 30000);
+  }
+
+  /** Pull the inbox badge total without fetching the whole list. */
+  private async refreshUnreadNotifications(): Promise<void> {
+    if (
+      !this.isActive ||
+      this.notificationPollInFlight ||
+      document.visibilityState === "hidden"
+    ) {
+      return;
+    }
+
+    this.notificationPollInFlight = true;
+    try {
+      const count = await firstValueFrom(
+        this.notificationService.getUnreadCount()
+      );
+      if (!this.isActive) return;
+      this.unreadNotifications = count;
+      this.cdr.markForCheck();
+    } catch (error) {
+      // A missing notifications migration should not spam the console every
+      // 30 seconds; log once per failure and keep the last known badge.
+      console.error("Failed to refresh notification count:", error);
+    } finally {
+      this.notificationPollInFlight = false;
     }
   }
 
@@ -1170,9 +1262,25 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  /** React to the Settings master switch without a page reload. */
+  private async applyTrackingPreference(enabled: boolean): Promise<void> {
+    this.trackingEnabled = enabled;
+    if (enabled) {
+      await this.setupLocationTracking();
+    } else {
+      await this.stopLocationTracking();
+    }
+    this.cdr.markForCheck();
+  }
+
   private async setupLocationTracking(): Promise<void> {
+    // Already running, already starting, or the master switch is off.
+    if (!this.trackingEnabled || this.watchId || this.trackingStarting) return;
+
+    this.trackingStarting = true;
     try {
       const granted = await this.geolocationService.requestPermissions();
+      if (!this.trackingEnabled) return;
       if (!granted) {
         this.connectionStatus = "disconnected";
         this.cdr.markForCheck();
@@ -1180,52 +1288,74 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         return;
       }
 
-      this.watchId = await this.geolocationService.watchPosition(
+      const watchId = await this.geolocationService.watchPosition(
         (position) => this.onPositionUpdate(position),
         () => {
           this.connectionStatus = "disconnected";
           this.cdr.markForCheck();
         }
       );
+      // The toggle may have been switched off while the prompt/watch started.
+      if (!this.trackingEnabled) {
+        await this.geolocationService.clearWatch(watchId);
+        return;
+      }
+
+      this.watchId = watchId;
       this.isTracking = true;
       this.connectionStatus = "connected";
       this.cdr.markForCheck();
       this.startLocationHeartbeat();
 
-      // Keep uploading location after the app is backgrounded or swiped
-      // away. Android-only; no-op on web/iOS. Respect the Settings toggle
-      // when the user has turned tracking off.
-      if (this.backgroundTrackingEnabled()) {
-        void this.backgroundTracker.start(10000);
-      }
+      // Keep uploading after the app is backgrounded or swiped away.
+      // Android-only; no-op on web/iOS.
+      void this.backgroundTracker.start(10000);
 
       await this.getInitialPosition();
     } catch (error) {
       console.error("Location tracking failed:", error);
       this.connectionStatus = "disconnected";
       this.cdr.markForCheck();
+    } finally {
+      this.trackingStarting = false;
     }
   }
 
-  /** Settings toggle: "Location tracking" defaults to enabled. */
-  private backgroundTrackingEnabled(): boolean {
-    try {
-      return localStorage.getItem("konek_location_tracking") !== "false";
-    } catch {
-      return true;
+  /** Stop watching and uploading this device's location immediately. */
+  private async stopLocationTracking(): Promise<void> {
+    const watchId = this.watchId;
+    this.watchId = null;
+    if (watchId) {
+      await this.geolocationService.clearWatch(watchId);
     }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    // If the switch flipped back on while clearWatch was resolving, leave the
+    // new watch/heartbeat startup to applyTrackingPreference.
+    if (!this.trackingEnabled) {
+      this.isTracking = false;
+      await this.backgroundTracker.stop();
+    }
+    this.cdr.markForCheck();
   }
 
-  private async getInitialPosition(): Promise<void> {
+  private async getInitialPosition(): Promise<boolean> {
     try {
       const position = await this.geolocationService.getCurrentPosition();
       this.onPositionUpdate(position);
+      return true;
     } catch (error) {
       console.debug("Initial fix unavailable:", error);
+      return false;
     }
   }
 
   private onPositionUpdate(position: Position): void {
+    // A queued callback can land just after the master switch was turned off.
+    if (!this.trackingEnabled) return;
+
     const { latitude, longitude, accuracy, altitude, speed, heading } = position.coords;
     const headingDeg = heading ?? this.geolocationService.getHeading();
     this.lastAccuracy = accuracy ?? null;
@@ -1289,6 +1419,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   /** Send the latest fix to the API; history is only written for real fixes. */
   private uploadLocation(addHistory: boolean): void {
+    if (!this.trackingEnabled) return;
     const fix = this.lastKnownFix;
     if (!fix || this.locationUploadInFlight) return;
 
@@ -1456,74 +1587,74 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   // ---------------------------------------------------------------------------
-  // Squad data
+  // Circle data
   // ---------------------------------------------------------------------------
 
   /**
-   * Fetch the user's squads and keep the active selection valid. When the
-   * active squad no longer exists (left from the Squads page), fall back to
-   * the first one so the map always points at a real squad.
+   * Fetch the user's circles and keep the active selection valid. When the
+   * active circle no longer exists (left from the Circles page), fall back to
+   * the first one so the map always points at a real circle.
    */
-  private async loadSquads(): Promise<void> {
-    if (this.squadsLoadPromise) {
-      return this.squadsLoadPromise;
+  private async loadCircles(): Promise<void> {
+    if (this.circlesLoadPromise) {
+      return this.circlesLoadPromise;
     }
-    this.squadsLoadPromise = this.fetchSquads().finally(() => {
-      this.squadsLoadPromise = null;
+    this.circlesLoadPromise = this.fetchCircles().finally(() => {
+      this.circlesLoadPromise = null;
     });
-    return this.squadsLoadPromise;
+    return this.circlesLoadPromise;
   }
 
-  /** Fetch squads and keep the active selection valid. */
-  private async fetchSquads(): Promise<void> {
+  /** Fetch circles and keep the active selection valid. */
+  private async fetchCircles(): Promise<void> {
     try {
-      const squads = await firstValueFrom(this.squadService.getUserSquads());
-      this.squads = squads ?? [];
-      if (!this.squads.some((squad) => squad.id === this.activeSquadId)) {
-        this.activeSquadId = this.squads[0]?.id ?? null;
+      const circles = await firstValueFrom(this.circleService.getUserCircles());
+      this.circles = circles ?? [];
+      if (!this.circles.some((circle) => circle.id === this.activeCircleId)) {
+        this.activeCircleId = this.circles[0]?.id ?? null;
       }
-      const active = this.squads.find((squad) => squad.id === this.activeSquadId);
-      this.activeSquadNameCache = active?.squad_name ?? null;
-      this.squadsLoaded = true;
+      const active = this.circles.find((circle) => circle.id === this.activeCircleId);
+      this.activeCircleNameCache = active?.squad_name ?? null;
+      this.circlesLoaded = true;
       if (active) {
-        this.persistActiveSquad();
+        this.persistActiveCircle();
       } else {
-        this.clearStoredSquad();
+        this.clearStoredCircle();
       }
       this.cdr.markForCheck();
     } catch (error) {
-      console.error("Failed to load squads:", error);
+      console.error("Failed to load circles:", error);
     }
   }
 
-  /** Reinstate the squad chosen in a previous session (survives a refresh). */
-  private restoreActiveSquad(): void {
+  /** Reinstate the circle chosen in a previous session (survives a refresh). */
+  private restoreActiveCircle(): void {
     try {
-      const raw = localStorage.getItem(MapPage.ACTIVE_SQUAD_KEY);
+      const raw = localStorage.getItem(MapPage.ACTIVE_CIRCLE_KEY);
       if (!raw) return;
       const stored = JSON.parse(raw) as { id?: unknown; name?: unknown };
       if (typeof stored.id === "number" && typeof stored.name === "string") {
-        this.activeSquadId = stored.id;
-        this.activeSquadNameCache = stored.name;
+        this.activeCircleId = stored.id;
+        this.activeCircleNameCache = stored.name;
       }
     } catch {
-      // Corrupt or unavailable storage: fall back to the first squad.
+      // Corrupt or unavailable storage: fall back to the first circle.
     }
   }
 
-  /** Remember the active squad so a refresh opens on the same one. */
-  private persistActiveSquad(name?: string): void {
-    const id = this.activeSquadId;
+  /** Remember the active circle so a refresh opens on the same one. */
+  private persistActiveCircle(name?: string): void {
+    const id = this.activeCircleId;
     if (id === null) return;
     const resolved =
       name ??
-      this.squads.find((squad) => squad.id === id)?.squad_name ??
-      this.activeSquadNameCache;
+      this.circles.find((circle) => circle.id === id)?.squad_name ??
+      this.activeCircleNameCache;
     if (!resolved) return;
-    this.activeSquadNameCache = resolved;
+    this.activeCircleNameCache = resolved;
     try {
       localStorage.setItem(
-        MapPage.ACTIVE_SQUAD_KEY,
+        MapPage.ACTIVE_CIRCLE_KEY,
         JSON.stringify({ id, name: resolved })
       );
     } catch {
@@ -1532,7 +1663,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Distance (metres) from current user to a given member. */
-  private memberDistance(member: SquadMemberLocation): number | null {
+  private memberDistance(member: CircleMemberLocation): number | null {
     const me = this.userMarker?.getLngLat();
     if (!me) return null;
     return this.geolocationService.calculateDistance(
@@ -1544,7 +1675,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Formatted distance label for a member. */
-  memberDistanceLabel(member: SquadMemberLocation): string {
+  memberDistanceLabel(member: CircleMemberLocation): string {
     const d = this.memberDistance(member);
     if (d === null) return "—";
     if (d < 1000) return `${Math.round(d)} m`;
@@ -1581,12 +1712,12 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Absolute URL for a member's profile picture, or null when they have none. */
-  memberPictureUrl(member: SquadMemberLocation): string | null {
+  memberPictureUrl(member: CircleMemberLocation): string | null {
     return this.authService.pictureUrl(member.profile_picture);
   }
 
   /** Avatar background: the member's photo when set, otherwise their gradient. */
-  memberAvatarBackground(member: SquadMemberLocation): string {
+  memberAvatarBackground(member: CircleMemberLocation): string {
     const url = this.memberPictureUrl(member);
     return url
       ? `url("${url}") center / cover no-repeat`
@@ -1594,18 +1725,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** Initials are only shown when there is no profile picture. */
-  memberAvatarLabel(member: SquadMemberLocation): string {
+  memberAvatarLabel(member: CircleMemberLocation): string {
     return this.memberPictureUrl(member) ? "" : this.memberInitials(member.username);
   }
 
   /** Members sharing right now (seen within the last three minutes). */
-  get onlineMembers(): SquadMemberLocation[] {
-    return this.squadMembers.filter((m) => this.isMemberOnline(m));
+  get onlineMembers(): CircleMemberLocation[] {
+    return this.circleMembers.filter((m) => this.isMemberOnline(m));
   }
 
   /** Members not sharing, most recently seen first. */
-  get offlineMembers(): SquadMemberLocation[] {
-    return this.squadMembers
+  get offlineMembers(): CircleMemberLocation[] {
+    return this.circleMembers
       .filter((m) => !this.isMemberOnline(m))
       .sort(
         (a, b) =>
@@ -1614,9 +1745,10 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /** One-line status under a member's name. */
-  memberSubLabel(member: SquadMemberLocation): string {
+  memberSubLabel(member: CircleMemberLocation): string {
     const online = this.isMemberOnline(member);
     if (member.user_id === this.currentUser?.id) {
+      if (!this.trackingEnabled) return "Not sharing";
       return online
         ? "Sharing live"
         : `Last seen ${this.getTimeAgo(member.timestamp)}`;
@@ -1630,98 +1762,124 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   /** Convenience: online members count. */
   get onlineCount(): number {
-    return this.squadMembers.filter((m) => this.isMemberOnline(m)).length;
+    return this.circleMembers.filter((m) => this.isMemberOnline(m)).length;
   }
 
-  private clearStoredSquad(): void {
+  private clearStoredCircle(): void {
     try {
-      localStorage.removeItem(MapPage.ACTIVE_SQUAD_KEY);
+      localStorage.removeItem(MapPage.ACTIVE_CIRCLE_KEY);
     } catch {
       // localStorage may be unavailable in private mode.
     }
   }
 
   /**
-   * Load the member locations for the active squad. `refreshSquads` is false
-   * when the caller already fetched the squad list (switching or opening the
+   * Load the member locations for the active circle. `refreshCircles` is false
+   * when the caller already fetched the circle list (switching or opening the
    * dropdown), so a switch costs a single locations request.
    */
-  private async loadSquadMembers(refreshSquads = true): Promise<void> {
-    this.isLoadingSquad = true;
+  private async loadCircleMembers(refreshCircles = true): Promise<void> {
+    this.isLoadingCircle = true;
     try {
-      if (refreshSquads) {
-        await this.loadSquads();
+      if (refreshCircles) {
+        await this.loadCircles();
       }
       const members = await firstValueFrom(
-        this.squadService.getSquadLocations(this.activeSquadId ?? undefined)
+        this.circleService.getCircleLocations(this.activeCircleId ?? undefined)
       );
-      this.squadMembers = members;
-      this.updateSquadMarkers();
+      this.circleMembers = members;
+      this.updateCircleMarkers();
       this.cdr.markForCheck();
 
-      if (this.activeSquadId) {
-        await this.loadGeofences(this.activeSquadId);
+      if (this.activeCircleId) {
+        await this.loadGeofences(this.activeCircleId);
       }
     } catch (error) {
-      console.error("Failed to load squad members:", error);
+      console.error("Failed to load circle members:", error);
     } finally {
-      this.isLoadingSquad = false;
+      this.isLoadingCircle = false;
       this.cdr.markForCheck();
     }
   }
 
   /**
-   * Pull the latest squad positions. The background poll passes `false` so an
+   * Pull the latest circle positions. The background poll passes `false` so an
    * automatic refresh stays silent; user-initiated refreshes get a toast.
    */
-  async refreshSquadLocations(notify = true): Promise<void> {
-    this.isLoadingSquad = true;
+  async refreshCircleLocations(notify = true): Promise<boolean> {
+    // A pull-to-refresh, a foreground retry and a poll can collide. Reuse the
+    // request already in flight so every caller gets the same real outcome.
+    if (this.circleRefreshPromise) {
+      return this.circleRefreshPromise;
+    }
+
+    const request = this.performCircleRefresh(notify).finally(() => {
+      this.circleRefreshPromise = null;
+    });
+    this.circleRefreshPromise = request;
+    return request;
+  }
+
+  private async performCircleRefresh(notify: boolean): Promise<boolean> {
+    if (notify) {
+      this.isLoadingCircle = true;
+      this.cdr.markForCheck();
+    }
+
     try {
       const members = await firstValueFrom(
-        this.squadService.getSquadLocations(this.activeSquadId ?? undefined)
+        this.circleService.getCircleLocations(this.activeCircleId ?? undefined)
       );
-      this.squadMembers = members;
-      this.updateSquadMarkers();
+      this.circleMembers = members;
+      this.updateCircleMarkers();
       this.cdr.markForCheck();
       this.checkGeofenceTransitions(members);
       if (notify) {
         void this.showUpdateToast("Circle locations refreshed");
       }
+      return true;
     } catch (error) {
-      console.error("Failed to refresh squad locations:", error);
+      console.error("Failed to refresh circle locations:", error);
+      if (notify) {
+        void this.showUpdateToast(
+          "Couldn't refresh circle locations",
+          "alert-circle-outline"
+        );
+      }
+      return false;
     } finally {
-      this.isLoadingSquad = false;
+      this.isLoadingCircle = false;
       this.cdr.markForCheck();
     }
   }
 
-  private updateSquadMarkers(): void {
+  private updateCircleMarkers(): void {
     if (!this.map) return;
 
-    const present = new Set(this.squadMembers.map((m) => String(m.user_id)));
-    for (const [id, marker] of this.squadMarkers) {
+    const present = new Set(this.circleMembers.map((m) => String(m.user_id)));
+    for (const [id, marker] of this.circleMarkers) {
       if (!present.has(id)) {
         marker.remove();
-        this.squadMarkers.delete(id);
-        this.squadMarkerEls.delete(id);
+        this.circleMarkers.delete(id);
+        this.circleMarkerEls.delete(id);
       }
     }
 
-    for (const member of this.squadMembers) {
+    for (const member of this.circleMembers) {
       if (member.user_id === this.currentUser?.id) continue; // skip self
 
       const id = String(member.user_id);
-      const existing = this.squadMarkers.get(id);
+      const existing = this.circleMarkers.get(id);
       if (existing) {
         existing.setLngLat([member.longitude, member.latitude]);
-        const el = this.squadMarkerEls.get(id);
-        if (el) this.paintSquadMarker(el, member);
+        const el = this.circleMarkerEls.get(id);
+        if (el) this.paintCircleMarker(el, member);
         continue;
       }
 
       const el = document.createElement("div");
       el.style.zIndex = "500";
-      this.paintSquadMarker(el, member);
+      this.paintCircleMarker(el, member);
       el.addEventListener("click", (event) => {
         event.stopPropagation();
         this.openMemberDetail(member.user_id);
@@ -1730,20 +1888,20 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       const marker = new maplibregl.Marker({ element: el, anchor: "center" })
         .setLngLat([member.longitude, member.latitude])
         .addTo(this.map);
-      this.squadMarkers.set(id, marker);
-      this.squadMarkerEls.set(id, el);
+      this.circleMarkers.set(id, marker);
+      this.circleMarkerEls.set(id, el);
     }
   }
 
   /** Avatar-style marker: photo (or initials), role colour and a live dot. */
-  private paintSquadMarker(el: HTMLDivElement, member: SquadMemberLocation): void {
+  private paintCircleMarker(el: HTMLDivElement, member: CircleMemberLocation): void {
     const online = this.isMemberOnline(member);
     const admin = member.role === "admin";
     const photo = this.memberPictureUrl(member);
     const movement = this.memberMovement(member);
     // Preserve MapLibre's own classes (maplibregl-marker, anchor class) while
     // refreshing the role/online state on every location poll.
-    el.classList.add("squad-marker");
+    el.classList.add("circle-marker");
     el.classList.toggle("is-admin", admin);
     el.innerHTML = `
       <div class="marker-ring"></div>
@@ -1769,7 +1927,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
    * moving get one, so a parked or offline friend stays visually quiet.
    */
   private memberMovement(
-    member: SquadMemberLocation
+    member: CircleMemberLocation
   ):
     | { state: "driving" | "moving"; label: string; speedKmh: number; icon: string }
     | null {
@@ -1807,13 +1965,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   // Geofences
   // ---------------------------------------------------------------------------
 
-  private async loadGeofences(squadId: number): Promise<void> {
+  private async loadGeofences(circleId: number): Promise<void> {
     try {
       this.geofences = await firstValueFrom(
-        this.squadService.getGeofences(squadId)
+        this.circleService.getGeofences(circleId)
       );
       this.renderGeofences();
-      this.checkGeofenceTransitions(this.squadMembers);
+      this.checkGeofenceTransitions(this.circleMembers);
     } catch (error) {
       console.debug("No geofences available:", error);
     }
@@ -1835,7 +1993,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     source?.setData(this.geofenceData);
   }
 
-  private checkGeofenceTransitions(members: SquadMemberLocation[]): void {
+  private checkGeofenceTransitions(members: CircleMemberLocation[]): void {
     for (const fence of this.geofences) {
       for (const member of members) {
         const key = `${fence.id}:${member.user_id}`;
@@ -1881,32 +2039,32 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  centerOnMember(member: SquadMemberLocation): void {
+  centerOnMember(member: CircleMemberLocation): void {
     this.map?.flyTo({
       center: [member.longitude, member.latitude],
       zoom: MapPage.MEMBER_FOCUS_ZOOM,
       duration: 600,
     });
-    this.closeSquadPanel();
+    this.closeCirclePanel();
   }
 
   // ---------------------------------------------------------------------------
-  // Member detail sheet (tap on a marker or squad member)
+  // Member detail sheet (tap on a marker or circle member)
   // ---------------------------------------------------------------------------
 
   /**
-   * Remember what the squad list was doing so the back button can restore it:
+   * Remember what the circle list was doing so the back button can restore it:
    * the sidebar on desktop, the current snap point on mobile.
    */
-  private rememberSquadPanelState(): void {
-    this.previousSquadListOpen = this.isMobileLayout()
-      ? this.squadSheetSnap !== "peek"
-      : this.showSquadList;
-    this.previousSquadSnap = this.squadSheetSnap;
+  private rememberCirclePanelState(): void {
+    this.previousCircleListOpen = this.isMobileLayout()
+      ? this.circleSheetSnap !== "peek"
+      : this.showCircleList;
+    this.previousCircleSnap = this.circleSheetSnap;
   }
 
   openMemberDetail(userId: number): void {
-    const member = this.squadMembers.find((m) => m.user_id === userId);
+    const member = this.circleMembers.find((m) => m.user_id === userId);
     if (!member) return;
     // Tapping your own row opens the self sheet: no ping chips, no directions.
     if (member.user_id === this.currentUser?.id) {
@@ -1914,13 +2072,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.centerOnUser();
       return;
     }
-    this.rememberSquadPanelState();
+    this.rememberCirclePanelState();
     this.selectedMember = member;
     this.selectedMemberRelationship = member.relationship ?? null;
     this.selectedIsSelf = false;
     this.detailSheetOpen = true;
     this.memberSheetSnap = "half";
-    this.closeSquadPanel();
+    this.closeCirclePanel();
     // MapLibre click handlers run outside Angular's change detection
     // (zoneless app), so schedule a render for the sheet state change.
     this.cdr.markForCheck();
@@ -1930,12 +2088,12 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   openSelfDetail(): void {
-    this.rememberSquadPanelState();
+    this.rememberCirclePanelState();
     this.selectedMember = null;
     this.selectedIsSelf = true;
     this.detailSheetOpen = true;
     this.memberSheetSnap = "half";
-    this.closeSquadPanel();
+    this.closeCirclePanel();
     this.cdr.markForCheck();
     requestAnimationFrame(() => this.applyMemberSheetSnap());
   }
@@ -1948,78 +2106,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.memberSheetSnap = "peek";
     this.memberPanel?.nativeElement.style.removeProperty("transform");
 
-    // Back returns to the squad list if it was open when the friend was tapped.
-    if (this.previousSquadListOpen) {
+    // Back returns to the circle list if it was open when the friend was tapped.
+    if (this.previousCircleListOpen) {
       if (this.isMobileLayout()) {
-        this.setSheetSnap(this.previousSquadSnap);
+        this.setSheetSnap(this.previousCircleSnap);
       } else {
-        this.showSquadList = true;
+        this.showCircleList = true;
       }
     }
-    this.previousSquadListOpen = false;
-    // Bring the squad sheet back out of hiding (mobile) and re-sync the FABs.
+    this.previousCircleListOpen = false;
+    // Bring the circle sheet back out of hiding (mobile) and re-sync the FABs.
     this.applySheetSnap();
     this.cdr.markForCheck();
-  }
-
-  /** Open a popover to edit the selected member's relationship label. */
-  async openRelationshipEditor(event: Event): Promise<void> {
-    if (!this.selectedMember || this.selectedIsSelf) return;
-    event.stopPropagation();
-
-    const popover = await this.popoverCtrl.create({
-      component: RelationshipPopoverComponent,
-      componentProps: {
-        currentRelationship: this.selectedMemberRelationship,
-        memberName: this.selectedMember.username,
-        isAdmin: this.detailIsAdmin,
-        currentUserId: this.currentUser?.id,
-        targetUserId: this.selectedMember.user_id,
-      },
-      event,
-      side: "bottom",
-      alignment: "center",
-      size: "auto",
-    });
-    await popover.present();
-    const { data } = await popover.onWillDismiss<MemberRelationship | null>();
-    if (data !== undefined) {
-      // User confirmed a selection (including null to clear)
-      await this.updateSelectedMemberRelationship(data);
-    }
-  }
-
-  /** Send the relationship change to the backend and update local state. */
-  private async updateSelectedMemberRelationship(
-    relationship: MemberRelationship | null
-  ): Promise<void> {
-    if (!this.selectedMember || !this.activeSquadId) return;
-    try {
-      const result = await firstValueFrom(
-        this.squadService.updateMemberRelationship(
-          this.activeSquadId,
-          this.selectedMember.user_id,
-          relationship
-        )
-      );
-      if (result !== undefined) {
-        this.selectedMemberRelationship = result;
-        // Also update the cached squadMembers array so the panel reflects it.
-        const idx = this.squadMembers.findIndex(
-          (m) => m.user_id === this.selectedMember!.user_id
-        );
-        if (idx !== -1) {
-          this.squadMembers[idx].relationship = result;
-        }
-        this.cdr.markForCheck();
-        void this.showUpdateToast(
-          result === null ? "Relationship cleared" : `Relationship set to ${this.relationshipLabel(result)}`
-        );
-      }
-    } catch (error) {
-      console.error("Failed to update relationship:", error);
-      void this.showUpdateToast("Failed to update relationship", "alert-circle-outline");
-    }
   }
 
   /** Human-readable label for a relationship value. */
@@ -2044,13 +2142,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const icons: Record<MemberRelationship, string> = {
       dad: "male-outline",
       mom: "female-outline",
-      son: "person-outline",
-      daughter: "person-outline",
-      child: "person-outline",
-      grandparent: "person-circle-outline",
+      son: "man-outline",
+      daughter: "woman-outline",
+      child: "happy-outline",
+      grandparent: "people-outline",
       partner: "heart-outline",
       friend: "person-add-outline",
-      other: "walk-outline",
+      other: "ellipsis-horizontal-outline",
     };
     return icons[rel] ?? "person-outline";
   }
@@ -2060,13 +2158,22 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     if (this.isRefreshingDetail) return;
     this.isRefreshingDetail = true;
     this.cdr.markForCheck();
+
     try {
-      if (this.selectedIsSelf) {
-        await this.getInitialPosition();
-      } else {
-        await this.refreshSquadLocations(false);
-      }
-      void this.showUpdateToast("Location refreshed");
+      const refreshed = this.selectedIsSelf
+        ? await this.getInitialPosition()
+        : await this.refreshCircleLocations(false);
+
+      void this.showUpdateToast(
+        refreshed ? "Location refreshed" : "Couldn't refresh location",
+        refreshed ? undefined : "alert-circle-outline"
+      );
+    } catch (error) {
+      console.error("Failed to refresh location:", error);
+      void this.showUpdateToast(
+        "Couldn't refresh location",
+        "alert-circle-outline"
+      );
     } finally {
       this.isRefreshingDetail = false;
       this.cdr.markForCheck();
@@ -2135,7 +2242,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Send a quick ping to the selected squad mate. The recipient's app picks it
+   * Send a quick ping to the selected circle mate. The recipient's app picks it
    * up on its next poll and vibrates there; the sender gets no success feedback
    * so only the person being pinged is alerted. Errors are still surfaced.
    */
@@ -2189,12 +2296,12 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  /** The selected member kept in sync with the latest squad poll. */
-  get liveSelectedMember(): SquadMemberLocation | null {
+  /** The selected member kept in sync with the latest circle poll. */
+  get liveSelectedMember(): CircleMemberLocation | null {
     const selected = this.selectedMember;
     if (!selected) return null;
     return (
-      this.squadMembers.find((m) => m.user_id === selected.user_id) ?? selected
+      this.circleMembers.find((m) => m.user_id === selected.user_id) ?? selected
     );
   }
 
@@ -2335,18 +2442,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     await sheet.present();
   }
 
-  toggleSquadList(): void {
+  toggleCircleList(): void {
     // The two sheets are mutually exclusive: the friend detail owns the edge.
     if (this.detailSheetOpen) return;
     if (this.isMobileLayout()) {
-      this.setSheetSnap(this.squadSheetSnap === "peek" ? "half" : "peek");
+      this.setSheetSnap(this.circleSheetSnap === "peek" ? "half" : "peek");
       return;
     }
-    this.showSquadList = !this.showSquadList;
+    this.showCircleList = !this.showCircleList;
   }
 
   // ---------------------------------------------------------------------------
-  // Mobile squad bottom sheet
+  // Mobile circle bottom sheet
   // ---------------------------------------------------------------------------
 
   private isMobileLayout(): boolean {
@@ -2359,7 +2466,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
    * area; `full` pins the sheet to the top of the content area.
    */
   private sheetOffsetFor(snap: "peek" | "half" | "full"): number {
-    const panel = this.squadPanel?.nativeElement;
+    const panel = this.circlePanel?.nativeElement;
     if (!panel) return 0;
     if (snap === "full") return 0;
 
@@ -2373,16 +2480,16 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   /** Peek height comes from CSS so the FAB/MapLibre offsets stay in sync. */
   private sheetPeekHeight(): number {
-    const panel = this.squadPanel?.nativeElement;
+    const panel = this.circlePanel?.nativeElement;
     if (!panel) return 82;
     const value = parseFloat(
-      getComputedStyle(panel).getPropertyValue("--squad-peek-height")
+      getComputedStyle(panel).getPropertyValue("--circle-peek-height")
     );
     return Number.isFinite(value) ? value : 82;
   }
 
   private applySheetSnap(): void {
-    const panel = this.squadPanel?.nativeElement;
+    const panel = this.circlePanel?.nativeElement;
     if (!panel) return;
 
     if (!this.isMobileLayout()) {
@@ -2393,7 +2500,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    // The squad sheet yields the bottom edge while the friend detail is open.
+    // The circle sheet yields the bottom edge while the friend detail is open.
     if (this.detailSheetOpen) {
       panel.style.transform = "translateY(100%)";
       this.setToolbarHidden(false);
@@ -2401,15 +2508,15 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    const offset = this.sheetOffsetFor(this.squadSheetSnap);
+    const offset = this.sheetOffsetFor(this.circleSheetSnap);
     panel.style.transform = `translateY(${offset}px)`;
     // The sheet owns the whole screen at full height: let the toolbar slide
-    // away so the squad list gets an unobstructed view.
-    this.setToolbarHidden(this.squadSheetSnap === "full");
+    // away so the circle list gets an unobstructed view.
+    this.setToolbarHidden(this.circleSheetSnap === "full");
     this.syncFabPosition(offset);
   }
 
-  /** Toggle the floating toolbar while the squad sheet is dragged. */
+  /** Toggle the floating toolbar while the circle sheet is dragged. */
   private setToolbarHidden(hidden: boolean): void {
     if (this.toolbarHidden === hidden) return;
     this.toolbarHidden = hidden;
@@ -2417,13 +2524,13 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Keep the map action stack glued 14px above the squad sheet's top edge so
+   * Keep the map action stack glued 14px above the circle sheet's top edge so
    * it rides along while the sheet is dragged and stays there after a snap.
    * The stack never climbs past the floating toolbar.
    */
   private syncFabPosition(panelOffset: number): void {
     const fabs = this.mapFabs?.nativeElement;
-    const panel = this.squadPanel?.nativeElement;
+    const panel = this.circlePanel?.nativeElement;
     if (!fabs || !panel) return;
 
     if (!this.isMobileLayout()) {
@@ -2459,7 +2566,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     const target = event.target as HTMLElement;
     if (target.closest("ion-button, ion-item, a")) return;
 
-    const panel = this.squadPanel?.nativeElement;
+    const panel = this.circlePanel?.nativeElement;
     if (!panel) return;
 
     if (this.isSheetDragging) {
@@ -2467,7 +2574,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
 
     this.sheetDragStartY = event.clientY;
-    this.sheetDragStartOffset = this.sheetOffsetFor(this.squadSheetSnap);
+    this.sheetDragStartOffset = this.sheetOffsetFor(this.circleSheetSnap);
     this.sheetCurrentOffset = this.sheetDragStartOffset;
     this.sheetDragMoved = false;
     this.isSheetDragging = true;
@@ -2484,7 +2591,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
 
   private readonly onSheetPointerMove = (event: PointerEvent): void => {
     if (!this.isSheetDragging) return;
-    const panel = this.squadPanel?.nativeElement;
+    const panel = this.circlePanel?.nativeElement;
     if (!panel) return;
 
     const delta = event.clientY - this.sheetDragStartY;
@@ -2532,7 +2639,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   private endSheetDrag(): void {
     this.isSheetDragging = false;
     this.sheetNearFull = false;
-    this.squadPanel?.nativeElement.classList.remove("dragging");
+    this.circlePanel?.nativeElement.classList.remove("dragging");
     this.mapFabs?.nativeElement.classList.remove("dragging");
     window.removeEventListener("pointermove", this.onSheetPointerMove);
     window.removeEventListener("pointerup", this.onSheetPointerEnd);
@@ -2550,7 +2657,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.sheetDragMoved = false;
       return;
     }
-    this.setSheetSnap(this.squadSheetSnap === "peek" ? "half" : "peek");
+    this.setSheetSnap(this.circleSheetSnap === "peek" ? "half" : "peek");
   }
 
   /** Tapping the sheet header (outside its buttons) expands it like the grabber. */
@@ -2565,16 +2672,16 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private setSheetSnap(snap: "peek" | "half" | "full"): void {
-    this.squadSheetSnap = snap;
+    this.circleSheetSnap = snap;
     this.applySheetSnap();
     this.cdr.markForCheck();
   }
 
-  closeSquadPanel(): void {
+  closeCirclePanel(): void {
     if (this.isMobileLayout()) {
       this.setSheetSnap("peek");
     } else {
-      this.showSquadList = false;
+      this.showCircleList = false;
       this.cdr.markForCheck();
     }
   }
@@ -2703,55 +2810,45 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  async openMessages(): Promise<void> {
-    const toast = await this.toastCtrl.create({
-      message: "Messaging is coming soon",
-      duration: 1800,
-      position: "top",
-      cssClass: "update-toast",
-    });
-    await toast.present();
-  }
-
   // ---------------------------------------------------------------------------
-  // Squad chip dropdown (create / join)
+  // Circle chip dropdown (create / join)
   // ---------------------------------------------------------------------------
 
   /**
-   * The toolbar squad chip opens a dropdown anchored to the pill itself, so it
+   * The toolbar circle chip opens a dropdown anchored to the pill itself, so it
    * appears directly under the chip instead of sliding up from the bottom.
    * The chip expands first, then the dropdown is sized to the expanded chip so
    * the two read as one connected card.
    */
-  async presentSquadOptions(event: Event): Promise<void> {
-    if (this.squadChipOpen) return;
+  async presentCircleOptions(event: Event): Promise<void> {
+    if (this.circleChipOpen) return;
 
     const anchor = event.currentTarget as HTMLElement;
-    this.squadChipOpen = true;
+    this.circleChipOpen = true;
     // Render the expanded chip before presenting so Ionic measures its final
     // width (not the collapsed pill's) when it sizes the popover.
     this.cdr.detectChanges();
 
-    // First open before the squad list has arrived: wait for it so the menu
+    // First open before the circle list has arrived: wait for it so the menu
     // is never empty. Every later open presents instantly from cache and
     // refreshes quietly in the background (a network round-trip here made the
     // menu feel laggy).
-    if (!this.squadsLoaded) {
-      const previousActiveId = this.activeSquadId;
-      await this.loadSquads();
-      if (previousActiveId !== this.activeSquadId) {
-        await this.loadSquadMembers(false);
+    if (!this.circlesLoaded) {
+      const previousActiveId = this.activeCircleId;
+      await this.loadCircles();
+      if (previousActiveId !== this.activeCircleId) {
+        await this.loadCircleMembers(false);
       }
     } else {
-      void this.refreshSquadsInBackground();
+      void this.refreshCirclesInBackground();
     }
 
     const popover = await this.popoverCtrl.create({
-      component: SquadMenuPopoverComponent,
+      component: CircleMenuPopoverComponent,
       componentProps: {
-        squadName: this.activeSquadName,
-        squads: this.squads,
-        activeSquadId: this.activeSquadId,
+        circleName: this.activeCircleName,
+        circles: this.circles,
+        activeCircleId: this.activeCircleId,
       },
       // Anchor to the button itself: event.target can be the inner label span.
       event: { target: anchor } as unknown as Event,
@@ -2759,7 +2856,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       alignment: "center",
       arrow: false,
       showBackdrop: true,
-      cssClass: "squad-menu-popover",
+      cssClass: "circle-menu-popover",
       // Ionic sets the popover width from the anchor's exact (sub-pixel) rect,
       // so the dropdown lines up with the expanded chip on both edges.
       size: "cover",
@@ -2767,7 +2864,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     // The backdrop hole is a CSS variable read via ::part(backdrop) so it is
     // already in effect on the backdrop's very first frame (no dim flash).
     popover.style.setProperty(
-      "--squad-chip-hole",
+      "--circle-chip-hole",
       this.buildBackdropHolePath(anchor)
     );
     await popover.present();
@@ -2795,7 +2892,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
         content.style.left = `calc(${rect.left}px + var(--offset-x, 0px))`;
       }
       popover.style.setProperty(
-        "--squad-chip-hole",
+        "--circle-chip-hole",
         this.buildBackdropHolePath(anchor)
       );
     };
@@ -2803,106 +2900,58 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     window.addEventListener("orientationchange", followChip);
 
     // Act after the popover closes so the next alert opens on a clean backdrop.
-    const { data } = await popover.onWillDismiss<SquadMenuResult>();
+    const { data } = await popover.onWillDismiss<CircleMenuResult>();
     popover.removeEventListener("click", dismissOnChipTap);
     window.removeEventListener("resize", followChip);
     window.removeEventListener("orientationchange", followChip);
-    this.squadChipOpen = false;
+    this.circleChipOpen = false;
     this.cdr.markForCheck();
 
     if (!data) return;
 
     if (data.action === "create") {
-      void this.createSquad();
+      void this.createCircle();
     } else if (data.action === "join") {
-      void this.joinSquad();
+      void this.joinCircle();
     } else if (data.action === "switch") {
-      void this.switchSquad(data.squadId);
+      void this.switchCircle(data.circleId);
     }
   }
 
   /**
-   * Quietly refetch the squad list after the dropdown is already on screen so
-   * squads created/left elsewhere show up next time without delaying this open.
+   * Quietly refetch the circle list after the dropdown is already on screen so
+   * circles created/left elsewhere show up next time without delaying this open.
    */
-  private async refreshSquadsInBackground(): Promise<void> {
-    const previousActiveId = this.activeSquadId;
-    await this.loadSquads();
-    if (previousActiveId !== this.activeSquadId) {
-      await this.loadSquadMembers(false);
+  private async refreshCirclesInBackground(): Promise<void> {
+    const previousActiveId = this.activeCircleId;
+    await this.loadCircles();
+    if (previousActiveId !== this.activeCircleId) {
+      await this.loadCircleMembers(false);
     }
   }
 
-  /** Invite code of the squad currently shown on the map. */
-  get activeSquadJoinCode(): string | null {
-    return (
-      this.squads.find((squad) => squad.id === this.activeSquadId)?.join_code ??
-      null
-    );
-  }
-
-  /** Copy the active squad's invite code so it can be pasted into a chat. */
-  async copySquadCode(): Promise<void> {
-    const code = this.activeSquadJoinCode;
-    if (!code) return;
-
-    try {
-      await navigator.clipboard.writeText(code);
-      await this.showUpdateToast("Join code copied!");
-    } catch {
-      // Clipboard access can be denied in a WebView: still surface the code.
-      await this.showUpdateToast(`Join code: ${code}`);
-    }
-  }
-
-  /** Share the active squad's invite code via the platform share sheet. */
-  async shareSquadCode(): Promise<void> {
-    const squad = this.squads.find((entry) => entry.id === this.activeSquadId);
-    if (!squad) return;
-
-    const text = `Join "${squad.squad_name}" on Konek with the code ${squad.join_code}`;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Join my Konek circle", text });
-        return;
-      } catch (error) {
-        // Closing the share sheet is not an error; anything else falls back
-        // to copying the code.
-        if ((error as DOMException)?.name === "AbortError") return;
-      }
-    }
-
-    try {
-      await navigator.clipboard.writeText(squad.join_code);
-      await this.showUpdateToast("Join code copied!");
-    } catch {
-      await this.showUpdateToast(`Join code: ${squad.join_code}`);
-    }
-  }
-
-  /** Swap the map over to another squad and reload its members and geofences. */
-  private async switchSquad(squadId: number): Promise<void> {
-    if (squadId === this.activeSquadId) return;
-    this.activeSquadId = squadId;
-    this.persistActiveSquad(
-      this.squads.find((squad) => squad.id === squadId)?.squad_name
+  /** Swap the map over to another circle and reload its members and geofences. */
+  private async switchCircle(circleId: number): Promise<void> {
+    if (circleId === this.activeCircleId) return;
+    this.activeCircleId = circleId;
+    this.persistActiveCircle(
+      this.circles.find((circle) => circle.id === circleId)?.squad_name
     );
     this.cdr.markForCheck();
-    await this.loadSquadMembers(false);
+    await this.loadCircleMembers(false);
   }
 
   /**
-   * Leave the squad open in the squad panel. Confirmation and the reload happen
+   * Leave the circle open in the circle panel. Confirmation and the reload happen
    * here so the panel's footer button stays a plain click handler.
    */
-  async leaveActiveSquad(): Promise<void> {
-    const squadId = this.activeSquadId;
-    if (squadId === null) return;
+  async leaveActiveCircle(): Promise<void> {
+    const circleId = this.activeCircleId;
+    if (circleId === null) return;
 
     const name =
-      this.squads.find((squad) => squad.id === squadId)?.squad_name ??
-      this.activeSquadName;
+      this.circles.find((circle) => circle.id === circleId)?.squad_name ??
+      this.activeCircleName;
     const alert = await this.alertCtrl.create({
       header: "Leave Circle",
       message: `Are you sure you want to leave "${name}"?`,
@@ -2912,7 +2961,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
           text: "Leave",
           role: "destructive",
           handler: () => {
-            void this.doLeaveSquad(squadId);
+            void this.doLeaveCircle(circleId);
           },
         },
       ],
@@ -2921,28 +2970,28 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Leave a squad, then move the map on: the squad list is refetched so the
-   * active squad falls back to the next one (or to none at all).
+   * Leave a circle, then move the map on: the circle list is refetched so the
+   * active circle falls back to the next one (or to none at all).
    */
-  private async doLeaveSquad(squadId: number): Promise<void> {
+  private async doLeaveCircle(circleId: number): Promise<void> {
     const loading = await this.loadingCtrl.create({ message: "Leaving circle..." });
     await loading.present();
 
     try {
-      await firstValueFrom(this.squadService.leaveSquad(squadId));
+      await firstValueFrom(this.circleService.leaveCircle(circleId));
       await loading.dismiss();
       void this.showUpdateToast("Left circle");
-      await this.loadSquads();
-      if (this.activeSquadId === null) {
-        // Left the last squad: drop its geofence circles from the map.
+      await this.loadCircles();
+      if (this.activeCircleId === null) {
+        // Left the last circle: drop its geofence circles from the map.
         this.geofences = [];
         this.renderGeofences();
       }
-      await this.loadSquadMembers(false);
+      await this.loadCircleMembers(false);
       this.cdr.markForCheck();
     } catch (error) {
       await loading.dismiss();
-      console.error("Leave squad failed:", error);
+      console.error("Leave circle failed:", error);
       // Surface the server's reason, e.g. the sole-admin rule.
       const message =
         (error as { error?: { message?: string } })?.error?.message ??
@@ -2982,94 +3031,94 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     return `path(evenodd, "${outer} ${hole}")`;
   }
 
-  private async createSquad(): Promise<void> {
-    this.isSquadFormModalOpen = true;
+  private async createCircle(): Promise<void> {
+    this.isCircleFormModalOpen = true;
     this.cdr.markForCheck();
     try {
-      const { CreateSquadModalComponent } = await import(
-        "./create-squad-modal/create-squad-modal.component"
+      const { CreateCircleModalComponent } = await import(
+        "./create-circle-modal/create-circle-modal.component"
       );
       const modal = await this.modalCtrl.create({
-        component: CreateSquadModalComponent,
-        cssClass: "squad-form-modal",
+        component: CreateCircleModalComponent,
+        cssClass: "circle-form-modal",
         backdropDismiss: true,
       });
       await modal.present();
 
       const { data, role } = await modal.onWillDismiss<string>();
       if (role === "confirm" && data) {
-        await this.doCreateSquad(data);
+        await this.doCreateCircle(data);
       }
     } finally {
-      this.isSquadFormModalOpen = false;
+      this.isCircleFormModalOpen = false;
       this.cdr.markForCheck();
     }
   }
 
-  private async doCreateSquad(name: string): Promise<void> {
+  private async doCreateCircle(name: string): Promise<void> {
     const loading = await this.loadingCtrl.create({ message: "Creating circle..." });
     await loading.present();
     try {
-      const squad = await firstValueFrom(
-        this.squadService.createSquad({ squad_name: name })
+      const circle = await firstValueFrom(
+        this.circleService.createCircle({ squad_name: name })
       );
       await loading.dismiss();
       void this.showUpdateToast("Circle created");
-      // Show the new squad straight away instead of staying on the old one.
-      if (squad?.id) {
-        this.activeSquadId = squad.id;
-        this.persistActiveSquad(squad.squad_name);
+      // Show the new circle straight away instead of staying on the old one.
+      if (circle?.id) {
+        this.activeCircleId = circle.id;
+        this.persistActiveCircle(circle.squad_name);
       }
-      await this.loadSquadMembers();
+      await this.loadCircleMembers();
     } catch (error) {
       await loading.dismiss();
-      console.error("Create squad failed:", error);
+      console.error("Create circle failed:", error);
       void this.showUpdateToast("Failed to create circle");
     }
   }
 
-  private async joinSquad(): Promise<void> {
-    this.isSquadFormModalOpen = true;
+  private async joinCircle(): Promise<void> {
+    this.isCircleFormModalOpen = true;
     this.cdr.markForCheck();
     try {
-      const { JoinSquadModalComponent } = await import(
-        "./join-squad-modal/join-squad-modal.component"
+      const { JoinCircleModalComponent } = await import(
+        "./join-circle-modal/join-circle-modal.component"
       );
       const modal = await this.modalCtrl.create({
-        component: JoinSquadModalComponent,
-        cssClass: "squad-form-modal",
+        component: JoinCircleModalComponent,
+        cssClass: "circle-form-modal",
         backdropDismiss: true,
       });
       await modal.present();
 
       const { data, role } = await modal.onWillDismiss<string>();
       if (role === "confirm" && data) {
-        await this.doJoinSquad(data);
+        await this.doJoinCircle(data);
       }
     } finally {
-      this.isSquadFormModalOpen = false;
+      this.isCircleFormModalOpen = false;
       this.cdr.markForCheck();
     }
   }
 
-  private async doJoinSquad(code: string): Promise<void> {
+  private async doJoinCircle(code: string): Promise<void> {
     const loading = await this.loadingCtrl.create({ message: "Joining circle..." });
     await loading.present();
     try {
-      const squad = await firstValueFrom(
-        this.squadService.joinSquad({ join_code: code })
+      const circle = await firstValueFrom(
+        this.circleService.joinCircle({ join_code: code })
       );
       await loading.dismiss();
       void this.showUpdateToast("Joined circle");
-      // Show the newly joined squad straight away.
-      if (squad?.id) {
-        this.activeSquadId = squad.id;
-        this.persistActiveSquad(squad.squad_name);
+      // Show the newly joined circle straight away.
+      if (circle?.id) {
+        this.activeCircleId = circle.id;
+        this.persistActiveCircle(circle.squad_name);
       }
-      await this.loadSquadMembers();
+      await this.loadCircleMembers();
     } catch (error) {
       await loading.dismiss();
-      console.error("Join squad failed:", error);
+      console.error("Join circle failed:", error);
       const message =
         (error as { error?: { message?: string } })?.error?.message ??
         "Failed to join circle";
@@ -3081,17 +3130,17 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
   // Helpers used by the template
   // ---------------------------------------------------------------------------
 
-  /** Group name shown in the toolbar: the active squad, or a neutral fallback. */
-  get activeSquadName(): string {
-    const active = this.squads.find((squad) => squad.id === this.activeSquadId);
+  /** Group name shown in the toolbar: the active circle, or a neutral fallback. */
+  get activeCircleName(): string {
+    const active = this.circles.find((circle) => circle.id === this.activeCircleId);
     if (active) return active.squad_name;
-    if (this.activeSquadNameCache) return this.activeSquadNameCache;
-    return this.squadsLoaded ? "Konek Map" : "Loading…";
+    if (this.activeCircleNameCache) return this.activeCircleNameCache;
+    return this.circlesLoaded ? "Konek Map" : "Loading…";
   }
 
-  /** Whether the panel's leave action applies: a squad must be selected. */
-  get hasActiveSquad(): boolean {
-    return this.activeSquadId !== null;
+  /** Whether the panel's leave action applies: a circle must be selected. */
+  get hasActiveCircle(): boolean {
+    return this.activeCircleId !== null;
   }
 
   /** Transient top-of-screen confirmation, replacing the old map pill. */
@@ -3120,7 +3169,12 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  isMemberOnline(member: SquadMemberLocation): boolean {
+  isMemberOnline(member: CircleMemberLocation): boolean {
+    // Self reflects the local master switch immediately; others only go
+    // offline once their last server location is older than three minutes.
+    if (member.user_id === this.currentUser?.id) {
+      return this.trackingEnabled && this.isTracking;
+    }
     return Date.now() - new Date(member.timestamp).getTime() < 180000;
   }
 
@@ -3142,7 +3196,53 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     await alert.present();
   }
 
+  /** Wipe all per-account map state (called when a different user logs in). */
+  private resetMapState(): void {
+    // Stop tracking for the old user.
+    if (this.watchId) {
+      void this.geolocationService.clearWatch(this.watchId);
+      this.watchId = null;
+    }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+    void this.backgroundTracker.stop();
+
+    // Clear all cached circle/member/geofence data.
+    this.circleMembers = [];
+    this.circles = [];
+    this.circleMarkers.forEach((marker) => marker.remove());
+    this.circleMarkers.clear();
+    this.circleMarkerEls.clear();
+    this.geofences = [];
+    this.insideGeofence.clear();
+    this.activeCircleId = null;
+    this.activeCircleNameCache = null;
+    this.circlesLoaded = false;
+    this.circlesLoadPromise = null;
+    this.clearStoredCircle();
+
+    // Close any open sheets/detail.
+    this.closeDetailSheet();
+    this.closeCirclePanel();
+
+    // Reset connection status.
+    this.connectionStatus = "connecting";
+    this.isTracking = false;
+    this.lastKnownFix = null;
+    this.lastAccuracy = null;
+    this.lastFixAt = null;
+
+    // Restart for the new user (ngOnInit already ran, so just re-fetch).
+    void this.loadCircleMembers();
+  }
+
   private cleanup(): void {
+    this.trackingSubscription?.unsubscribe();
+    this.trackingSubscription = null;
+    this.authSubscription?.unsubscribe();
+    this.authSubscription = null;
     if (this.watchId) {
       void this.geolocationService.clearWatch(this.watchId);
       this.watchId = null;
@@ -3156,12 +3256,18 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       clearInterval(this.pingPollTimer);
       this.pingPollTimer = null;
     }
+    if (this.notificationPollTimer) {
+      clearInterval(this.notificationPollTimer);
+      this.notificationPollTimer = null;
+    }
     if (this.pingScrollFrame !== null) {
       cancelAnimationFrame(this.pingScrollFrame);
       this.pingScrollFrame = null;
     }
     this.pingScrollTarget = null;
     this.pingPollInFlight = false;
+    this.notificationPollInFlight = false;
+    this.circleRefreshPromise = null;
     document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.shownPingIds.clear();
     if (this.compassTimer) {
@@ -3197,7 +3303,7 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
       this.map.off("load", this.onMapLoad);
       this.map.off("click", this.onMapClick);
       this.map.off("error", this.onMapError);
-      this.squadMarkers.forEach((marker) => marker.remove());
+      this.circleMarkers.forEach((marker) => marker.remove());
       this.userMarker?.remove();
       this.geofencePopup?.remove();
       this.map.remove();
@@ -3205,8 +3311,8 @@ export class MapPage implements OnInit, AfterViewInit, OnDestroy {
     }
     this.zoomControl = null;
     this.attributionControl = null;
-    this.squadMarkers.clear();
-    this.squadMarkerEls.clear();
+    this.circleMarkers.clear();
+    this.circleMarkerEls.clear();
     this.userMarker = null;
     this.userMarkerEl = null;
     this.geofencePopup = null;

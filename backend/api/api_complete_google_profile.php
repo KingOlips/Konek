@@ -19,6 +19,7 @@
 require_once __DIR__ . "/../config/database.php";
 require_once __DIR__ . "/../config/cors.php";
 require_once __DIR__ . "/../config/google.php";
+require_once __DIR__ . "/../lib/mailer.php";
 
 // Only allow POST requests
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
@@ -178,6 +179,30 @@ try {
 
     $userId = (int) $db->lastInsertId();
 
+    // Welcome the new account in the in-app inbox. Best-effort: the account is
+    // already created, so a missing migration must never undo it.
+    try {
+        $notifStmt = $db->prepare("
+            INSERT INTO notifications (user_id, type, title, message)
+            VALUES (:user_id, 'welcome', :title, :message)
+        ");
+        $notifTitle = "Welcome to Konek, " . $username . "!";
+        $notifMessage = "Your account is ready. Create or join a circle to start sharing your location with the people you trust.";
+        $notifStmt->bindParam(":user_id", $userId, PDO::PARAM_INT);
+        $notifStmt->bindParam(":title", $notifTitle, PDO::PARAM_STR);
+        $notifStmt->bindParam(":message", $notifMessage, PDO::PARAM_STR);
+        $notifStmt->execute();
+    } catch (Throwable $e) {
+        error_log("Welcome notification error: " . $e->getMessage());
+    }
+
+    $emailSent = false;
+    try {
+        $emailSent = konekSendWelcomeEmail($email, $username);
+    } catch (Throwable $e) {
+        error_log("Welcome email error: " . $e->getMessage());
+    }
+
     $userStmt = $db->prepare("
         SELECT id, username, email, contact_number, profile_picture, active_status, password_set, created_at
         FROM users
@@ -192,6 +217,7 @@ try {
     echo json_encode([
         "success" => true,
         "message" => "Account created",
+        "email_sent" => $emailSent,
         "data" => [
             "id" => (int) $user["id"],
             "username" => $user["username"],

@@ -2,13 +2,21 @@
   <span class="grabber" aria-hidden="true"></span>
 
   <div class="identity">
-    <div class="identity-avatar" [style.background]="gradient" aria-hidden="true">
-      {{ initials }}
-    </div>
-
     <div class="identity-titles">
       <p class="eyebrow">Circle</p>
-      <h2 class="name">{{ squad.squad_name }}</h2>
+      <div class="name-row">
+        <h2 class="name">{{ circle.squad_name }}</h2>
+        @if (isAdmin) {
+          <button
+            type="button"
+            class="rename"
+            (click)="renameCircle()"
+            aria-label="Rename circle"
+          >
+            <ion-icon name="pencil-outline" aria-hidden="true"></ion-icon>
+          </button>
+        }
+      </div>
       <div class="meta">
         <span class="role-chip" [class.admin]="isAdmin">
           @if (isAdmin) {
@@ -38,7 +46,7 @@
     <div class="code-card">
       <div class="code-body">
         <span class="code-label">Invite code</span>
-        <span class="code-value">{{ squad.join_code }}</span>
+        <span class="code-value">{{ circle.join_code }}</span>
       </div>
       <button type="button" class="code-copy" (click)="copyCode()">
         <ion-icon name="copy-outline" aria-hidden="true"></ion-icon>
@@ -48,8 +56,8 @@
 
     <div class="members-head">
       <h3>Members</h3>
-      @if (isAdmin && !isLoading && !loadError && members.length > 1) {
-        <span class="members-hint">Tap ••• to change a role</span>
+      @if (!isLoading && !loadError && members.length > 0) {
+        <span class="members-hint">Tap ••• to change a relationship</span>
       }
     </div>
 
@@ -107,7 +115,7 @@
               <span class="admin-chip">Admin</span>
             }
 
-            @if (canManage(member)) {
+            @if (canEditRelationship(member)) {
               <button
                 type="button"
                 class="member-menu"

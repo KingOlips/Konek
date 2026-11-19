@@ -125,6 +125,23 @@ try {
     $updateStmt->bindParam(":id", $userId, PDO::PARAM_INT);
     $updateStmt->execute();
 
+    // The inbox notification is part of the account welcome. It is best-effort
+    // so a missing notifications migration never breaks registration.
+    try {
+        $notifStmt = $db->prepare("
+            INSERT INTO notifications (user_id, type, title, message)
+            VALUES (:user_id, 'welcome', :title, :message)
+        ");
+        $notifTitle = "Welcome to Konek, " . $username . "!";
+        $notifMessage = "Your account is ready. Create or join a circle to start sharing your location with the people you trust.";
+        $notifStmt->bindParam(":user_id", $userId, PDO::PARAM_INT);
+        $notifStmt->bindParam(":title", $notifTitle, PDO::PARAM_STR);
+        $notifStmt->bindParam(":message", $notifMessage, PDO::PARAM_STR);
+        $notifStmt->execute();
+    } catch (Throwable $e) {
+        error_log("Welcome notification error: " . $e->getMessage());
+    }
+
     // The account exists at this point; a mail failure must never undo it.
     $emailSent = false;
     try {

@@ -3,7 +3,7 @@
   width: 100%;
 }
 
-.squad-menu {
+.circle-menu {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -12,14 +12,14 @@
   padding: 12px;
 }
 
-.squad-menu-header {
+.circle-menu-header {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
 
-.squad-menu-label {
+.circle-menu-label {
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.7px;
@@ -27,7 +27,7 @@
   color: #78828f;
 }
 
-.squad-menu-name {
+.circle-menu-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -37,8 +37,8 @@
   color: #141a24;
 }
 
-/* Squad switcher: one row per squad, active row tinted with a trailing check. */
-.squad-menu-list {
+/* Circle switcher: one row per circle, active row tinted with a trailing check. */
+.circle-menu-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -49,7 +49,7 @@
   border-bottom: 1px solid rgba(47, 111, 224, 0.12);
 }
 
-.squad-menu-row {
+.circle-menu-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -68,16 +68,16 @@
   transition: background 0.12s ease;
 }
 
-.squad-menu-row:active {
+.circle-menu-row:active {
   background: #e4eeff;
 }
 
-.squad-menu-row.is-active {
+.circle-menu-row.is-active {
   background: #edf3ff;
   color: #1f5fd0;
 }
 
-.squad-menu-row-name {
+.circle-menu-row-name {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -85,19 +85,19 @@
   white-space: nowrap;
 }
 
-.squad-menu-check {
+.circle-menu-check {
   flex: 0 0 auto;
   font-size: 17px;
   color: #2f6fe0;
 }
 
 /* The two actions share the row so the dropdown stays compact. */
-.squad-menu-actions {
+.circle-menu-actions {
   display: flex;
   gap: 8px;
 }
 
-.squad-menu-action {
+.circle-menu-action {
   display: flex;
   flex: 1 1 0;
   flex-direction: column;
@@ -119,12 +119,12 @@
   transition: background 0.12s ease, transform 0.12s ease;
 }
 
-.squad-menu-action:active {
+.circle-menu-action:active {
   background: #e4eeff;
   transform: scale(0.97);
 }
 
-.squad-menu-action ion-icon {
+.circle-menu-action ion-icon {
   flex: 0 0 auto;
   font-size: 18px;
   color: #2f6fe0;
@@ -133,11 +133,11 @@
 /* Very narrow phones cannot fit both labels side by side; stack the actions
  * and lay each one out horizontally. */
 @media (max-width: 359px) {
-  .squad-menu-actions {
+  .circle-menu-actions {
     flex-direction: column;
   }
 
-  .squad-menu-action {
+  .circle-menu-action {
     flex-direction: row;
     justify-content: flex-start;
     gap: 10px;
@@ -147,45 +147,45 @@
   }
 }
 
-:host-context(.dark) .squad-menu-label {
+:host-context(.dark) .circle-menu-label {
   color: #98a1af;
 }
 
-:host-context(.dark) .squad-menu-name {
+:host-context(.dark) .circle-menu-name {
   color: #f4f5f7;
 }
 
-:host-context(.dark) .squad-menu-action {
+:host-context(.dark) .circle-menu-action {
   border-color: rgba(141, 180, 255, 0.18);
   background: #232a36;
   color: #f4f5f7;
 }
 
-:host-context(.dark) .squad-menu-action:active {
+:host-context(.dark) .circle-menu-action:active {
   background: #2b3442;
 }
 
-:host-context(.dark) .squad-menu-action ion-icon {
+:host-context(.dark) .circle-menu-action ion-icon {
   color: #8db4ff;
 }
 
-:host-context(.dark) .squad-menu-list {
+:host-context(.dark) .circle-menu-list {
   border-color: rgba(141, 180, 255, 0.14);
 }
 
-:host-context(.dark) .squad-menu-row {
+:host-context(.dark) .circle-menu-row {
   color: #f4f5f7;
 }
 
-:host-context(.dark) .squad-menu-row:active {
+:host-context(.dark) .circle-menu-row:active {
   background: #2b3442;
 }
 
-:host-context(.dark) .squad-menu-row.is-active {
+:host-context(.dark) .circle-menu-row.is-active {
   background: #26344b;
   color: #a8c6ff;
 }
 
-:host-context(.dark) .squad-menu-check {
+:host-context(.dark) .circle-menu-check {
   color: #8db4ff;
 }

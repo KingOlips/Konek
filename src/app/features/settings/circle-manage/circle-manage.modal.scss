@@ -55,18 +55,37 @@
   gap: 13px;
 }
 
-.identity-avatar {
-  flex: 0 0 54px;
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rename {
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 18px;
-  color: #ffffff;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  box-shadow: 0 10px 22px -14px rgba(15, 23, 42, 0.75);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--s-line);
+  border-radius: 9px;
+  background: var(--s-surface-soft);
+  color: var(--s-muted);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  ion-icon {
+    font-size: 15px;
+  }
+
+  &:hover {
+    background: var(--s-line);
+    color: var(--s-primary);
+  }
 }
 
 .identity-titles {
@@ -579,6 +598,12 @@
 button:focus-visible {
   outline: 2px solid var(--s-primary);
   outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .sheet-head {
+    padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  }
 }
 
 @media (max-width: 420px) {

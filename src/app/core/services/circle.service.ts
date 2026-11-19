@@ -2,59 +2,83 @@ import { Injectable, inject } from "@angular/core";
 import { HttpClient, HttpHeaders } from "@angular/common/http";
 import { Observable, catchError, from, map, switchMap, throwError } from "rxjs";
 import { AuthService } from "./auth.service";
-import { ApiEnvelope, Geofence, SquadMemberLocation } from "../models/location.models";
+import { ApiEnvelope, Geofence, CircleMemberLocation } from "../models/location.models";
 import {
-  CreateSquadRequest,
-  JoinSquadRequest,
+  CreateCircleRequest,
+  JoinCircleRequest,
   MemberRelationship,
-  Squad,
-  SquadMember,
-} from "../models/squad.models";
+  Circle,
+  CircleMember,
+} from "../models/circle.models";
 import { environment } from "../../../environments/environment";
 
+/**
+ * Circle API client.
+ *
+ * Endpoint names and request/response keys still use the backend's legacy
+ * "squad" vocabulary; everything the app exposes is a circle.
+ */
 @Injectable({
   providedIn: "root",
 })
-export class SquadService {
+export class CircleService {
   private readonly http = inject(HttpClient);
   private readonly authService = inject(AuthService);
 
-  getUserSquads(): Observable<Squad[]> {
-    return this.request<Squad[]>("GET", "api_get_squads.php");
+  getUserCircles(): Observable<Circle[]> {
+    return this.request<Circle[]>("GET", "api_get_squads.php");
   }
 
-  createSquad(data: CreateSquadRequest): Observable<Squad> {
-    return this.request<Squad>("POST", "api_create_squad.php", data);
+  createCircle(data: CreateCircleRequest): Observable<Circle> {
+    return this.request<Circle>("POST", "api_create_squad.php", data);
   }
 
-  joinSquad(data: JoinSquadRequest): Observable<Squad> {
-    return this.request<Squad>("POST", "api_join_squad.php", data);
+  joinCircle(data: JoinCircleRequest): Observable<Circle> {
+    return this.request<Circle>("POST", "api_join_squad.php", data);
   }
 
-  leaveSquad(squadId: number): Observable<void> {
-    return this.request<void>("DELETE", `api_leave_squad.php?squad_id=${squadId}`);
+  leaveCircle(circleId: number): Observable<void> {
+    return this.request<void>(
+      "DELETE",
+      `api_leave_squad.php?squad_id=${circleId}`
+    );
   }
 
-  getSquadMembers(squadId?: number): Observable<SquadMember[]> {
-    const query = squadId ? `?squad_id=${squadId}` : "";
-    return this.request<SquadMember[]>("GET", `api_get_squad_members.php${query}`);
+  /** Rename a circle (admin only; enforced by the API). */
+  updateCircle(
+    circleId: number,
+    circleName: string
+  ): Observable<{ id: number; squad_name: string }> {
+    return this.request<{ id: number; squad_name: string }>(
+      "PUT",
+      "api_update_squad.php",
+      { squad_id: circleId, squad_name: circleName }
+    );
   }
 
-  getSquadLocations(squadId?: number): Observable<SquadMemberLocation[]> {
-    const query = squadId ? `?squad_id=${squadId}` : "";
-    return this.request<SquadMemberLocation[]>(
+  getCircleMembers(circleId?: number): Observable<CircleMember[]> {
+    const query = circleId ? `?squad_id=${circleId}` : "";
+    return this.request<CircleMember[]>(
+      "GET",
+      `api_get_squad_members.php${query}`
+    );
+  }
+
+  getCircleLocations(circleId?: number): Observable<CircleMemberLocation[]> {
+    const query = circleId ? `?squad_id=${circleId}` : "";
+    return this.request<CircleMemberLocation[]>(
       "GET",
       `api_get_squad_locations.php${query}`
     );
   }
 
   updateMemberRole(
-    squadId: number,
+    circleId: number,
     userId: number,
     role: "member" | "admin"
   ): Observable<void> {
     return this.request<void>("PUT", "api_update_member_role.php", {
-      squad_id: squadId,
+      squad_id: circleId,
       user_id: userId,
       role,
     });
@@ -62,7 +86,7 @@ export class SquadService {
 
   /** Set or clear a member's family/friend label inside a circle. */
   updateMemberRelationship(
-    squadId: number,
+    circleId: number,
     userId: number,
     relationship: MemberRelationship | null
   ): Observable<MemberRelationship | null> {
@@ -70,17 +94,17 @@ export class SquadService {
       "PUT",
       "api_update_member_relationship.php",
       {
-        squad_id: squadId,
+        squad_id: circleId,
         user_id: userId,
         relationship,
       }
     );
   }
 
-  removeMember(squadId: number, userId: number): Observable<void> {
+  removeMember(circleId: number, userId: number): Observable<void> {
     return this.request<void>(
       "DELETE",
-      `api_remove_member.php?squad_id=${squadId}&user_id=${userId}`
+      `api_remove_member.php?squad_id=${circleId}&user_id=${userId}`
     );
   }
 
@@ -94,8 +118,11 @@ export class SquadService {
     return this.request<Geofence>("POST", "api_create_geofence.php", data);
   }
 
-  getGeofences(squadId: number): Observable<Geofence[]> {
-    return this.request<Geofence[]>("GET", `api_get_geofences.php?squad_id=${squadId}`);
+  getGeofences(circleId: number): Observable<Geofence[]> {
+    return this.request<Geofence[]>(
+      "GET",
+      `api_get_geofences.php?squad_id=${circleId}`
+    );
   }
 
   deleteGeofence(geofenceId: number): Observable<void> {

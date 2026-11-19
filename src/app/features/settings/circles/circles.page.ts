@@ -1,4 +1,5 @@
 import { ChangeDetectorRef, Component, inject } from "@angular/core";
+import { Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import {
   ActionSheetController,
@@ -27,15 +28,14 @@ import {
   refreshOutline,
   shieldCheckmarkOutline,
 } from "ionicons/icons";
-import { SquadService } from "../../../core/services/squad.service";
-import { Squad } from "../../../core/models/squad.models";
-import { avatarGradient, initialsFor } from "../../../core/utils/avatar";
+import { CircleService } from "../../../core/services/circle.service";
+import { Circle } from "../../../core/models/circle.models";
 
 /**
  * Settings → Circle management.
  *
  * Keeps the settings page short: everything about circles (create, join,
- * inspect members, change roles, leave) lives on this screen.
+ * inspect members, label relationships, leave) lives on this screen.
  */
 @Component({
   selector: "app-circle-management",
@@ -56,16 +56,24 @@ import { avatarGradient, initialsFor } from "../../../core/utils/avatar";
   ],
 })
 export class CircleManagementPage implements ViewWillEnter {
-  private readonly squadService = inject(SquadService);
+  private readonly circleService = inject(CircleService);
   private readonly actionSheetCtrl = inject(ActionSheetController);
   private readonly loadingCtrl = inject(LoadingController);
   private readonly modalCtrl = inject(ModalController);
   private readonly toastCtrl = inject(ToastController);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly router = inject(Router);
 
-  circles: Squad[] = [];
+  circles: Circle[] = [];
   isLoading = true;
   loadError = false;
+
+  /** `/circles` is reached from the map; the settings route backs to Settings. */
+  get backHref(): string {
+    return this.router.url.startsWith("/settings/circles")
+      ? "/settings"
+      : "/map";
+  }
 
   constructor() {
     addIcons({
@@ -89,7 +97,7 @@ export class CircleManagementPage implements ViewWillEnter {
     this.cdr.markForCheck();
 
     try {
-      this.circles = (await firstValueFrom(this.squadService.getUserSquads())) ?? [];
+      this.circles = (await firstValueFrom(this.circleService.getUserCircles())) ?? [];
     } catch (error) {
       console.error("Failed to load circles:", error);
       this.loadError = true;
@@ -101,7 +109,7 @@ export class CircleManagementPage implements ViewWillEnter {
 
   async doRefresh(event: CustomEvent): Promise<void> {
     try {
-      this.circles = (await firstValueFrom(this.squadService.getUserSquads())) ?? [];
+      this.circles = (await firstValueFrom(this.circleService.getUserCircles())) ?? [];
       this.loadError = false;
     } catch (error) {
       console.error("Failed to refresh circles:", error);
@@ -112,16 +120,8 @@ export class CircleManagementPage implements ViewWillEnter {
     }
   }
 
-  isAdmin(circle: Squad): boolean {
+  isAdmin(circle: Circle): boolean {
     return (circle.user_role ?? circle.role) === "admin";
-  }
-
-  initials(name: string): string {
-    return initialsFor(name);
-  }
-
-  gradient(name: string): string {
-    return avatarGradient(name);
   }
 
   /** Create or join, from the header button and the empty state. */
@@ -145,14 +145,14 @@ export class CircleManagementPage implements ViewWillEnter {
     await sheet.present();
   }
 
-  async openCircle(circle: Squad): Promise<void> {
+  async openCircle(circle: Circle): Promise<void> {
     const { CircleManageModalComponent } = await import(
       "../circle-manage/circle-manage.modal"
     );
 
     const modal = await this.modalCtrl.create({
       component: CircleManageModalComponent,
-      componentProps: { squad: circle },
+      componentProps: { circle: circle },
       cssClass: "circle-manage-modal",
       backdropDismiss: true,
     });
@@ -169,13 +169,13 @@ export class CircleManagementPage implements ViewWillEnter {
   }
 
   async createCircle(): Promise<void> {
-    const { CreateSquadModalComponent } = await import(
-      "../../map/create-squad-modal/create-squad-modal.component"
+    const { CreateCircleModalComponent } = await import(
+      "../../map/create-circle-modal/create-circle-modal.component"
     );
 
     const modal = await this.modalCtrl.create({
-      component: CreateSquadModalComponent,
-      cssClass: "squad-form-modal",
+      component: CreateCircleModalComponent,
+      cssClass: "circle-form-modal",
       backdropDismiss: true,
     });
     await modal.present();
@@ -187,7 +187,7 @@ export class CircleManagementPage implements ViewWillEnter {
     await loading.present();
 
     try {
-      await firstValueFrom(this.squadService.createSquad({ squad_name: data }));
+      await firstValueFrom(this.circleService.createCircle({ squad_name: data }));
       await loading.dismiss();
       await this.loadCircles();
       await this.showToast("Circle created");
@@ -199,13 +199,13 @@ export class CircleManagementPage implements ViewWillEnter {
   }
 
   async joinCircle(): Promise<void> {
-    const { JoinSquadModalComponent } = await import(
-      "../../map/join-squad-modal/join-squad-modal.component"
+    const { JoinCircleModalComponent } = await import(
+      "../../map/join-circle-modal/join-circle-modal.component"
     );
 
     const modal = await this.modalCtrl.create({
-      component: JoinSquadModalComponent,
-      cssClass: "squad-form-modal",
+      component: JoinCircleModalComponent,
+      cssClass: "circle-form-modal",
       backdropDismiss: true,
     });
     await modal.present();
@@ -218,7 +218,7 @@ export class CircleManagementPage implements ViewWillEnter {
 
     try {
       await firstValueFrom(
-        this.squadService.joinSquad({ join_code: data.toUpperCase() })
+        this.circleService.joinCircle({ join_code: data.toUpperCase() })
       );
       await loading.dismiss();
       await this.loadCircles();

@@ -5,8 +5,8 @@
    * off-screen, so the content area itself must never scroll (they scroll
    * internally). Without this the off-screen dock creates a scrollbar. */
   --overflow: hidden;
-  /* Visible height of the mobile squad sheet when collapsed. */
-  --squad-peek-height: 82px;
+  /* Visible height of the mobile circle sheet when collapsed. */
+  --circle-peek-height: 82px;
   /* Header height: chips float over the map, so overlays start below it. */
   --map-top-inset: calc(60px + var(--ion-safe-area-top, 0px));
   height: 100%;
@@ -29,7 +29,7 @@
  * applies to them.
  */
 
-/* Toolbar: three standalone chips (settings, squad name, messages) with clear gaps.
+/* Toolbar: three standalone chips (settings, circle name, messages) with clear gaps.
  * The bar itself is transparent so only the chips carry a surface. */
 ion-toolbar.map-toolbar {
   --background: transparent;
@@ -52,7 +52,7 @@ ion-header {
   will-change: transform, opacity;
 }
 
-/* Slide the toolbar out of the way when the squad sheet reaches full height. */
+/* Slide the toolbar out of the way when the circle sheet reaches full height. */
 ion-header.toolbar-hidden {
   transform: translateY(-100%);
   opacity: 0;
@@ -97,9 +97,38 @@ ion-title {
   overflow: hidden;
 }
 
+/* Notification bell with an unread badge pinned to the top-right corner. */
+.notification-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.notification-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  z-index: 2;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  --background: #e02424;
+  --color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+:host-context(.dark) .notification-count {
+  border-color: #15181e;
+}
+
 /* Centre chip: its own pill so it never melts into the side buttons. It is a
- * button on the map page so tapping it opens the squad dropdown. */
-.squad-chip {
+ * button on the map page so tapping it opens the circle dropdown. */
+.circle-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -124,14 +153,14 @@ ion-title {
   transition: transform 0.12s ease, border-radius 0.15s ease;
 }
 
-.squad-chip:active {
+.circle-chip:active {
   transform: scale(0.97);
 }
 
 /* Open state: the chip becomes the dropdown's header. It fills the space
  * between the side buttons (capped) so the popover can match its width and sit
  * flush underneath it, with squared-off bottom corners. */
-.squad-chip.chip-open {
+.circle-chip.chip-open {
   width: min(300px, 100%);
   border-radius: 16px 16px 0 0;
   border-bottom-color: transparent;
@@ -139,40 +168,40 @@ ion-title {
   cursor: default;
 }
 
-.squad-chip.chip-open:active {
+.circle-chip.chip-open:active {
   transform: none;
 }
 
-.squad-chip ion-icon {
+.circle-chip ion-icon {
   flex: 0 0 auto;
   font-size: 17px;
   color: #2f6fe0;
 }
 
-/* Caret hinting that the squad pill opens a dropdown; flips while open. */
-.squad-chip .chip-caret {
+/* Caret hinting that the circle pill opens a dropdown; flips while open. */
+.circle-chip .chip-caret {
   font-size: 14px;
   opacity: 0.65;
   transition: transform 0.15s ease;
 }
 
-.squad-chip.chip-open .chip-caret {
+.circle-chip.chip-open .chip-caret {
   transform: rotate(180deg);
 }
 
-.squad-name {
+.circle-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Squad count badge on the squad map button */
-ion-fab-button.squad-fab {
+/* Circle count badge on the circle map button */
+ion-fab-button.circle-fab {
   position: relative;
 }
 
-.squad-count {
+.circle-count {
   position: absolute;
   top: 0;
   inset-inline-end: 0;
@@ -190,8 +219,8 @@ ion-fab-button.squad-fab {
   box-shadow: 0 0 0 2px #ffffff;
 }
 
-/* Squad Panel - sidebar on desktop, bottom sheet on mobile */
-.squad-panel {
+/* Circle Panel - sidebar on desktop, bottom sheet on mobile */
+.circle-panel {
   position: absolute;
   top: var(--map-top-inset, 60px);
   right: -360px;
@@ -213,11 +242,11 @@ ion-fab-button.squad-fab {
   overflow: hidden;
 }
 
-.squad-panel.open {
+.circle-panel.open {
   right: 0;
 }
 
-.squad-panel.dragging {
+.circle-panel.dragging {
   transition: none;
   user-select: none;
 }
@@ -290,7 +319,7 @@ ion-fab-button.squad-fab {
   border-radius: 2px;
 }
 
-/* Hide the drag affordances while a create/join squad modal is open, so they
+/* Hide the drag affordances while a create/join circle modal is open, so they
  * cannot be clicked or dragged behind the modal overlay. */
 .panel-handle.hidden,
 .sheet-grabber.hidden {
@@ -298,7 +327,7 @@ ion-fab-button.squad-fab {
   pointer-events: none;
 }
 
-/* Spinning refresh icon while squad positions reload */
+/* Spinning refresh icon while circle positions reload */
 ion-icon.spinning {
   animation: konek-spin 0.9s linear infinite;
 }
@@ -319,12 +348,12 @@ ion-fab-button {
   --border-color: var(--ion-color-light, #e9ecef);
 }
 
-/* Untinted FABs (map style, squad list) need an explicit icon colour. */
+/* Untinted FABs (map style, circle list) need an explicit icon colour. */
 ion-fab-button:not(.ion-color) {
   --color: #2f6fe0;
 }
 
-/* Keep the map actions clear of the sliding squad sidebar. */
+/* Keep the map actions clear of the sliding circle sidebar. */
 ion-fab.map-fabs {
   transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     opacity 0.2s ease;
@@ -634,6 +663,24 @@ ion-fab-button.ion-color-primary {
   background: rgba(240, 160, 32, 0.2);
 }
 
+.relationship-badge.is-readonly {
+  cursor: default;
+}
+
+.relationship-badge.is-readonly:hover {
+  background: rgba(240, 160, 32, 0.12);
+}
+
+/* Secondary colour for the "add" affordance keeps it distinct from a label. */
+.relationship-badge.is-empty {
+  background: rgba(47, 111, 224, 0.1);
+  color: #2f6fe0;
+}
+
+.relationship-badge.is-empty:hover {
+  background: rgba(47, 111, 224, 0.18);
+}
+
 .relationship-badge .edit-icon {
   font-size: 11px;
   opacity: 0.7;
@@ -762,7 +809,7 @@ ion-fab-button.ion-color-primary {
   gap: 18px;
 }
 
-/* Splash branding while the first squad fetch is in flight. */
+/* Splash branding while the first circle fetch is in flight. */
 .loading-brand {
   display: flex;
   flex-direction: column;
@@ -816,10 +863,10 @@ ion-fab-button.ion-color-primary {
 
 
 /* ---------------------------------------------------------------------------
- * Squad panel: grouped online/offline list, gradient avatars, live pulses.
+ * Circle panel: grouped online/offline list, gradient avatars, live pulses.
  * ------------------------------------------------------------------------ */
 
-/* Compact header: squad name + counts left, ghost icon buttons right. */
+/* Compact header: circle name + counts left, ghost icon buttons right. */
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -835,7 +882,7 @@ ion-fab-button.ion-color-primary {
   min-width: 0;
 }
 
-.panel-squad-name {
+.panel-circle-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -845,82 +892,13 @@ ion-fab-button.ion-color-primary {
   color: #141a24;
 }
 
-.panel-squad-meta {
+.panel-circle-meta {
   margin: 2px 0 0;
   font-size: 12.5px;
   font-weight: 500;
   color: #78828f;
 }
 
-/* Invite code: visible at a glance with copy/share shortcuts. */
-.panel-invite {
-  margin-top: 10px;
-  padding-top: 9px;
-  border-top: 1px solid rgba(17, 24, 39, 0.06);
-}
-
-.invite-label {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: #78828f;
-}
-
-.invite-code-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.invite-code {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 6px 10px;
-  border: 1px dashed rgba(47, 111, 224, 0.35);
-  border-radius: 8px;
-  background: #f7faff;
-  color: #1f5fd0;
-  font-size: 14.5px;
-  font-weight: 800;
-  letter-spacing: 0.8px;
-}
-
-.invite-btn {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid rgba(47, 111, 224, 0.18);
-  border-radius: 8px;
-  background: #ffffff;
-  color: #2f6fe0;
-  font-size: 16px;
-  cursor: pointer;
-  transition: background 0.12s ease, transform 0.12s ease;
-}
-
-.invite-btn:active {
-  background: #e4eeff;
-  transform: scale(0.94);
-}
-
-.invite-btn-primary {
-  border-color: transparent;
-  background: #2f6fe0;
-  color: #ffffff;
-}
-
-.invite-btn-primary:active {
-  background: #1f5fd0;
-}
 
 .meta-sep {
   margin: 0 4px;
@@ -1225,7 +1203,7 @@ ion-fab-button.ion-color-primary {
 }
 
 /* Loading skeletons */
-.loading-squad {
+.loading-circle {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1282,7 +1260,7 @@ ion-fab-button.ion-color-primary {
 }
 
 /* Empty state */
-.empty-squad {
+.empty-circle {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1307,14 +1285,14 @@ ion-fab-button.ion-color-primary {
   font-size: 34px;
 }
 
-.empty-squad h4 {
+.empty-circle h4 {
   margin: 0;
   font-size: 16.5px;
   font-weight: 700;
   color: #141a24;
 }
 
-.empty-squad p {
+.empty-circle p {
   margin: 0;
   max-width: 250px;
   font-size: 13.5px;
@@ -1322,7 +1300,7 @@ ion-fab-button.ion-color-primary {
   color: #78828f;
 }
 
-.empty-squad ion-button {
+.empty-circle ion-button {
   --border-radius: 12px;
   font-weight: 600;
 }
@@ -1334,42 +1312,12 @@ ion-fab-button.ion-color-primary {
     border-color: rgba(255, 255, 255, 0.08);
   }
 
-  .panel-squad-name {
+  .panel-circle-name {
     color: #f4f5f7;
   }
 
-  .panel-squad-meta {
+  .panel-circle-meta {
     color: #98a1af;
-  }
-
-  .panel-invite {
-    border-color: rgba(255, 255, 255, 0.08);
-  }
-
-  .invite-label {
-    color: #98a1af;
-  }
-
-  .invite-code {
-    color: #a8c6ff;
-    background: #1e2530;
-    border-color: rgba(141, 180, 255, 0.28);
-  }
-
-  .invite-btn {
-    border-color: rgba(141, 180, 255, 0.24);
-    background: #232a36;
-    color: #8db4ff;
-  }
-
-  .invite-btn:active {
-    background: #2b3442;
-  }
-
-  .invite-btn-primary {
-    border-color: transparent;
-    background: #3d7bf0;
-    color: #ffffff;
   }
 
   .meta-sep {
@@ -1455,11 +1403,11 @@ ion-fab-button.ion-color-primary {
     color: #a5b4fc;
   }
 
-  .empty-squad h4 {
+  .empty-circle h4 {
     color: #f4f5f7;
   }
 
-  .empty-squad p {
+  .empty-circle p {
     color: #98a1af;
   }
 }
@@ -1481,23 +1429,23 @@ ion-fab-button.ion-color-primary {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
   }
 
-  .squad-chip {
+  .circle-chip {
     background: #1f232b;
     border-color: rgba(255, 255, 255, 0.12);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
     color: #f4f5f7;
   }
 
-  .squad-chip ion-icon {
+  .circle-chip ion-icon {
     color: #8db4ff;
   }
 
-  .squad-chip.chip-open {
+  .circle-chip.chip-open {
     border-bottom-color: transparent;
     box-shadow: none;
   }
 
-  .squad-panel {
+  .circle-panel {
     background: #14171c;
     box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
   }
@@ -1549,7 +1497,7 @@ ion-fab-button.ion-color-primary {
     background: #232833;
   }
 
-  .squad-count {
+  .circle-count {
     box-shadow: 0 0 0 2px #15181e;
   }
 
@@ -1629,6 +1577,19 @@ ion-fab-button.ion-color-primary {
     background: rgba(255, 199, 107, 0.24);
   }
 
+  .relationship-badge.is-readonly:hover {
+    background: rgba(255, 199, 107, 0.16);
+  }
+
+  .relationship-badge.is-empty {
+    background: rgba(86, 148, 255, 0.16);
+    color: #8db4ff;
+  }
+
+  .relationship-badge.is-empty:hover {
+    background: rgba(86, 148, 255, 0.24);
+  }
+
   .status {
     color: #98a1af;
   }
@@ -1661,7 +1622,7 @@ ion-fab-button.ion-color-primary {
 }
 
 /* ---------------------------------------------------------------------------
- * Mobile: the squad sidebar becomes a draggable bottom sheet, and the map
+ * Mobile: the circle sidebar becomes a draggable bottom sheet, and the map
  * actions move above the collapsed sheet.
  * ------------------------------------------------------------------------ */
 @media (max-width: 767px) {
@@ -1675,20 +1636,20 @@ ion-fab-button.ion-color-primary {
     height: 40px;
   }
 
-  .squad-chip {
+  .circle-chip {
     height: 40px;
     padding-inline: 12px;
     font-size: 14px;
     gap: 6px;
   }
 
-  .squad-chip ion-icon {
+  .circle-chip ion-icon {
     font-size: 16px;
   }
 
   ion-fab.map-fabs {
     bottom: calc(
-      var(--squad-peek-height) + 14px + var(--ion-safe-area-bottom, 0px)
+      var(--circle-peek-height) + 14px + var(--ion-safe-area-bottom, 0px)
     );
   }
 
@@ -1703,11 +1664,11 @@ ion-fab-button.ion-color-primary {
   }
 
   /* The sheet is always reachable from its peek state. */
-  ion-fab-button.squad-fab {
+  ion-fab-button.circle-fab {
     display: none;
   }
 
-  .squad-panel {
+  .circle-panel {
     top: auto;
     bottom: 0;
     left: 0;
@@ -1718,7 +1679,7 @@ ion-fab-button.ion-color-primary {
     max-height: none;
     border-radius: 20px 20px 0 0;
     box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.22);
-    transform: translateY(calc(100% - var(--squad-peek-height)));
+    transform: translateY(calc(100% - var(--circle-peek-height)));
     transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     z-index: 1000;
   }
@@ -1764,7 +1725,7 @@ ion-fab-button.ion-color-primary {
     animation: none;
   }
 
-  .squad-panel,
+  .circle-panel,
   .panel-handle,
   .member-dock,
   ion-fab.map-fabs {

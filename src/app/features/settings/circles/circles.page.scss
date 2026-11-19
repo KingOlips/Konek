@@ -83,20 +83,6 @@
   }
 }
 
-.circle-avatar {
-  flex: 0 0 48px;
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  box-shadow: 0 8px 18px -12px rgba(15, 23, 42, 0.65);
-}
-
 .circle-main {
   display: flex;
   flex: 1 1 auto;
@@ -241,13 +227,6 @@
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
 
-.skeleton-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  background: #eef2f8;
-}
-
 .skeleton-lines {
   display: flex;
   flex: 1;
@@ -357,7 +336,6 @@
     background: #171a20;
   }
 
-  .skeleton-avatar,
   .skeleton-line {
     background: rgba(255, 255, 255, 0.07);
   }

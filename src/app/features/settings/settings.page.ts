@@ -23,9 +23,10 @@ import { AuthService, User } from "../../core/services/auth.service";
 import { BackgroundTrackerService } from "../../core/services/background-tracker.service";
 import { BiometricService } from "../../core/services/biometric.service";
 import { LocationService } from "../../core/services/location.service";
+import { LocationTrackingService } from "../../core/services/location-tracking.service";
 import { GeolocationService } from "../../core/services/geolocation.service";
-import { SquadService } from "../../core/services/squad.service";
-import { Squad } from "../../core/models/squad.models";
+import { CircleService } from "../../core/services/circle.service";
+import { Circle } from "../../core/models/circle.models";
 import { addIcons } from "ionicons";
 import {
   fingerPrintOutline,
@@ -66,8 +67,9 @@ export class SettingsPage implements OnInit, ViewWillEnter {
   private readonly backgroundTracker = inject(BackgroundTrackerService);
   private readonly biometricService = inject(BiometricService);
   private readonly locationService = inject(LocationService);
+  private readonly locationTrackingService = inject(LocationTrackingService);
   private readonly geolocationService = inject(GeolocationService);
-  private readonly squadService = inject(SquadService);
+  private readonly circleService = inject(CircleService);
   private readonly router = inject(Router);
   private readonly alertCtrl = inject(AlertController);
   private readonly loadingCtrl = inject(LoadingController);
@@ -88,7 +90,7 @@ export class SettingsPage implements OnInit, ViewWillEnter {
   historyCount = 0;
 
   /** Circles shown in the management section. */
-  circles: Squad[] = [];
+  circles: Circle[] = [];
   circlesLoading = true;
   circlesError = false;
 
@@ -144,7 +146,7 @@ export class SettingsPage implements OnInit, ViewWillEnter {
     this.cdr.markForCheck();
 
     try {
-      const circles = await firstValueFrom(this.squadService.getUserSquads());
+      const circles = await firstValueFrom(this.circleService.getUserCircles());
       this.circles = circles ?? [];
     } catch (error) {
       console.error("Failed to load circles:", error);
@@ -184,7 +186,7 @@ export class SettingsPage implements OnInit, ViewWillEnter {
     // Load from localStorage for web, or Preferences for native
     try {
       this.darkMode = localStorage.getItem("konek_dark_mode") === "true";
-      this.locationTrackingEnabled = localStorage.getItem("konek_location_tracking") !== "false";
+      this.locationTrackingEnabled = this.locationTrackingService.enabled;
       this.adaptiveGps = localStorage.getItem("konek_adaptive_gps") !== "false";
       
       // Apply dark mode
@@ -294,17 +296,20 @@ export class SettingsPage implements OnInit, ViewWillEnter {
   }
 
   async toggleLocationTracking(): Promise<void> {
-    this.locationTrackingEnabled = !this.locationTrackingEnabled;
-    localStorage.setItem("konek_location_tracking", this.locationTrackingEnabled.toString());
-    
+    // The shared service is the master switch: the map stops its watch,
+    // heartbeat and uploads as soon as this flips off.
+    this.locationTrackingEnabled = this.locationTrackingService.toggle();
+
     if (!this.locationTrackingEnabled) {
-      // The map owns foreground tracking; stop the native background uploader.
+      // Stop the native uploader immediately; the map stops its foreground
+      // tracking through the service subscription.
       await this.backgroundTracker.stop();
       this.showToast("Location tracking disabled");
     } else {
       void this.backgroundTracker.start(10000);
       this.showToast("Location tracking enabled");
     }
+    this.cdr.markForCheck();
   }
 
   async toggleAdaptiveGps(): Promise<void> {
@@ -413,40 +418,39 @@ export class SettingsPage implements OnInit, ViewWillEnter {
   }
 
   async logout(): Promise<void> {
-    const actionSheet = await this.actionSheetCtrl.create({
-      header: "Sign Out",
-      buttons: [
-        {
-          text: "Sign Out",
-          role: "destructive",
-          icon: "log-out-outline",
-          handler: async () => {
-            const loading = await this.loadingCtrl.create({ message: "Signing out..." });
-            await loading.present();
+    // Confirm in a popup instead of an action sheet.
+    const { SignOutModalComponent } = await import("./sign-out/sign-out.modal");
 
-            // Stop the native uploader before the token is cleared.
-            await this.backgroundTracker.stop();
-
-            this.authService.logout().subscribe({
-              next: async () => {
-                await loading.dismiss();
-                this.router.navigate(["/login"], { replaceUrl: true });
-              },
-              error: async () => {
-                await loading.dismiss();
-                this.router.navigate(["/login"], { replaceUrl: true });
-              },
-            });
-          },
-        },
-        {
-          text: "Cancel",
-          role: "cancel",
-          icon: "close-outline",
-        },
-      ],
+    const modal = await this.modalCtrl.create({
+      component: SignOutModalComponent,
+      cssClass: "sign-out-modal",
+      backdropDismiss: true,
     });
-    await actionSheet.present();
+
+    await modal.present();
+    const { role } = await modal.onWillDismiss();
+    if (role !== "confirm") return;
+
+    const loading = await this.loadingCtrl.create({ message: "Signing out..." });
+    await loading.present();
+
+    // Stop the native uploader before the token is cleared.
+    await this.backgroundTracker.stop();
+
+    this.authService.logout().subscribe({
+      next: async () => {
+        await this.authService.reloadSession();
+        try { localStorage.removeItem("konek_active_squad"); } catch {}
+        await loading.dismiss();
+        this.router.navigate(["/login"], { replaceUrl: true });
+      },
+      error: async () => {
+        await this.authService.reloadSession();
+        try { localStorage.removeItem("konek_active_squad"); } catch {}
+        await loading.dismiss();
+        this.router.navigate(["/login"], { replaceUrl: true });
+      },
+    });
   }
 
   async showAbout(): Promise<void> {

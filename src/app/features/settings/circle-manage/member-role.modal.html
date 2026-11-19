@@ -2,8 +2,17 @@
   <span class="grabber" aria-hidden="true"></span>
 
   <header class="role-head">
-    <span class="role-avatar" [style.background]="gradient" aria-hidden="true">
-      {{ initials }}
+    <span
+      class="role-avatar"
+      [class.has-photo]="avatarUrl"
+      [style.background]="avatarUrl ? 'transparent' : gradient"
+      aria-hidden="true"
+    >
+      @if (avatarUrl) {
+        <img [src]="avatarUrl" alt="" />
+      } @else {
+        {{ initials }}
+      }
     </span>
     <div class="role-titles">
       <h2>{{ memberName }}</h2>
@@ -14,41 +23,45 @@
     </button>
   </header>
 
-  <p class="role-label">Relationship in this circle</p>
+  <div class="role-scroll">
+    <p class="role-label">Relationship in this circle</p>
 
-  <div class="role-options" role="radiogroup" aria-label="Relationship in this circle">
-    @for (option of relationshipOptions; track option.value) {
-      <button
-        type="button"
-        class="role-option"
-        role="radio"
-        [class.is-selected]="draftRelationship === option.value"
-        [attr.aria-checked]="draftRelationship === option.value"
-        (click)="selectRelationship(option.value)"
-      >
-        <span class="option-icon" [class.admin]="option.value === 'partner'" aria-hidden="true">
-          <ion-icon [name]="option.icon"></ion-icon>
-        </span>
-        <span class="option-copy">
-          <span class="option-title">{{ option.label }}</span>
-        </span>
-        <span class="option-radio" [class.is-checked]="draftRelationship === option.value" aria-hidden="true">
-          @if (draftRelationship === option.value) {
-            <ion-icon name="checkmark-outline"></ion-icon>
-          }
-        </span>
+    <div class="role-options" role="radiogroup" aria-label="Relationship in this circle">
+      @for (option of relationshipOptions; track option.value) {
+        <button
+          type="button"
+          class="role-option"
+          role="radio"
+          [class.is-selected]="draftRelationship === option.value"
+          [attr.aria-checked]="draftRelationship === option.value"
+          (click)="selectRelationship(option.value)"
+        >
+          <span class="option-icon" aria-hidden="true">
+            <ion-icon [name]="option.icon"></ion-icon>
+          </span>
+          <span class="option-copy">
+            <span class="option-title">{{ option.label }}</span>
+          </span>
+          <span class="option-radio" [class.is-checked]="draftRelationship === option.value" aria-hidden="true">
+            @if (draftRelationship === option.value) {
+              <ion-icon name="checkmark-outline"></ion-icon>
+            }
+          </span>
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="role-foot">
+    <button type="button" class="role-save" [disabled]="!changed" (click)="save()">
+      Save changes
+    </button>
+
+    @if (canRemove) {
+      <button type="button" class="role-remove" (click)="remove()">
+        <ion-icon name="person-remove-outline" aria-hidden="true"></ion-icon>
+        <span>Remove from circle</span>
       </button>
     }
   </div>
-
-  <button type="button" class="role-save" [disabled]="!changed" (click)="save()">
-    Save changes
-  </button>
-
-  @if (canRemove) {
-    <button type="button" class="role-remove" (click)="remove()">
-      <ion-icon name="person-remove-outline" aria-hidden="true"></ion-icon>
-      <span>Remove from circle</span>
-    </button>
-  }
 </div>

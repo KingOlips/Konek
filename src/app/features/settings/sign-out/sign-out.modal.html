@@ -1,0 +1,29 @@
+<ion-content class="modal-content">
+  <div class="modal-shell">
+    <header class="modal-head">
+      <div>
+        <p class="modal-eyebrow">Konek account</p>
+        <h2>Sign out?</h2>
+      </div>
+
+      <button type="button" class="modal-close" (click)="cancel()" aria-label="Close">
+        <ion-icon name="close-outline" aria-hidden="true"></ion-icon>
+      </button>
+    </header>
+
+    <p class="modal-lead">
+      You'll stop sharing your location with your circles while signed out. You
+      can sign back in anytime.
+    </p>
+
+    <div class="modal-actions">
+      <ion-button expand="block" fill="outline" class="cancel-button" (click)="cancel()">
+        Cancel
+      </ion-button>
+      <ion-button expand="block" class="confirm-button" (click)="confirm()">
+        <ion-icon name="log-out-outline" slot="start" aria-hidden="true"></ion-icon>
+        Sign Out
+      </ion-button>
+    </div>
+  </div>
+</ion-content>

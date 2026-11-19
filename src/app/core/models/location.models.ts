@@ -1,8 +1,8 @@
 /**
- * Shared location/squad models for the Konek app.
+ * Shared location/circle models for the Konek app.
  */
 
-import type { MemberRelationship } from "./squad.models";
+import type { MemberRelationship } from "./circle.models";
 
 export interface ApiEnvelope<T> {
   success: boolean;
@@ -25,7 +25,7 @@ export interface LocationHistoryEntry extends LocationUpdate {
   timestamp: string;
 }
 
-export interface SquadMemberLocation {
+export interface CircleMemberLocation {
   user_id: number;
   username: string;
   /** Stored profile picture path, or null when the member has none. */

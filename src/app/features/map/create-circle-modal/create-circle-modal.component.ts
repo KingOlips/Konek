@@ -10,18 +10,18 @@ import {
 } from "ionicons/icons";
 
 /**
- * Custom bottom-sheet modal for creating a squad. Collects and validates the
+ * Custom bottom-sheet modal for creating a circle. Collects and validates the
  * name locally, then dismisses with the trimmed value so MapPage can run the
  * API call against the normal loading/toast flow.
  */
 @Component({
-  selector: "app-create-squad-modal",
+  selector: "app-create-circle-modal",
   standalone: true,
   imports: [FormsModule, IonButton, IonIcon, IonInput],
-  templateUrl: "./create-squad-modal.component.html",
-  styleUrls: ["../squad-form-modal.shared.scss"],
+  templateUrl: "./create-circle-modal.component.html",
+  styleUrls: ["../circle-form-modal.shared.scss"],
 })
-export class CreateSquadModalComponent implements AfterViewInit {
+export class CreateCircleModalComponent implements AfterViewInit {
   private readonly modalCtrl = inject(ModalController);
 
   @ViewChild("nameInput") private nameInput?: IonInput;

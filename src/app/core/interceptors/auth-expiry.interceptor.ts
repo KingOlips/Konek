@@ -20,6 +20,7 @@ const CREDENTIAL_ENDPOINTS = [
   "api_register.php",
   "api_forgot_password.php",
   "api_reset_password.php",
+  "api_logout.php",
 ];
 
 /**
