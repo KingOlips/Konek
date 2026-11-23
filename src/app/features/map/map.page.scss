@@ -86,15 +86,21 @@ ion-title {
   width: 42px;
   height: 42px;
   margin: 0;
-  --border-radius: 14px;
+  --border-radius: 50%;
   --background: #ffffff;
   --background-hover: #eef4ff;
   --background-hover-opacity: 1;
   --color: #2f6fe0;
   border: none;
-  border-radius: 14px;
+  border-radius: 50%;
   box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08);
   overflow: hidden;
+}
+
+.nav-icon-button::part(native) {
+  border: 0;
+  border-radius: 50%;
+  box-shadow: none;
 }
 
 /* Notification bell with an unread badge pinned to the top-right corner. */
@@ -126,6 +132,12 @@ ion-title {
   border-color: #15181e;
 }
 
+/* Circle chip motion. The duration and easing match the dropdown animation in
+ * animations/circle-menu.animations.ts, so the chip and the menu move as one.
+ * Keep both files in sync. */
+$circle-menu-duration: 220ms;
+$circle-menu-easing: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
 /* Centre chip: its own pill so it never melts into the side buttons. It is a
  * button on the map page so tapping it opens the circle dropdown. */
 .circle-chip {
@@ -133,6 +145,7 @@ ion-title {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  box-sizing: border-box;
   max-width: 100%;
   min-width: 0;
   height: 42px;
@@ -150,7 +163,7 @@ ion-title {
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
-  transition: transform 0.12s ease, border-radius 0.15s ease;
+  transition: transform 0.12s ease;
 }
 
 .circle-chip:active {
@@ -161,9 +174,8 @@ ion-title {
  * between the side buttons (capped) so the popover can match its width and sit
  * flush underneath it, with squared-off bottom corners. */
 .circle-chip.chip-open {
-  width: min(300px, 100%);
   border-radius: 16px 16px 0 0;
-  border-bottom-color: transparent;
+  border: 0;
   box-shadow: none;
   cursor: default;
 }
@@ -182,11 +194,18 @@ ion-title {
 .circle-chip .chip-caret {
   font-size: 14px;
   opacity: 0.65;
-  transition: transform 0.15s ease;
 }
 
 .circle-chip.chip-open .chip-caret {
   transform: rotate(180deg);
+}
+
+/* Users who ask for less motion get an instant chip change. */
+@media (prefers-reduced-motion: reduce) {
+  .circle-chip,
+  .circle-chip .chip-caret {
+    transition-duration: 0ms;
+  }
 }
 
 .circle-name {
@@ -343,9 +362,13 @@ ion-icon.spinning {
 ion-fab-button {
   --background: rgba(255, 255, 255, 0.97);
   --box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  --border-width: 1px;
-  --border-style: solid;
-  --border-color: var(--ion-color-light, #e9ecef);
+  --border-width: 0;
+  --border-style: none;
+  --border-color: transparent;
+}
+
+ion-fab-button::part(native) {
+  border: 0;
 }
 
 /* Untinted FABs (map style, circle list) need an explicit icon colour. */
@@ -425,26 +448,27 @@ ion-fab-button.ion-color-primary {
   flex-direction: column;
   /* The avatar deliberately breaks out of the top edge. */
   overflow: visible;
-  background: #ffffff;
-  border-radius: 22px 22px 0 0;
-  box-shadow: 0 -10px 34px rgba(15, 23, 42, 0.22);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  border-top: 1px solid rgba(15, 23, 42, 0.05);
+  border-radius: 26px 26px 0 0;
+  box-shadow: 0 -14px 44px rgba(15, 23, 42, 0.24);
 }
 
 /* The avatar is the grabber and straddles the sheet's top edge. */
 .member-grabber {
   position: absolute;
-  top: -28px;
+  top: -32px;
   left: 50%;
   z-index: 3;
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   display: flex;
   border-radius: 50%;
   /* Solid disc under the translucent avatar: the half above the sheet edge
    * must not let the map bleed through. */
   background: #ffffff;
   /* Sheet-coloured ring makes the avatar look embedded in the sheet. */
-  box-shadow: 0 0 0 4px #ffffff, 0 8px 20px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 0 0 5px #ffffff, 0 10px 24px rgba(15, 23, 42, 0.2);
   transform: translateX(-50%);
   touch-action: none;
   cursor: grab;
@@ -507,19 +531,21 @@ ion-fab-button.ion-color-primary {
 
 .ping-chip {
   flex: 0 0 auto;
-  padding: 9px 15px;
+  padding: 10px 16px;
   border: 1px solid rgba(47, 111, 224, 0.22);
   border-radius: 999px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
   color: #2f6fe0;
-  box-shadow: 0 2px 10px rgba(17, 24, 39, 0.16);
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.16);
   font: inherit;
   font-size: 13.5px;
   font-weight: 650;
+  letter-spacing: 0.01em;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
-  transition: transform 0.12s ease, background 0.2s ease;
+  transition: transform 0.12s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .ping-chip:active {
@@ -550,9 +576,15 @@ ion-fab-button.ion-color-primary {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* Clear the avatar's inside half (28px) plus the ring and a 12px gap. */
-  padding: 38px 20px calc(24px + var(--ion-safe-area-bottom, 0px));
-  border-radius: 22px 22px 0 0;
+  /* Clear the avatar's inside half (32px) plus the ring and a 12px gap. */
+  padding: 46px 20px calc(26px + var(--ion-safe-area-bottom, 0px));
+  border-radius: 26px 26px 0 0;
+  scrollbar-color: rgba(15, 23, 42, 0.18) transparent;
+}
+
+.member-panel-content::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+  border-radius: 999px;
 }
 
 /* Name + badges centred under the avatar handle */
@@ -560,25 +592,25 @@ ion-fab-button.ion-color-primary {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px 0 18px;
+  padding: 8px 0 20px;
   text-align: center;
 }
 
 .hero-avatar {
-  flex: 0 0 56px;
-  width: 56px;
-  height: 56px;
+  flex: 0 0 64px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(56, 128, 255, 0.12);
+  background: rgba(47, 111, 224, 0.12);
   color: #2f6fe0;
-  font-size: 19px;
+  font-size: 21px;
   font-weight: 700;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  box-shadow: inset 0 0 0 2px rgba(56, 128, 255, 0.28);
+  box-shadow: inset 0 0 0 2px rgba(47, 111, 224, 0.28);
 }
 
 .hero-avatar.is-admin {
@@ -591,7 +623,7 @@ ion-fab-button.ion-color-primary {
   background: linear-gradient(180deg, #58a0ff 0%, #2f7bf0 100%);
   color: #fff;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.3px;
 }
 
@@ -605,9 +637,10 @@ ion-fab-button.ion-color-primary {
 
 .hero-meta h2 {
   max-width: 100%;
-  margin: 0 0 6px;
-  font-size: 19px;
+  margin: 0 0 8px;
+  font-size: 20px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   line-height: 1.2;
   color: #141a24;
   overflow: hidden;
@@ -629,13 +662,13 @@ ion-fab-button.ion-color-primary {
 }
 
 .role-badge {
-  padding: 2px 9px;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(56, 128, 255, 0.12);
+  background: rgba(47, 111, 224, 0.12);
   color: #2f6fe0;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.3px;
   text-transform: uppercase;
 }
 
@@ -648,13 +681,13 @@ ion-fab-button.ion-color-primary {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 9px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: rgba(240, 160, 32, 0.12);
   color: #b97400;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.3px;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
@@ -690,9 +723,12 @@ ion-fab-button.ion-color-primary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.05);
   font-size: 12px;
   font-weight: 600;
-  color: #78828f;
+  color: #64748b;
 }
 
 .status-dot {
@@ -709,13 +745,15 @@ ion-fab-button.ion-color-primary {
 
 .status.online {
   color: #1f9d55;
+  background: rgba(45, 211, 111, 0.14);
 }
 
 /* Detail rows */
 .detail-card {
-  border-radius: 16px;
+  border-radius: 18px;
   background: #f7f9fc;
-  border: 1px solid #e5e9f0;
+  border: 1px solid #e8ecf3;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   overflow: hidden;
 }
 
@@ -723,23 +761,24 @@ ion-fab-button.ion-color-primary {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 54px;
-  padding: 10px 14px;
+  min-height: 58px;
+  padding: 12px 14px;
+  transition: background 0.16s ease;
 }
 
 .detail-row + .detail-row {
-  border-top: 1px solid #eef1f6;
+  border-top: 1px solid #edf1f7;
 }
 
 .row-icon {
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(56, 128, 255, 0.12);
+  background: rgba(47, 111, 224, 0.1);
   color: #2f6fe0;
   font-size: 17px;
 }
@@ -747,30 +786,45 @@ ion-fab-button.ion-color-primary {
 .row-label {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 14.5px;
-  font-weight: 550;
-  color: #141a24;
+  font-size: 14px;
+  font-weight: 500;
+  color: #5a6478;
 }
 
 .row-value {
   flex: 0 0 auto;
-  font-size: 14px;
-  font-weight: 650;
-  color: #2f6fe0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #141a24;
 }
 
 /* Actions */
 .sheet-actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 18px;
+  gap: 12px;
+  padding-top: 20px;
 }
 
 .sheet-actions ion-button {
-  --border-radius: 14px;
+  --border-radius: 16px;
   margin: 0;
+  min-height: 50px;
   font-weight: 650;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.sheet-actions ion-button:first-child::part(native) {
+  background: linear-gradient(135deg, #2f6fe0 0%, #4b8df6 100%);
+  box-shadow: 0 10px 22px rgba(47, 111, 224, 0.32);
+}
+
+.sheet-actions ion-button:not(:first-child)::part(native) {
+  background: rgba(47, 111, 224, 0.08);
+  border-color: rgba(47, 111, 224, 0.28);
+  color: #2f6fe0;
+  box-shadow: none;
 }
 
 /* Wider screens: keep it a bottom sheet, just narrower and centred. */
@@ -807,50 +861,6 @@ ion-fab-button.ion-color-primary {
   justify-content: center;
   z-index: 1200;
   gap: 18px;
-}
-
-/* Splash branding while the first circle fetch is in flight. */
-.loading-brand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.loading-mark {
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #2f6fe0, #5aa4ff);
-  color: #fff;
-  box-shadow: 0 14px 34px rgba(47, 111, 224, 0.32);
-  animation: loading-pulse 1.8s ease-in-out infinite;
-}
-
-.loading-mark ion-icon {
-  font-size: 32px;
-}
-
-.loading-brand h1 {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ion-text-color, #1f2937);
-}
-
-@keyframes loading-pulse {
-  0%,
-  100% {
-    transform: scale(1);
-    box-shadow: 0 14px 34px rgba(47, 111, 224, 0.32);
-  }
-  50% {
-    transform: scale(1.06);
-    box-shadow: 0 18px 42px rgba(47, 111, 224, 0.42);
-  }
 }
 
 .map-loading-overlay p {
@@ -1431,7 +1441,9 @@ ion-fab-button.ion-color-primary {
 
   .circle-chip {
     background: #1f232b;
-    border-color: rgba(255, 255, 255, 0.12);
+    /* Solid hairline (not translucent white) so the chip and the dropdown
+     * below it render with the same clean edge in dark mode. */
+    border-color: #2b303a;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
     color: #f4f5f7;
   }
@@ -1489,10 +1501,6 @@ ion-fab-button.ion-color-primary {
     color: #98a1af;
   }
 
-  .loading-brand h1 {
-    color: #f3f5f8;
-  }
-
   .panel-handle {
     background: #232833;
   }
@@ -1503,7 +1511,8 @@ ion-fab-button.ion-color-primary {
 
   .member-panel {
     background: #171a20;
-    box-shadow: 0 -10px 34px rgba(0, 0, 0, 0.55);
+    border-top-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.58);
   }
 
   .member-grabber {
@@ -1592,10 +1601,12 @@ ion-fab-button.ion-color-primary {
 
   .status {
     color: #98a1af;
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .status.online {
     color: #6fdc9c;
+    background: rgba(111, 220, 156, 0.14);
   }
 
   .detail-card {
@@ -1617,6 +1628,20 @@ ion-fab-button.ion-color-primary {
   }
 
   .row-value {
+    color: #8db4ff;
+  }
+
+  .member-panel-content {
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  }
+
+  .member-panel-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .sheet-actions ion-button:not(:first-child)::part(native) {
+    background: rgba(141, 180, 255, 0.12);
+    border-color: rgba(141, 180, 255, 0.3);
     color: #8db4ff;
   }
 }

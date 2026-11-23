@@ -18,10 +18,10 @@ return [
     "password" => "your 16-character app password",
     "from_email" => "your.name@gmail.com",
     "from_name" => "Konek",
-    // Where the reset-password link should point. Use your LAN IP (for a
-    // phone on the same Wi-Fi) or your deployed frontend URL.
+    // Where the welcome email's "Open Konek" button should point. Use your
+    // LAN IP or your deployed frontend URL.
     "app_url" => "http://localhost:8100",
-    // Public HTTPS origin of the backend, used for the "Verify" button in
-    // reset emails. Leave empty to derive it from the incoming request.
+    // Public HTTPS origin of the backend. Current reset emails use codes;
+    // this remains for legacy reset links sent before the code rollout.
     "public_url" => "https://your-public-host.example",
 ];

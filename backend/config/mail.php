@@ -26,9 +26,8 @@ $config = [
     "from_email" => getenv("KONEK_MAIL_FROM") ?: "",
     "from_name" => getenv("KONEK_MAIL_FROM_NAME") ?: "Konek",
     "app_url" => rtrim(getenv("KONEK_APP_URL") ?: "http://localhost:8100", "/"),
-    // Public origin of the Konek backend, used to build HTTPS links in emails
-    // (for example the password-reset Verify page). Empty means "derive from
-    // the current request".
+    // Public origin of the Konek backend. Current password resets use codes;
+    // this supports legacy reset links. Empty means "derive from the request".
     "public_url" => rtrim((string) (getenv("KONEK_PUBLIC_URL") ?: ""), "/"),
     "debug" => filter_var(getenv("KONEK_MAIL_DEBUG") ?: "0", FILTER_VALIDATE_BOOLEAN),
     "timeout" => 15,

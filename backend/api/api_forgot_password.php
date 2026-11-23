@@ -1,16 +1,21 @@
 <?php
 /**
- * Konek API - Request a password reset verification email
+ * Konek API - Request a password reset verification code
  * POST /api/api_forgot_password.php
  *
  * Request Body: { "email": "string" }
- * Response: { "success": bool, "message": "string", "session_id": "string" }
+ * Response: {
+ *   "success": bool,
+ *   "message": "string",
+ *   "session_id": "string",
+ *   "verification_method": "code",
+ *   "code_length": 6
+ * }
  *
- * The email contains a "Verify" button pointing at the public HTTPS landing
- * page. The device that requested the reset (often a desktop browser) watches
- * the returned `session_id`; when the user taps Verify on any device, the
- * landing page marks the session verified and the requesting screen switches
- * to the new-password form by itself.
+ * The email contains a six-digit verification code. The requesting device
+ * enters that code, receives a one-time reset token, and can then save a new
+ * password. The plain code is never returned by this endpoint or stored in
+ * the database.
  *
  * The response is intentionally generic: it never reveals whether an email is
  * registered. A session is created in both cases, so the presence of a
@@ -19,6 +24,7 @@
 
 require_once __DIR__ . "/../config/database.php";
 require_once __DIR__ . "/../config/cors.php";
+require_once __DIR__ . "/../lib/http.php";
 require_once __DIR__ . "/../lib/mailer.php";
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
@@ -36,7 +42,7 @@ if ($email === "" || strlen($email) > 255 || !filter_var($email, FILTER_VALIDATE
     exit();
 }
 
-$genericMessage = "If that email is registered, a verification link is on its way. Open it on any device and tap Verify — the screen where you started will switch to the password form.";
+$genericMessage = "If that email is registered, a 6-digit verification code is on its way. Enter it in Konek to choose a new password.";
 
 try {
     $db = getDBConnection();
@@ -69,20 +75,43 @@ try {
     $sessionId = bin2hex(random_bytes(32));
 
     if (!$user) {
-        // Same status and wording as a successful send. A dummy session keeps
-        // the response shape identical; it can never be verified because no
-        // reset token exists for it.
+        // Same status, wording, and code-verification behavior as a successful
+        // send. A dummy session keeps the response shape identical; its hidden
+        // code is never emailed, so it can never be verified.
+        $dummyCode = str_pad((string) random_int(0, 999999), 6, "0", STR_PAD_LEFT);
+        $dummyCodeHash = password_hash($dummyCode, PASSWORD_ARGON2ID);
+        if ($dummyCodeHash === false) {
+            throw new RuntimeException("Could not hash password reset code");
+        }
+
         $sessionStmt = $db->prepare("
-            INSERT INTO password_reset_sessions (id, user_id, expires_at)
-            VALUES (:id, NULL, DATE_ADD(NOW(), INTERVAL 30 MINUTE))
+            INSERT INTO password_reset_sessions (
+                id,
+                user_id,
+                purpose,
+                verification_code_hash,
+                verification_attempts,
+                expires_at
+            )
+            VALUES (
+                :id,
+                NULL,
+                'reset',
+                :verification_code_hash,
+                0,
+                DATE_ADD(NOW(), INTERVAL 30 MINUTE)
+            )
         ");
         $sessionStmt->bindParam(":id", $sessionId, PDO::PARAM_STR);
+        $sessionStmt->bindParam(":verification_code_hash", $dummyCodeHash, PDO::PARAM_STR);
         $sessionStmt->execute();
 
-        echo json_encode([
+        konekSendJsonEarly([
             "success" => true,
             "message" => $genericMessage,
             "session_id" => $sessionId,
+            "verification_method" => "code",
+            "code_length" => 6,
         ]);
         exit();
     }
@@ -92,75 +121,64 @@ try {
     $deleteSessions->bindParam(":user_id", $user["id"], PDO::PARAM_INT);
     $deleteSessions->execute();
 
+    // Remove outstanding legacy link tokens when a new code request starts.
     $deleteResets = $db->prepare("DELETE FROM password_resets WHERE user_id = :user_id");
     $deleteResets->bindParam(":user_id", $user["id"], PDO::PARAM_INT);
     $deleteResets->execute();
 
-    $rawToken = bin2hex(random_bytes(32));
-    $tokenHash = hash("sha256", $rawToken);
+    $verificationCode = str_pad((string) random_int(0, 999999), 6, "0", STR_PAD_LEFT);
+    $codeHash = password_hash($verificationCode, PASSWORD_ARGON2ID);
+    if ($codeHash === false) {
+        throw new RuntimeException("Could not hash password reset code");
+    }
 
+    // Use the database clock: PHP and MySQL can run in different time zones,
+    // and verification compares against MySQL's NOW().
     $sessionStmt = $db->prepare("
-        INSERT INTO password_reset_sessions (id, user_id, expires_at)
-        VALUES (:id, :user_id, DATE_ADD(NOW(), INTERVAL 30 MINUTE))
+        INSERT INTO password_reset_sessions (
+            id,
+            user_id,
+            purpose,
+            verification_code_hash,
+            verification_attempts,
+            expires_at
+        )
+        VALUES (
+            :id,
+            :user_id,
+            'reset',
+            :verification_code_hash,
+            0,
+            DATE_ADD(NOW(), INTERVAL 30 MINUTE)
+        )
     ");
     $sessionStmt->bindParam(":id", $sessionId, PDO::PARAM_STR);
     $sessionStmt->bindParam(":user_id", $user["id"], PDO::PARAM_INT);
+    $sessionStmt->bindParam(":verification_code_hash", $codeHash, PDO::PARAM_STR);
     $sessionStmt->execute();
 
-    // Use the database clock: PHP and MySQL can run in different time zones,
-    // and the reset check compares against MySQL's NOW().
-    $insertStmt = $db->prepare("
-        INSERT INTO password_resets (user_id, token_hash, session_id, expires_at)
-        VALUES (:user_id, :token_hash, :session_id, DATE_ADD(NOW(), INTERVAL 30 MINUTE))
-    ");
-    $insertStmt->bindParam(":user_id", $user["id"], PDO::PARAM_INT);
-    $insertStmt->bindParam(":token_hash", $tokenHash, PDO::PARAM_STR);
-    $insertStmt->bindParam(":session_id", $sessionId, PDO::PARAM_STR);
-    $insertStmt->execute();
-
-    $config = konekMailConfig();
-
-    // Gmail and most email clients strip custom schemes (`konek://`) from
-    // links, so the button is a normal HTTPS URL. It never points at the
-    // developer machine: the public origin works from any network.
-    $publicBase = trim((string) ($config["public_url"] ?? ""));
-    if ($publicBase === "") {
-        $forwardedProto = strtolower((string) ($_SERVER["HTTP_X_FORWARDED_PROTO"] ?? ""));
-        $isHttps = (!empty($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off")
-            || $forwardedProto === "https";
-        $host = (string) ($_SERVER["HTTP_HOST"] ?? "localhost");
-        $publicBase = ($isHttps ? "https" : "http") . "://" . $host;
-    }
-    $verifyUrl = rtrim($publicBase, "/") . "/konek/backend/api/reset_verify_page.php?token=" . urlencode($rawToken);
-
-    // The same public URL is passed twice on purpose: the reset email must
-    // never contain the LAN/dev `app_url`, because the phone opening the
-    // mailbox usually cannot reach the desktop's localhost.
-    if (!konekSendPasswordResetEmail($user["email"], $user["username"], $verifyUrl, $verifyUrl)) {
-        // Don't leave a token the user never received.
-        $cleanupReset = $db->prepare("DELETE FROM password_resets WHERE token_hash = :token_hash");
-        $cleanupReset->bindParam(":token_hash", $tokenHash, PDO::PARAM_STR);
-        $cleanupReset->execute();
-
-        $cleanupSession = $db->prepare("DELETE FROM password_reset_sessions WHERE id = :id");
-        $cleanupSession->bindParam(":id", $sessionId, PDO::PARAM_STR);
-        $cleanupSession->execute();
-
-        http_response_code(502);
-        echo json_encode([
-            "success" => false,
-            "message" => "We couldn't send the reset email right now. Please try again in a moment.",
-        ]);
-        exit();
-    }
-
-    echo json_encode([
+    // Answer before SMTP so the app can show the code field right away.
+    konekSendJsonEarly([
         "success" => true,
         "message" => $genericMessage,
         "session_id" => $sessionId,
+        "verification_method" => "code",
+        "code_length" => 6,
     ]);
 
+    if (!konekSendPasswordResetEmail($user["email"], $user["username"], $verificationCode)) {
+        // The client already has the session id; remove it so a code that was
+        // never delivered cannot be used.
+        $cleanupSession = $db->prepare("DELETE FROM password_reset_sessions WHERE id = :id");
+        $cleanupSession->bindParam(":id", $sessionId, PDO::PARAM_STR);
+        $cleanupSession->execute();
+        error_log("Forgot password: reset email failed for user {$user["id"]}");
+    }
 } catch (PDOException $e) {
+    error_log("Forgot password error: " . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(["success" => false, "message" => "Internal server error"]);
+} catch (Throwable $e) {
     error_log("Forgot password error: " . $e->getMessage());
     http_response_code(500);
     echo json_encode(["success" => false, "message" => "Internal server error"]);

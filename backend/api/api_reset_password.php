@@ -64,6 +64,7 @@ try {
             FROM password_reset_sessions s
             INNER JOIN users u ON u.id = s.user_id
             WHERE s.desktop_token = :desktop_token
+              AND s.purpose = 'reset'
               AND s.status = 'verified'
               AND s.expires_at > NOW()
               AND u.active_status = 1
@@ -84,7 +85,7 @@ try {
         http_response_code(400);
         echo json_encode([
             "success" => false,
-            "message" => "This reset link is invalid or has expired. Request a new one.",
+            "message" => "This reset request is invalid or has expired. Request a new code.",
         ]);
         exit();
     }

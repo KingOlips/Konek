@@ -58,8 +58,11 @@ mysql -u root < database/schema.sql
 # Existing databases only: add the pings table
 mysql -u root konek_db < database/migrations/2026-11-10_add_pings_table.sql
 
-# Existing databases only: add hashed password-reset tokens
+# Existing databases only: run missing password-reset migrations in order
 mysql -u root konek_db < database/migrations/2026-11-17_add_password_resets.sql
+mysql -u root konek_db < database/migrations/2026-11-18_cross_device_password_reset.sql
+mysql -u root konek_db < database/migrations/2026-11-22_password_reset_codes.sql
+mysql -u root konek_db < database/migrations/2026-11-22_password_change_codes.sql
 ```
 
 ### 2. Backend Setup
@@ -75,7 +78,7 @@ Copy-Item -Path backend -Destination C:\xampp\htdocs\konek\ -Recurse -Force
 
 #### Email delivery
 
-Welcome and password-reset emails are sent over SMTP with PHPMailer. Create
+Welcome emails and password-reset verification codes are sent over SMTP with PHPMailer. Create
 the local config (git-ignored) and fill in the account details:
 
 ```powershell
@@ -87,10 +90,11 @@ For Gmail, enable 2-Step Verification and create a 16-character
 Gmail address and `password` to the App Password; `from_email` can stay empty
 and defaults to `username`.
 
-`app_url` controls where reset links point. Use `http://localhost:8100` for
-desktop testing, or your computer's LAN address (for example
-`http://192.168.1.24:8100`) so a phone on the same Wi-Fi can open the link.
-`npm start` binds the dev server to all interfaces.
+`app_url` controls where the welcome email's **Open Konek** button points.
+Password resets use a six-digit code entered inside the app, so phones need no
+public reset link. Use `http://localhost:8100` for desktop testing, or your
+computer's LAN address (for example `http://192.168.1.24:8100`) for the welcome
+button. `npm start` binds the dev server to all interfaces.
 
 Verify the SMTP account without going through the app:
 
@@ -221,8 +225,10 @@ Konek/
 | POST | `/api_register.php` | Register new user |
 | POST | `/api_login.php` | Login user |
 | POST | `/api_logout.php` | Logout user |
-| POST | `/api_change_password.php` | Change password (authenticated) |
-| POST | `/api_forgot_password.php` | Email a password-reset link |
+| POST | `/api_request_password_change_code.php` | Email a password-change verification code (authenticated) |
+| POST | `/api_change_password.php` | Change password after code verification (authenticated) |
+| POST | `/api_forgot_password.php` | Email a password-reset verification code |
+| POST | `/api_verify_reset_code.php` | Verify an emailed reset or change code and issue a one-time token |
 | POST | `/api_reset_password.php` | Reset password and sign in with the new token |
 
 ### Location
@@ -291,11 +297,11 @@ answers `OPTIONS` preflight requests.
 
 The following was tested end-to-end against XAMPP (Apache + MariaDB):
 
-- Database import (7 tables: `users`, `squads`, `squad_members`, `locations`, `geofences`, `pings`, `password_resets`)
+- Database import (9 tables: `users`, `squads`, `squad_members`, `locations`, `geofences`, `pings`, `password_reset_sessions`, `password_resets`, `notifications`)
 - Register → login → authenticated logout
-- Registration welcome email and password-reset link delivery (SMTP)
-- Forgot password → emailed link → reset → automatic sign-in
-- Change password (wrong current password rejected, new password works, old rejected)
+- Registration welcome email and password-reset code delivery (SMTP)
+- Forgot password → emailed 6-digit code → verify code → reset → automatic sign-in
+- Change password → emailed 6-digit code → verify code → current password checked → new password works, old rejected
 - Create squad, join squad by code, fetch squads/members
 - Update location and retrieve latest location per squad member
 - Create/list geofences
@@ -308,6 +314,8 @@ The following was tested end-to-end against XAMPP (Apache + MariaDB):
 ## Security Notes
 
 - Passwords hashed with Argon2id (`PASSWORD_ARGON2ID`)
+- Six-digit reset and change codes stored only as Argon2id hashes, with five-attempt lockout
+- Reset and change codes are purpose-scoped, so a token from one flow cannot complete the other
 - Opaque, cryptographically random API tokens (`random_bytes`)
 - Prepared statements prevent SQL injection
 - Bearer tokens invalidated on logout

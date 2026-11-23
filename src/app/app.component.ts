@@ -219,14 +219,18 @@ export class AppComponent implements OnInit {
 
         const unlocked = await this.biometricService.authenticate("Unlock Konek");
         if (!unlocked) {
-          // Never keep uploading in the background after a failed unlock.
-          await this.backgroundTracker.stop();
-          try {
-            await firstValueFrom(this.authService.logout());
-          } catch {
-            // Session is cleared locally even if the API is unreachable.
+          // Start logout before stopping the uploader so polling responses
+          // cannot be mistaken for an expired session during shutdown.
+          const logoutPromise = firstValueFrom(this.authService.logout()).catch(
+            () => undefined
+          );
+          await Promise.all([
+            logoutPromise,
+            this.backgroundTracker.stop(),
+          ]);
+          if (!this.authService.isAuthenticated()) {
+            await this.router.navigate(["/login"], { replaceUrl: true });
           }
-          await this.router.navigate(["/login"], { replaceUrl: true });
         }
       });
     } catch (error) {

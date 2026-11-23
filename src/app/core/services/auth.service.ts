@@ -3,9 +3,14 @@ import { HttpClient, HttpHeaders } from "@angular/common/http";
 import {
   BehaviorSubject,
   Observable,
+  ReplaySubject,
   catchError,
+  defer,
+  finalize,
   from,
   map,
+  of,
+  share,
   switchMap,
   tap,
   throwError,
@@ -58,11 +63,14 @@ export interface AuthResponse {
   suggested_username?: string;
   email?: string;
   /**
-   * Cross-device password reset: identifies the pending request this screen is
-   * watching. The screen switches to the password form once the email link is
-   * verified on any device.
+   * Password reset request identifier. The screen uses it while checking the
+   * emailed verification code.
    */
   session_id?: string;
+  /** Password reset verification method requested by the backend. */
+  verification_method?: "code" | "link";
+  /** Number of digits in the emailed verification code. */
+  code_length?: number;
 }
 
 /** Result of polling a cross-device password reset session. */
@@ -73,10 +81,33 @@ export interface ResetSessionStatus {
   message?: string;
 }
 
+/** Result of checking an emailed password verification code. */
+export interface ResetCodeVerification {
+  success: boolean;
+  valid: boolean;
+  message: string;
+  token?: string;
+  attempts_remaining?: number;
+}
+
+/** Result of requesting a password-change verification code. */
+export interface PasswordCodeResponse {
+  success: boolean;
+  message: string;
+  session_id?: string;
+  verification_method?: "code";
+  code_length?: number;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   message: string;
   data?: T;
+}
+
+interface SessionSnapshot {
+  token: string | null;
+  epoch: number;
 }
 
 const TOKEN_KEY = "konek_auth_token";
@@ -96,6 +127,25 @@ export class AuthService {
   /** Emits auth state changes. */
   readonly isAuthenticated$ = this.isAuthenticatedSubject.asObservable();
 
+  /** Emits while the current session is being explicitly logged out. */
+  private readonly loggingOutSubject = new BehaviorSubject<boolean>(false);
+  readonly loggingOut$ = this.loggingOutSubject.asObservable();
+
+  /** Explicit logout operation that currently owns the logging-out state. */
+  private loggingOutOperationId: number | null = null;
+  /** Shared logout request for the current session. */
+  private logoutRequest$: Observable<ApiResponse<void>> | null = null;
+  private logoutRequestOperationId: number | null = null;
+  private logoutRequestEpoch: number | null = null;
+  private logoutRequestToken: string | null = null;
+  private logoutOperationId = 0;
+  /** Changes whenever persisted session identity changes. */
+  private sessionEpoch = 0;
+  /** Latest session-producing request wins over older responses. */
+  private sessionRequestId = 0;
+  /** Serializes session reads and writes so stale state cannot overwrite newer state. */
+  private storageMutation: Promise<void> = Promise.resolve();
+
   /** Resolves once the persisted session has been read from storage. */
   private sessionReady: Promise<void>;
 
@@ -105,20 +155,28 @@ export class AuthService {
 
   private async loadStoredSession(): Promise<void> {
     try {
-      const [{ value: token }, { value: userData }] = await Promise.all([
-        Preferences.get({ key: TOKEN_KEY }),
-        Preferences.get({ key: USER_KEY }),
-      ]);
+      await this.enqueueStorageRead(async () => {
+        const [{ value: token }, { value: userData }] = await Promise.all([
+          Preferences.get({ key: TOKEN_KEY }),
+          Preferences.get({ key: USER_KEY }),
+        ]);
 
-      if (token && userData) {
+        if (!token || !userData) return;
+
         const user = JSON.parse(userData) as User;
         user.auth_token = token;
-        this.currentUserSubject.next(user);
-        this.isAuthenticatedSubject.next(true);
-      }
+        if (this.currentUserSubject.value?.auth_token !== token) {
+          this.sessionEpoch++;
+          this.currentUserSubject.next(user);
+          this.isAuthenticatedSubject.next(true);
+        }
+      });
     } catch (error) {
       console.error("Failed to restore session:", error);
-      await this.clearStoredSession();
+      const expectedToken =
+        this.currentUserSubject.value?.auth_token ?? null;
+      const expectedEpoch = this.sessionEpoch;
+      await this.clearStoredSession(expectedToken, expectedEpoch, true);
     }
   }
 
@@ -126,7 +184,7 @@ export class AuthService {
   async whenReady(): Promise<void> {
     return this.sessionReady;
   }
-    /** Reload session from storage; call after login/logout so whenReady() waits for fresh data. */
+  /** Reload session from storage; call after external session changes. */
   async reloadSession(): Promise<void> {
     this.sessionReady = this.loadStoredSession();
     await this.sessionReady;
@@ -142,6 +200,26 @@ export class AuthService {
 
   forgotPassword(email: string): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${environment.apiUrl}/api_forgot_password.php`, { email });
+  }
+
+  /** Verify a six-digit code emailed for a password reset or change. */
+  verifyPasswordCode(
+    sessionId: string,
+    code: string
+  ): Observable<ResetCodeVerification> {
+    return this.http.post<ResetCodeVerification>(
+      `${environment.apiUrl}/api_verify_reset_code.php`,
+      { session_id: sessionId, code }
+    );
+  }
+
+  /** Send a password-change verification code to the signed-in user's email. */
+  requestPasswordChangeCode(): Observable<PasswordCodeResponse> {
+    return this.http.post<PasswordCodeResponse>(
+      `${environment.apiUrl}/api_request_password_change_code.php`,
+      {},
+      { headers: this.authHeaders(true) }
+    );
   }
 
   /**
@@ -223,32 +301,37 @@ export class AuthService {
    */
   private withSession(label: string) {
     return (source: Observable<AuthResponse>): Observable<AuthResponse> =>
-      source.pipe(
-        switchMap((response) => {
-          if (!response.success || !response.data) {
-            return from(Promise.resolve(response));
-          }
-          const user = response.data;
-          return from(this.persistSession(user.auth_token, user)).pipe(
-            tap(() => {
-              this.currentUserSubject.next(user);
-              this.isAuthenticatedSubject.next(true);
-              this.haptic("success");
-            }),
-            tap(() => { this.sessionReady = this.loadStoredSession(); }),
-            map(() => response)
-          );
-        }),
-        catchError((error) => {
-          console.error(`${label} failed:`, error);
-          return throwError(() => error);
-        })
-      );
+      defer(() => {
+        const requestId = ++this.sessionRequestId;
+        return source.pipe(
+          switchMap((response) => {
+            if (!response.success || !response.data) {
+              return from(Promise.resolve(response));
+            }
+            const user = response.data;
+            return from(
+              this.persistSession(user.auth_token, user, requestId)
+            ).pipe(
+              tap((persisted) => {
+                if (persisted) {
+                  void this.haptic("success");
+                }
+              }),
+              map(() => response)
+            );
+          }),
+          catchError((error) => {
+            console.error(`${label} failed:`, error);
+            return throwError(() => error);
+          })
+        );
+      });
   }
 
   changePassword(
     currentPassword: string | null,
-    newPassword: string
+    newPassword: string,
+    verificationToken: string
   ): Observable<ApiResponse<void>> {
     const token = this.currentUserSubject.value?.auth_token;
     const headers = new HttpHeaders({
@@ -258,27 +341,37 @@ export class AuthService {
 
     return this.http.post<ApiResponse<void>>(
       `${environment.apiUrl}/api_change_password.php`,
-      { current_password: currentPassword ?? "", new_password: newPassword },
+      {
+        current_password: currentPassword ?? "",
+        new_password: newPassword,
+        verification_token: verificationToken,
+      },
       { headers }
     );
   }
 
   /** Load the signed-in user's profile from the server and cache it locally. */
   getProfile(): Observable<ApiResponse<User>> {
-    return this.http
-      .get<ApiResponse<User>>(`${environment.apiUrl}/api_get_profile.php`, {
-        headers: this.authHeaders(),
-      })
-      .pipe(this.mergeProfileIntoSession());
+    return defer(() => {
+      const session = this.captureSession();
+      return this.http
+        .get<ApiResponse<User>>(`${environment.apiUrl}/api_get_profile.php`, {
+          headers: this.authHeaders(false, session.token),
+        })
+        .pipe(this.mergeProfileIntoSession(session));
+    });
   }
 
   /** Update the signed-in user's name, email, and contact number. */
   updateProfile(updates: ProfileUpdate): Observable<ApiResponse<User>> {
-    return this.http
-      .post<ApiResponse<User>>(`${environment.apiUrl}/api_update_profile.php`, updates, {
-        headers: this.authHeaders(true),
-      })
-      .pipe(this.mergeProfileIntoSession());
+    return defer(() => {
+      const session = this.captureSession();
+      return this.http
+        .post<ApiResponse<User>>(`${environment.apiUrl}/api_update_profile.php`, updates, {
+          headers: this.authHeaders(true, session.token),
+        })
+        .pipe(this.mergeProfileIntoSession(session));
+    });
   }
 
   /**
@@ -289,11 +382,14 @@ export class AuthService {
     const formData = new FormData();
     formData.append("profile_picture", file, file.name);
 
-    return this.http
-      .post<ApiResponse<User>>(`${environment.apiUrl}/api_upload_profile_picture.php`, formData, {
-        headers: this.authHeaders(),
-      })
-      .pipe(this.mergeProfileIntoSession());
+    return defer(() => {
+      const session = this.captureSession();
+      return this.http
+        .post<ApiResponse<User>>(`${environment.apiUrl}/api_upload_profile_picture.php`, formData, {
+          headers: this.authHeaders(false, session.token),
+        })
+        .pipe(this.mergeProfileIntoSession(session));
+    });
   }
 
   /**
@@ -308,7 +404,7 @@ export class AuthService {
   }
 
   /** Persist profile fields returned by the API into the cached session. */
-  private mergeProfileIntoSession() {
+  private mergeProfileIntoSession(session: SessionSnapshot) {
     return (source: Observable<ApiResponse<User>>): Observable<ApiResponse<User>> =>
       source.pipe(
         switchMap((response) => {
@@ -316,14 +412,37 @@ export class AuthService {
             return from(Promise.resolve(response));
           }
           const current = this.currentUserSubject.value;
-          const merged: User = { ...current, ...response.data } as User;
-          return from(this.updateUserData(merged)).pipe(map(() => response));
+          if (
+            !current ||
+            current.auth_token !== session.token ||
+            this.sessionEpoch !== session.epoch
+          ) {
+            return from(Promise.resolve(response));
+          }
+          const merged: User = {
+            ...current,
+            ...response.data,
+            auth_token: session.token ?? current.auth_token,
+          } as User;
+          return from(
+            this.updateUserData(merged, session.token, session.epoch)
+          ).pipe(map(() => response));
         })
       );
   }
 
-  private authHeaders(json = false): HttpHeaders {
-    const token = this.currentUserSubject.value?.auth_token;
+  /** Capture the session identity that owns an account-bound request. */
+  private captureSession(): SessionSnapshot {
+    return {
+      token: this.currentUserSubject.value?.auth_token ?? null,
+      epoch: this.sessionEpoch,
+    };
+  }
+
+  private authHeaders(
+    json = false,
+    token: string | null | undefined = this.currentUserSubject.value?.auth_token
+  ): HttpHeaders {
     return new HttpHeaders({
       ...(json ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -331,55 +450,232 @@ export class AuthService {
   }
 
   logout(): Observable<ApiResponse<void>> {
-    const token = this.currentUserSubject.value?.auth_token;
+    const currentToken = this.currentUserSubject.value?.auth_token ?? null;
+    const currentEpoch = this.sessionEpoch;
+    if (this.logoutRequest$) {
+      const sameSession =
+        this.logoutRequestEpoch === currentEpoch &&
+        this.logoutRequestToken === currentToken;
+      const sessionAlreadyCleared =
+        currentToken === null && this.isLoggingOut();
+      if (sameSession || sessionAlreadyCleared) {
+        return this.logoutRequest$;
+      }
+    }
+
+    const operationId = ++this.logoutOperationId;
+    const expectedEpoch = currentEpoch;
+    const token = currentToken;
     const headers = new HttpHeaders({
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     });
 
-    // Always clear the local session, even when the API call fails.
-    const finish = () =>
-      from(this.clearStoredSession()).pipe(
-        tap(() => {
-          this.currentUserSubject.next(null);
-          this.isAuthenticatedSubject.next(false);
-          this.haptic("warning");
-        })
-      );
+    const request$ = defer(() => {
+      const activeToken =
+        this.currentUserSubject.value?.auth_token ?? null;
+      if (
+        this.sessionEpoch !== expectedEpoch ||
+        activeToken !== token
+      ) {
+        return of<ApiResponse<void>>({ success: true, message: "Signed out" });
+      }
 
-    if (!token) {
-      return finish().pipe(map(() => ({ success: true, message: "Signed out" })));
-    }
+      this.loggingOutOperationId = operationId;
+      this.sessionRequestId++;
+      this.setLoggingOut(true);
 
-    return this.http
-      .post<ApiResponse<void>>(`${environment.apiUrl}/api_logout.php`, {}, { headers })
-      .pipe(
-        switchMap((response) => finish().pipe(map(() => response))),
-        catchError((error) =>
-          finish().pipe(switchMap(() => throwError(() => error)))
+      const request = token
+        ? this.http.post<ApiResponse<void>>(
+            `${environment.apiUrl}/api_logout.php`,
+            {},
+            { headers }
+          )
+        : of<ApiResponse<void>>({ success: true, message: "Signed out" });
+
+      // Clear local state before waiting for the server. Polling stops at once,
+      // and a failed logout still leaves the device signed out.
+      return from(
+        this.clearStoredSession(token, expectedEpoch, true)
+      ).pipe(
+        catchError(() => of(false)),
+        switchMap((cleared) =>
+          cleared
+            ? request
+            : of<ApiResponse<void>>({ success: true, message: "Signed out" })
         )
       );
+    }).pipe(
+      finalize(() => {
+        if (this.logoutRequestOperationId === operationId) {
+          this.logoutRequest$ = null;
+          this.logoutRequestOperationId = null;
+          this.logoutRequestEpoch = null;
+          this.logoutRequestToken = null;
+        }
+        if (this.loggingOutOperationId === operationId) {
+          this.loggingOutOperationId = null;
+          this.setLoggingOut(false);
+        }
+      })
+    );
+
+    const logoutSubject = new ReplaySubject<ApiResponse<void>>(1);
+    this.logoutRequest$ = request$.pipe(
+      share({
+        connector: () => logoutSubject,
+        resetOnError: false,
+        resetOnComplete: false,
+        resetOnRefCountZero: false,
+      })
+    );
+    this.logoutRequestOperationId = operationId;
+    this.logoutRequestEpoch = expectedEpoch;
+    this.logoutRequestToken = token;
+    return this.logoutRequest$;
   }
 
-  private async persistSession(token: string, user: User): Promise<void> {
-    await Promise.all([
-      Preferences.set({ key: TOKEN_KEY, value: token }),
-      Preferences.set({ key: USER_KEY, value: JSON.stringify(user) }),
-    ]);
+  /** Serialize session storage operations so old state cannot replace new state. */
+  private enqueueStorageTask<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.storageMutation.then(operation, operation);
+    this.storageMutation = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
   }
 
-  private async clearStoredSession(): Promise<void> {
-    // Drop the remembered map circle so the next account never sees the
-    // previous user's circle name flash before the list loads.
-    try {
-      localStorage.removeItem("konek_active_squad");
-    } catch {
-      // localStorage may be unavailable in private mode.
+  /** Queue a write behind every earlier session read and write. */
+  private enqueueStorageMutation<T>(operation: () => Promise<T>): Promise<T> {
+    return this.enqueueStorageTask(operation);
+  }
+
+  /** Queue a read behind every earlier session write. */
+  private enqueueStorageRead<T>(operation: () => Promise<T>): Promise<T> {
+    return this.enqueueStorageTask(operation);
+  }
+
+  /** Persist and publish only the latest session-producing response. */
+  private async persistSession(
+    token: string,
+    user: User,
+    requestId: number
+  ): Promise<boolean> {
+    const sessionUser: User = { ...user, auth_token: token };
+    return this.enqueueStorageMutation(async () => {
+      if (requestId !== this.sessionRequestId) return false;
+
+      await Promise.all([
+        Preferences.set({ key: TOKEN_KEY, value: token }),
+        Preferences.set({ key: USER_KEY, value: JSON.stringify(sessionUser) }),
+      ]);
+
+      if (requestId !== this.sessionRequestId) {
+        const activeToken =
+          this.currentUserSubject.value?.auth_token ?? null;
+        if (activeToken !== token || this.isLoggingOut()) {
+          try {
+            const { value: storedToken } = await Preferences.get({
+              key: TOKEN_KEY,
+            });
+            if ((storedToken ?? null) === token) {
+              await Promise.all([
+                Preferences.remove({ key: TOKEN_KEY }),
+                Preferences.remove({ key: USER_KEY }),
+              ]);
+            }
+          } catch {
+            // A newer session or logout owns storage now.
+          }
+        }
+        return false;
+      }
+
+      this.cancelLoggingOut();
+      this.sessionEpoch++;
+      this.currentUserSubject.next(sessionUser);
+      this.isAuthenticatedSubject.next(true);
+      this.sessionReady = Promise.resolve();
+      return true;
+    });
+  }
+
+  /**
+   * Clear session storage only when it still belongs to the expected session.
+   * A late logout must never remove credentials written by a newer login.
+   */
+  private clearStoredSession(
+    expectedToken?: string | null,
+    expectedEpoch?: number,
+    clearMemory = false
+  ): Promise<boolean> {
+    return this.enqueueStorageMutation(async () => {
+      if (
+        expectedEpoch !== undefined &&
+        this.sessionEpoch !== expectedEpoch
+      ) {
+        return false;
+      }
+
+      const currentToken = this.currentUserSubject.value?.auth_token ?? null;
+      if (expectedToken !== undefined && currentToken !== expectedToken) {
+        return false;
+      }
+
+      let storedToken: string | null = null;
+      try {
+        const stored = await Preferences.get({ key: TOKEN_KEY });
+        storedToken = stored.value ?? null;
+      } catch {
+        // Continue clearing memory even when storage cannot be read.
+      }
+      const storedSessionMatches =
+        expectedToken === undefined ||
+        expectedToken === null ||
+        storedToken === expectedToken;
+
+      // Keep newer stored credentials when they do not belong to this
+      // session, but still clear the matching in-memory session.
+      if (storedSessionMatches) {
+        try {
+          await Promise.all([
+            Preferences.remove({ key: TOKEN_KEY }),
+            Preferences.remove({ key: USER_KEY }),
+          ]);
+        } catch {
+          // Local memory must still be cleared if storage removal fails.
+        }
+      }
+
+      if (!clearMemory) return true;
+
+      // Drop the remembered map circle so the next account never sees the
+      // previous user's circle name flash before the list loads.
+      try {
+        localStorage.removeItem("konek_active_squad");
+      } catch {
+        // localStorage may be unavailable in private mode.
+      }
+
+      this.sessionEpoch++;
+      this.currentUserSubject.next(null);
+      this.isAuthenticatedSubject.next(false);
+      this.sessionReady = Promise.resolve();
+      return true;
+    });
+  }
+
+  /** Publish explicit-logout state for the operation that owns it. */
+  private setLoggingOut(loggingOut: boolean): void {
+    if (this.loggingOutSubject.value !== loggingOut) {
+      this.loggingOutSubject.next(loggingOut);
     }
-    await Promise.all([
-      Preferences.remove({ key: TOKEN_KEY }),
-      Preferences.remove({ key: USER_KEY }),
-    ]);
+  }
+
+  /** A newer authenticated session supersedes any older logout operation. */
+  private cancelLoggingOut(): void {
+    this.loggingOutOperationId = null;
+    this.setLoggingOut(false);
   }
 
   /**
@@ -387,15 +683,41 @@ export class AuthService {
    * logout(), no server call is made: the token is already invalid, so the
    * only useful recovery is sending the user back to login.
    */
-  async expireSession(): Promise<void> {
-    await this.clearStoredSession();
-    this.currentUserSubject.next(null);
-    this.isAuthenticatedSubject.next(false);
+  async expireSession(
+    expectedToken = this.currentUserSubject.value?.auth_token ?? null,
+    expectedEpoch = this.sessionEpoch
+  ): Promise<boolean> {
+    // Reject an expiry for a session that was already replaced. Only the
+    // session that was active when expiry was detected may invalidate pending
+    // session-producing requests.
+    const currentToken = this.currentUserSubject.value?.auth_token ?? null;
+    if (
+      currentToken !== expectedToken ||
+      this.sessionEpoch !== expectedEpoch
+    ) {
+      return false;
+    }
+
+    // Invalidate login or password-reset responses that started before this
+    // expiry. A newer login started afterwards receives a newer request id
+    // and can still establish its session.
+    this.sessionRequestId++;
+
+    const cleared = await this.clearStoredSession(
+      expectedToken,
+      expectedEpoch,
+      true
+    );
+    if (!cleared) return false;
+
+    return true;
   }
 
   async getAuthToken(): Promise<string | null> {
-    const { value } = await Preferences.get({ key: TOKEN_KEY });
-    return value;
+    const { value } = await this.enqueueStorageRead(() =>
+      Preferences.get({ key: TOKEN_KEY })
+    );
+    return value ?? null;
   }
 
   getCurrentUser(): User | null {
@@ -406,9 +728,48 @@ export class AuthService {
     return this.isAuthenticatedSubject.value;
   }
 
-  async updateUserData(user: User): Promise<void> {
-    await Preferences.set({ key: USER_KEY, value: JSON.stringify(user) });
-    this.currentUserSubject.next(user);
+  /** True while an explicit logout is running. */
+  isLoggingOut(): boolean {
+    return this.loggingOutSubject.value;
+  }
+
+  /** Identifies the current authenticated session for stale-response checks. */
+  getSessionEpoch(): number {
+    return this.sessionEpoch;
+  }
+
+  async updateUserData(
+    user: User,
+    expectedToken = this.currentUserSubject.value?.auth_token ?? null,
+    expectedEpoch = this.sessionEpoch
+  ): Promise<boolean> {
+    const sessionUser: User = {
+      ...user,
+      auth_token: expectedToken ?? user.auth_token,
+    };
+    return this.enqueueStorageMutation(async () => {
+      const currentToken =
+        this.currentUserSubject.value?.auth_token ?? null;
+      if (
+        currentToken !== expectedToken ||
+        this.sessionEpoch !== expectedEpoch
+      ) {
+        return false;
+      }
+
+      await Preferences.set({
+        key: USER_KEY,
+        value: JSON.stringify(sessionUser),
+      });
+      if (
+        this.currentUserSubject.value?.auth_token !== expectedToken ||
+        this.sessionEpoch !== expectedEpoch
+      ) {
+        return false;
+      }
+      this.currentUserSubject.next(sessionUser);
+      return true;
+    });
   }
 
   /** Fire-and-forget haptic feedback; silently no-ops on web. */

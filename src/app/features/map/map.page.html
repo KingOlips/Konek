@@ -434,7 +434,7 @@
         </div>
 
         <div class="sheet-actions">
-          <ion-button expand="block" shape="round" (click)="centerOnSelection()">
+          <ion-button expand="block" (click)="centerOnSelection()">
             <ion-icon name="locate-outline" slot="start"></ion-icon>
             {{ selectedIsSelf ? "Center on me" : "Center on map" }}
           </ion-button>
@@ -442,7 +442,6 @@
           @if (!selectedIsSelf) {
             <ion-button
               expand="block"
-              shape="round"
               fill="outline"
               (click)="openDirections()"
             >
@@ -457,12 +456,6 @@
 
   @if (!mapReady || !initialLoadDone) {
     <div class="map-loading-overlay">
-      <div class="loading-brand">
-        <span class="loading-mark">
-          <ion-icon name="navigate-outline"></ion-icon>
-        </span>
-        <h1>Konek</h1>
-      </div>
       <ion-spinner name="crescent"></ion-spinner>
       <p>Getting your circle on the map…</p>
     </div>

@@ -37,7 +37,7 @@ try {
     $stmt = $db->prepare("
         SELECT status, desktop_token, expires_at > NOW() AS is_live
         FROM password_reset_sessions
-        WHERE id = :id
+        WHERE id = :id AND purpose = 'reset'
         LIMIT 1
     ");
     $stmt->bindParam(":id", $sessionId, PDO::PARAM_STR);

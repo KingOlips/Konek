@@ -82,7 +82,7 @@ export class ForgotPasswordPage {
     this.isLoading = true;
     this.email = this.forgotForm.value.email;
     const loading = await this.loadingCtrl.create({
-      message: "Sending reset link...",
+      message: "Sending reset code...",
       spinner: "crescent",
     });
     await loading.present();
@@ -94,12 +94,21 @@ export class ForgotPasswordPage {
       await loading.dismiss();
 
       if (!response.success) {
-        await this.showError(response.message || "Failed to send reset link");
+        await this.showError(response.message || "Failed to send reset code");
         return;
       }
 
-      // Show success state with email
-      this.cdr.markForCheck();
+      if (!response.session_id) {
+        await this.showError("The reset code request did not complete. Please try again.");
+        return;
+      }
+
+      await this.router.navigate(["/reset-password"], {
+        queryParams: {
+          session_id: response.session_id,
+          email: this.email,
+        },
+      });
     } catch (error: any) {
       await loading.dismiss();
       console.error("Forgot password error:", error);
@@ -108,7 +117,7 @@ export class ForgotPasswordPage {
       await this.showError(
         offline
           ? "Can't reach the Konek server. Check your internet connection and try again in a moment."
-          : (error?.error?.message ?? "Failed to send reset link. Please try again.")
+          : (error?.error?.message ?? "Failed to send reset code. Please try again.")
       );
     } finally {
       this.isLoading = false;

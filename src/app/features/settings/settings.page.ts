@@ -434,23 +434,24 @@ export class SettingsPage implements OnInit, ViewWillEnter {
     const loading = await this.loadingCtrl.create({ message: "Signing out..." });
     await loading.present();
 
-    // Stop the native uploader before the token is cleared.
-    await this.backgroundTracker.stop();
+    // Subscribe before stopping the native uploader so logout state starts
+    // immediately. Poll responses that arrive during tracker shutdown must be
+    // treated as expected logout responses, not an expired session.
+    const logoutPromise = firstValueFrom(this.authService.logout()).catch(
+      () => undefined
+    );
+    await Promise.all([
+      logoutPromise,
+      this.backgroundTracker.stop(),
+    ]);
 
-    this.authService.logout().subscribe({
-      next: async () => {
-        await this.authService.reloadSession();
-        try { localStorage.removeItem("konek_active_squad"); } catch {}
-        await loading.dismiss();
-        this.router.navigate(["/login"], { replaceUrl: true });
-      },
-      error: async () => {
-        await this.authService.reloadSession();
-        try { localStorage.removeItem("konek_active_squad"); } catch {}
-        await loading.dismiss();
-        this.router.navigate(["/login"], { replaceUrl: true });
-      },
-    });
+    if (this.authService.isAuthenticated()) {
+      await loading.dismiss();
+      return;
+    }
+    try { localStorage.removeItem("konek_active_squad"); } catch {}
+    await loading.dismiss();
+    this.router.navigate(["/login"], { replaceUrl: true });
   }
 
   async showAbout(): Promise<void> {

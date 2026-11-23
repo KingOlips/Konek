@@ -191,78 +191,114 @@ HTML;
 }
 
 /**
- * Build the password reset email (subject, HTML, text) without sending it.
- * Kept separate so the content can be verified without SMTP.
+ * Build a password verification-code email (subject, HTML, text) without
+ * sending it. Kept separate so the content can be verified without SMTP.
  *
+ * @param bool $forChange True for the Settings "change password" flow.
  * @return array{subject: string, html: string, text: string}
  */
-function konekBuildPasswordResetEmail(string $username, string $resetUrl, string $verifyPageUrl = ""): array
-{
-    // Older callers only pass the web URL; keep them working.
-    $primaryUrl = $verifyPageUrl !== "" ? $verifyPageUrl : $resetUrl;
-    $safeVerify = konekEscape($primaryUrl);
+function konekBuildPasswordCodeEmail(
+    string $username,
+    string $verificationCode,
+    bool $forChange,
+    int $expiresMinutes
+): array {
+    $safeCode = konekEscape($verificationCode);
     $name = konekEscape($username);
+
+    if ($forChange) {
+        $intro = "We received a request to change your Konek password. Enter this "
+            . "6-digit verification code in the app to continue.";
+        $subject = "Your Konek password change code";
+        $preheader = "Use this code within {$expiresMinutes} minutes to change your password.";
+        $heading = "Verify your password change";
+        $expiry = "This code expires in <strong style=\"color:#334155;\">{$expiresMinutes} minutes</strong>. "
+            . "Enter it in Settings to continue.";
+        $textIntro = "We received a request to change your Konek password.";
+        $textAction = "Enter it in Konek Settings to continue.";
+        $safeNote = "Didn't ask for this? Ignore this email and consider changing your password.";
+    } else {
+        $intro = "We received a request to reset your Konek password. Enter this "
+            . "6-digit verification code in the app to choose a new password.";
+        $subject = "Your Konek password reset code";
+        $preheader = "Use this code within {$expiresMinutes} minutes to choose a new password.";
+        $heading = "Reset your password";
+        $expiry = "This code expires in <strong style=\"color:#334155;\">{$expiresMinutes} minutes</strong>. "
+            . "You can enter it on any device where you started the password reset.";
+        $textIntro = "We received a request to reset your Konek password.";
+        $textAction = "Enter it in Konek to choose a new password.";
+        $safeNote = "Didn't ask for this? You can safely ignore this email - your password stays the same.";
+    }
 
     $body = <<<HTML
 <p style="margin:0 0 16px;color:#334155;font-size:15px;line-height:1.7;">Hi <strong style="color:#0f172a;">{$name}</strong>,</p>
-<p style="margin:0 0 24px;color:#334155;font-size:15px;line-height:1.7;">
-  We received a request to reset your Konek password. Tap
-  <strong style="color:#0f172a;">Verify</strong> below. The screen where you
-  started the reset will switch to the new-password form automatically — even
-  if you opened this email on a different device. The link expires in
-  <strong style="color:#0f172a;">30 minutes</strong>.
+<p style="margin:0 0 20px;color:#334155;font-size:15px;line-height:1.7;">
+  {$intro}
 </p>
-<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
   <tr>
-    <td style="border-radius:12px;background:#1d4ed8;">
-      <a href="{$safeVerify}" style="display:inline-block;padding:13px 28px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;border-radius:12px;">Verify</a>
+    <td align="center" style="padding:16px 24px;border:1px solid #dbeafe;border-radius:14px;background:#eff6ff;color:#1d4ed8;font-size:34px;font-weight:800;letter-spacing:0.28em;font-variant-numeric:tabular-nums;">
+      {$safeCode}
     </td>
   </tr>
 </table>
-<p style="margin:0 0 8px;color:#64748b;font-size:13px;line-height:1.7;">
-  Button not working? Copy this link into your browser:
-</p>
-<p style="margin:0 0 24px;word-break:break-all;color:#1d4ed8;font-size:13px;line-height:1.6;">
-  <a href="{$safeVerify}" style="color:#1d4ed8;text-decoration:underline;word-break:break-all;">{$safeVerify}</a>
+<p style="margin:0 0 16px;color:#64748b;font-size:13px;line-height:1.7;">
+  {$expiry}
 </p>
 <p style="margin:0;color:#64748b;font-size:13px;line-height:1.7;">
-  Didn't ask for this? You can safely ignore this email — your password stays the same.
+  {$safeNote}
 </p>
 HTML;
 
     $text = "Hi {$username},\n\n"
-        . "We received a request to reset your Konek password.\n\n"
-        . "Verify here: {$primaryUrl}\n\n"
-        . "The screen where you started the reset will switch to the new-password form automatically, even if you open this email on another device.\n\n"
-        . "The link expires in 30 minutes. If you didn't ask for this, ignore this email.\n";
+        . "{$textIntro}\n\n"
+        . "Your verification code is: {$verificationCode}\n\n"
+        . "{$textAction} The code expires in {$expiresMinutes} minutes.\n\n"
+        . "If you didn't ask for this, ignore this email.\n";
 
     return [
-        "subject" => "Verify your Konek password reset",
-        "html" => konekEmailLayout(
-            "Tap Verify within 30 minutes to choose a new password.",
-            "Verify your password reset",
-            $body
-        ),
+        "subject" => $subject,
+        "html" => konekEmailLayout($preheader, $heading, $body),
         "text" => $text,
     ];
 }
 
 /**
- * Password reset email.
+ * Build the password reset email without sending it.
  *
- * The primary "Verify" button points at an HTTPS landing page, because email
- * clients strip custom app schemes like konek://. On Android the verified App
- * Link opens the Konek app directly; everywhere else the page offers the deep
- * link and a browser fallback. The web URL below the button is the direct
- * browser reset link.
+ * @return array{subject: string, html: string, text: string}
  */
-function konekSendPasswordResetEmail(string $toEmail, string $username, string $resetUrl, string $verifyPageUrl = ""): bool
+function konekBuildPasswordResetEmail(string $username, string $verificationCode): array
+{
+    return konekBuildPasswordCodeEmail($username, $verificationCode, false, 30);
+}
+
+/** Build the Settings password-change email without sending it. */
+function konekBuildPasswordChangeEmail(string $username, string $verificationCode): array
+{
+    return konekBuildPasswordCodeEmail($username, $verificationCode, true, 10);
+}
+
+/** Send the six-digit password reset verification code. */
+function konekSendPasswordResetEmail(string $toEmail, string $username, string $verificationCode): bool
 {
     if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
         return false;
     }
 
-    $email = konekBuildPasswordResetEmail($username, $resetUrl, $verifyPageUrl);
+    $email = konekBuildPasswordResetEmail($username, $verificationCode);
+
+    return konekSendMail($toEmail, $username, $email["subject"], $email["html"], $email["text"]);
+}
+
+/** Send the six-digit password-change verification code. */
+function konekSendPasswordChangeEmail(string $toEmail, string $username, string $verificationCode): bool
+{
+    if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+
+    $email = konekBuildPasswordChangeEmail($username, $verificationCode);
 
     return konekSendMail($toEmail, $username, $email["subject"], $email["html"], $email["text"]);
 }

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * App Global CSS
  * ----------------------------------------------------------------------------
  * Put style rules here that you want to apply globally. These styles are for
@@ -73,12 +73,12 @@
   outline: none;
 }
 
-/* Keep the zoom/compass control clear of the floating toolbar. */
+/* Keep map controls clear of the floating toolbar. */
 .map-content .maplibregl-ctrl-top-left {
   top: calc(var(--map-top-inset, 60px) + 8px);
 }
 
-/* Zoom/compass control: circular, shadowed, clear of the FAB. */
+/* Map control group: compact, shadowed, clear of the FAB. */
 .maplibregl-ctrl-group {
   margin: 12px !important;
   border: none !important;
@@ -102,6 +102,33 @@
   background: #f4f7fb;
 }
 
+/* 2D/3D toggle. Label shows the view the button switches TO. */
+.maplibregl-ctrl-group button.maplibregl-ctrl-pitch-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #2f6fe0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.maplibregl-ctrl-group button.maplibregl-ctrl-pitch-toggle:hover {
+  background: #eef4ff;
+}
+
+.maplibregl-ctrl-group button.maplibregl-ctrl-pitch-toggle[aria-pressed="true"] {
+  color: #ffffff;
+  background: #2f6fe0;
+}
+
+.maplibregl-ctrl-group button.maplibregl-ctrl-pitch-toggle[aria-pressed="true"]:hover {
+  background: #2563cf;
+}
+
 .maplibregl-ctrl-attrib {
   font-family: inherit;
   font-size: 10px;
@@ -117,6 +144,12 @@
 @media (max-width: 767px) {
   .map-content .maplibregl-ctrl-bottom-left {
     bottom: calc(var(--circle-peek-height, 82px) + 6px);
+  }
+
+  /* Give the view-toggle button a reliable touch target. */
+  .maplibregl-ctrl-group button {
+    width: 44px;
+    height: 44px;
   }
 }
 
@@ -406,6 +439,23 @@
 
   .maplibregl-ctrl-group button:hover {
     background: #ffffff;
+  }
+
+  .maplibregl-ctrl-group button.maplibregl-ctrl-pitch-toggle {
+    color: #8db4ff;
+  }
+
+  .maplibregl-ctrl-group button.maplibregl-ctrl-pitch-toggle:hover {
+    background: rgba(141, 180, 255, 0.14);
+  }
+
+  .maplibregl-ctrl-group button.maplibregl-ctrl-pitch-toggle[aria-pressed="true"] {
+    color: #0d1424;
+    background: #8db4ff;
+  }
+
+  .maplibregl-ctrl-group button.maplibregl-ctrl-pitch-toggle[aria-pressed="true"]:hover {
+    background: #a5c4ff;
   }
 
   .maplibregl-ctrl-group button + button {
@@ -792,11 +842,14 @@ body.dark ion-toast.update-toast.ping-alert-toast::part(icon) {
  * shell so it drops straight out of the expanded chip with no modal styling.
  * ------------------------------------------------------------------------ */
 ion-popover.circle-menu-popover {
+  /* Do not override `display`: Ionic's `.popover-wrapper` gets its `z-index: 10`
+   * as a flex item. `display: block` drops the whole menu behind the backdrop,
+   * so every tap lands on the backdrop instead of a menu button. */
   --background: #ffffff;
   --box-shadow: none;
   --backdrop-opacity: 0.2;
-  /* Overlap the chip's bottom border by a hairline so there is no seam. */
-  --offset-y: -1px;
+  --offset-y: 0px;
+  --max-width: calc(100vw - 24px);
 }
 
 /* Same border and surface as the chip: the two elements read as one card.
@@ -804,15 +857,19 @@ ion-popover.circle-menu-popover {
  * and the shadow is pushed below so it never darkens the chip above. */
 ion-popover.circle-menu-popover::part(content) {
   box-sizing: border-box;
-  overflow: hidden;
-  border: 1px solid rgba(17, 24, 39, 0.1);
-  border-top: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: 0;
+  border: 0;
+  outline: 0;
   border-radius: 0 0 16px 16px;
   box-shadow: 0 18px 24px -12px rgba(16, 24, 40, 0.28);
-  /* Ionic's MD enter animation scales the menu from 80% to 100%, which makes
-   * it visibly narrower than the chip for the first frames. Keep the width
-   * fixed and let the fade (and underlying slide) carry the entrance instead. */
-  transform: none !important;
+}
+
+ion-popover.circle-menu-popover::part(wrapper) {
+  margin: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 /* Chip-shaped hole in the backdrop, supplied by MapPage before presenting so
@@ -827,8 +884,13 @@ body.dark ion-popover.circle-menu-popover {
   --backdrop-opacity: 0.35;
 }
 
+/* Solid hairline instead of translucent white: a white-alpha border blooms
+ * around the rounded corners on dark surfaces (WebView compositing), which
+ * shows up as a white rim behind the dropdown. The explicit background keeps
+ * the first painted frame dark even before the surface variable settles. */
 body.dark ion-popover.circle-menu-popover::part(content) {
-  border-color: rgba(255, 255, 255, 0.12);
+  background: #1f232b;
+  border: 0;
   box-shadow: 0 18px 24px -12px rgba(0, 0, 0, 0.6);
 }
 

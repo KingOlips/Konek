@@ -66,7 +66,6 @@ import type {
   Map as MapLibreMap,
   MapMouseEvent,
   Marker,
-  NavigationControl,
   Popup,
 } from "maplibre-gl";
 import type { Feature, FeatureCollection, Polygon } from "geojson";
@@ -88,6 +87,17 @@ import {
   CircleMenuPopoverComponent,
   CircleMenuResult,
 } from "./circle-menu-popover/circle-menu-popover.component";
+import { PitchToggleControl } from "./pitch-toggle.control";
+import {
+  CIRCLE_CHIP_CARD_RADIUS,
+  CIRCLE_CHIP_PILL_RADIUS,
+  createCircleMenuEnterAnimation,
+  createCircleMenuLeaveAnimation,
+  getCircleMenuBottomInset,
+  type CircleMenuAnimationRef,
+  type CircleMenuFrame,
+  type CircleMenuGeometry,
+} from "./animations/circle-menu.animations";
 
 /**
  * Inline SVGs for the marker movement badges. Keeping them inline avoids
@@ -106,6 +116,8 @@ const MOVEMENT_WALK_ICON = `<svg class="marker-movement-icon" viewBox="0 0 24 24
   <path d="m13.4 8.6 2 3.1 2.7 1.4" />
   <path d="m11.9 14.2 2.4 2.1.9 3.7" />
 </svg>`;
+
+const CIRCLE_CHIP_MAX_WIDTH = 300;
 
 type MapStyle = "street" | "satellite" | "hybrid";
 type SheetSnap = "peek" | "half" | "full";
@@ -288,7 +300,7 @@ export class MapPage
   /** Continuous beam rotation in unwrapped degrees (tracks past 0°/360°). */
   private headingDeg = 0;
   private resizeObserver: ResizeObserver | null = null;
-  private zoomControl: NavigationControl | null = null;
+  private pitchToggleControl: PitchToggleControl | null = null;
   private attributionControl: AttributionControl | null = null;
   private sizeTimers: ReturnType<typeof setTimeout>[] = [];
   private lastUploadAt = 0;
@@ -311,8 +323,13 @@ export class MapPage
   private trackingEnabled = true;
   private trackingSubscription: Subscription | null = null;
   private authSubscription: Subscription | null = null;
+  private loggingOutSubscription: Subscription | null = null;
   private lastUserId: number | null = null;
-  private trackingStarting = false;
+  /** Session epoch tracked separately because one user can sign in again. */
+  private lastSessionEpoch = 0;
+  /** Invalidates pending tracking work when the account or switch changes. */
+  private trackingOperationId = 0;
+  private trackingStartOperationId: number | null = null;
   private hasCentered = false;
   private geofences: Geofence[] = [];
   private insideGeofence = new Map<string, boolean>();
@@ -436,6 +453,18 @@ export class MapPage
   isSendingPing = false;
   /** True while the toolbar chip is expanded under its dropdown. */
   circleChipOpen = false;
+  /** True while the dropdown is being prepared, before the chip widens. */
+  circleMenuPending = false;
+  /** Set when another chip tap cancels an opening popover. */
+  private circleMenuCancelRequested = false;
+  /** Open popover used to dismiss the menu from its chip. */
+  private circleMenuPopover: HTMLIonPopoverElement | null = null;
+  /** Removes menu listeners when the map or popover is destroyed. */
+  private circleMenuTeardown: (() => void) | null = null;
+  /** Chip that owns the active menu, so teardown can restore its width. */
+  private circleMenuAnchor: HTMLElement | null = null;
+  /** Identifies the current menu operation so stale cleanup cannot affect it. */
+  private circleMenuOperationId = 0;
 
   constructor() {
     addIcons({
@@ -470,6 +499,16 @@ export class MapPage
     // chip shows its name immediately instead of a placeholder.
     this.restoreActiveCircle();
 
+    // Stop account-bound work as soon as logout starts. Waiting for the local
+    // session to clear would let slow logout calls race fresh polling.
+    this.loggingOutSubscription = this.authService.loggingOut$.subscribe(
+      (loggingOut) => {
+        if (!loggingOut) return;
+        this.isActive = false;
+        this.resetMapState();
+      }
+    );
+
     // The Settings toggle is the master switch: only watch/upload while it is
     // on. Keep listening so toggling it off stops sharing without a reload.
     this.trackingEnabled = this.locationTrackingService.enabled;
@@ -481,13 +520,36 @@ export class MapPage
       }
     );
 
-    // Watch for user changes (login/logout/switch) and reset map state.
+    // Watch for session changes (login/logout/re-login) and reset map state.
+    this.lastUserId = this.authService.getCurrentUser()?.id ?? null;
+    this.lastSessionEpoch = this.authService.getSessionEpoch();
     this.authSubscription = this.authService.currentUser$.subscribe((user) => {
-      if (this.lastUserId !== null && this.lastUserId !== user?.id) {
-        // Different user logged in — wipe all map data for the old account.
+      const previousUserId = this.lastUserId;
+      const previousSessionEpoch = this.lastSessionEpoch;
+      const nextUserId = user?.id ?? null;
+      const nextSessionEpoch = this.authService.getSessionEpoch();
+      this.lastUserId = nextUserId;
+      this.lastSessionEpoch = nextSessionEpoch;
+
+      const sessionChanged =
+        previousSessionEpoch !== nextSessionEpoch;
+      if (!sessionChanged && previousUserId === nextUserId) return;
+
+      if (nextUserId === null) {
+        // Logout invalidates the token. Stop account-bound work before any
+        // queued request can turn the expected 401 into a session-expiry loop.
+        this.isActive = false;
         this.resetMapState();
+        return;
       }
-      this.lastUserId = user?.id ?? null;
+
+      // A new session must not reuse data or account-bound work from the
+      // previous session, even when both sessions belong to the same user.
+      this.isActive = !this.authService.isLoggingOut();
+      this.resetMapState();
+      if (!this.isActive) return;
+      void this.loadCircleMembers();
+      this.startForegroundPolling();
     });
 
     await this.geolocationService.startMotionTracking();
@@ -495,13 +557,15 @@ export class MapPage
     await this.loadCircleMembers();
     this.initialLoadDone = true;
     this.cdr.markForCheck();
-    this.scheduleCirclePoll();
-    this.startPingPolling();
-    this.startNotificationPolling();
+    this.startForegroundPolling();
   }
 
   /** Refresh badges and positions when returning from another screen. */
   ionViewWillEnter(): void {
+    this.isActive = Boolean(this.currentUser) && !this.authService.isLoggingOut();
+    if (!this.isActive || !this.currentUser) return;
+
+    this.startForegroundPolling();
     void this.refreshUnreadNotifications();
     void this.refreshCircleLocations(false);
     // Recover if the initial permission prompt was dismissed; toggling the
@@ -570,11 +634,60 @@ export class MapPage
     }, 500);
   }
 
+  /** Start foreground polling once, only while an authenticated map is active. */
+  private startForegroundPolling(): void {
+    if (
+      !this.isActive ||
+      !this.currentUser ||
+      this.authService.isLoggingOut()
+    ) {
+      return;
+    }
+    this.scheduleCirclePoll();
+    this.startPingPolling();
+    this.startNotificationPolling();
+  }
+
+  /** Stop every foreground request that depends on the current account. */
+  private stopForegroundPolling(): void {
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer);
+      this.pollTimer = null;
+    }
+    if (this.pingPollTimer) {
+      clearInterval(this.pingPollTimer);
+      this.pingPollTimer = null;
+    }
+    if (this.notificationPollTimer) {
+      clearInterval(this.notificationPollTimer);
+      this.notificationPollTimer = null;
+    }
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
+  }
+
+  /** True when a response still belongs to the active authenticated session. */
+  private isSessionCurrent(sessionEpoch: number): boolean {
+    return (
+      this.isActive &&
+      Boolean(this.currentUser) &&
+      !this.authService.isLoggingOut() &&
+      this.authService.getSessionEpoch() === sessionEpoch
+    );
+  }
+
   /** Refresh the circle on the accelerometer-driven cadence (5s moving / 30s still). */
   private scheduleCirclePoll(): void {
-    if (!this.isActive) return;
+    if (
+      !this.isActive ||
+      !this.currentUser ||
+      this.authService.isLoggingOut() ||
+      this.pollTimer
+    ) {
+      return;
+    }
     const delay = this.geolocationService.getPollInterval();
     this.pollTimer = setTimeout(async () => {
+      this.pollTimer = null;
       await this.refreshCircleLocations(false);
       this.scheduleCirclePoll();
     }, delay);
@@ -586,7 +699,14 @@ export class MapPage
    * anything that arrived meanwhile.
    */
   private startPingPolling(): void {
-    if (this.pingPollTimer) return;
+    if (
+      this.pingPollTimer ||
+      !this.isActive ||
+      !this.currentUser ||
+      this.authService.isLoggingOut()
+    ) {
+      return;
+    }
     document.addEventListener("visibilitychange", this.onVisibilityChange);
     void this.pollIncomingPings();
     this.pingPollTimer = setInterval(() => {
@@ -609,6 +729,8 @@ export class MapPage
     // A slow request must not overlap the next six-second tick.
     if (
       !this.isActive ||
+      !this.currentUser ||
+      this.authService.isLoggingOut() ||
       this.pingPollInFlight ||
       document.visibilityState === "hidden"
     ) {
@@ -616,17 +738,21 @@ export class MapPage
     }
 
     this.pingPollInFlight = true;
+    const sessionEpoch = this.authService.getSessionEpoch();
     try {
       const pings = await firstValueFrom(this.pingService.getPendingPings());
-      // The user may have left the map while the request was in flight.
-      if (!this.isActive || !pings.length) return;
+      // The user may have left the map or changed accounts while the request
+      // was in flight.
+      if (!this.isSessionCurrent(sessionEpoch) || !pings.length) return;
 
       // Mark every fetched ping read, including stale ones we choose not to
       // surface, so a backlog cannot buzz again on every later poll.
       firstValueFrom(
         this.pingService.markPingsRead(pings.map((ping) => ping.id))
       ).catch((error) => {
-        console.error("Failed to mark pings read:", error);
+        if (this.isSessionCurrent(sessionEpoch)) {
+          console.error("Failed to mark pings read:", error);
+        }
       });
 
       const fresh = pings.filter((ping) => !this.shownPingIds.has(ping.id));
@@ -641,20 +767,32 @@ export class MapPage
 
       const emergency = recent.find((ping) => ping.ping_type === "need_help");
       await this.vibrateForPing(emergency?.ping_type ?? recent[0].ping_type);
+      if (!this.isSessionCurrent(sessionEpoch)) return;
       await this.showUpdateToast(
         this.summarizePings(recent),
         this.pingIcon(emergency ?? recent[0]),
         emergency ? { cssClass: "ping-alert-toast", duration: 4000 } : undefined
       );
     } catch (error) {
-      console.error("Failed to poll pings:", error);
+      if (this.isSessionCurrent(sessionEpoch)) {
+        console.error("Failed to poll pings:", error);
+      }
     } finally {
-      this.pingPollInFlight = false;
+      if (sessionEpoch === this.authService.getSessionEpoch()) {
+        this.pingPollInFlight = false;
+      }
     }
   }
 
   private startNotificationPolling(): void {
-    if (this.notificationPollTimer) return;
+    if (
+      this.notificationPollTimer ||
+      !this.isActive ||
+      !this.currentUser ||
+      this.authService.isLoggingOut()
+    ) {
+      return;
+    }
     void this.refreshUnreadNotifications();
     this.notificationPollTimer = setInterval(() => {
       void this.refreshUnreadNotifications();
@@ -665,6 +803,8 @@ export class MapPage
   private async refreshUnreadNotifications(): Promise<void> {
     if (
       !this.isActive ||
+      !this.currentUser ||
+      this.authService.isLoggingOut() ||
       this.notificationPollInFlight ||
       document.visibilityState === "hidden"
     ) {
@@ -672,19 +812,24 @@ export class MapPage
     }
 
     this.notificationPollInFlight = true;
+    const sessionEpoch = this.authService.getSessionEpoch();
     try {
       const count = await firstValueFrom(
         this.notificationService.getUnreadCount()
       );
-      if (!this.isActive) return;
+      if (!this.isSessionCurrent(sessionEpoch)) return;
       this.unreadNotifications = count;
       this.cdr.markForCheck();
     } catch (error) {
       // A missing notifications migration should not spam the console every
       // 30 seconds; log once per failure and keep the last known badge.
-      console.error("Failed to refresh notification count:", error);
+      if (this.isSessionCurrent(sessionEpoch)) {
+        console.error("Failed to refresh notification count:", error);
+      }
     } finally {
-      this.notificationPollInFlight = false;
+      if (sessionEpoch === this.authService.getSessionEpoch()) {
+        this.notificationPollInFlight = false;
+      }
     }
   }
 
@@ -794,8 +939,8 @@ export class MapPage
       this.cdr.markForCheck();
     }, 12000);
 
-    // Zoom/compass buttons work on touch too, so phones keep them.
-    this.syncZoomControl();
+    // Keep the explicit 2D/3D toggle available on every device.
+    this.addPitchToggleControl();
     this.addAttributionControl();
   }
 
@@ -832,19 +977,14 @@ export class MapPage
   };
 
   /**
-   * Keep the MapLibre navigation control in sync with the layout. It is
-   * desktop-only, so resizing across the 768px breakpoint must add or remove
-   * the control instead of leaving a stale copy behind.
+   * Add the 2D/3D toggle. This button provides an explicit way to move
+   * between flat and tilted views on touch screens.
    */
-  private syncZoomControl(): void {
-    if (!this.map || this.zoomControl) return;
+  private addPitchToggleControl(): void {
+    if (!this.map || this.pitchToggleControl) return;
 
-    const control = new maplibregl.NavigationControl({
-      showCompass: true,
-      showZoom: false,
-      visualizePitch: false,
-    });
-    this.zoomControl = control;
+    const control = new PitchToggleControl(MapPage.DEFAULT_PITCH);
+    this.pitchToggleControl = control;
     this.map.addControl(control, "top-left");
   }
 
@@ -1224,7 +1364,6 @@ export class MapPage
 
   private readonly onWindowResize = (): void => {
     this.refreshMapSize();
-    this.syncZoomControl();
   };
 
   /** Re-measure the canvas after layout changes. */
@@ -1275,12 +1414,29 @@ export class MapPage
 
   private async setupLocationTracking(): Promise<void> {
     // Already running, already starting, or the master switch is off.
-    if (!this.trackingEnabled || this.watchId || this.trackingStarting) return;
+    if (
+      !this.trackingEnabled ||
+      this.watchId ||
+      this.trackingStartOperationId !== null
+    ) {
+      return;
+    }
 
-    this.trackingStarting = true;
+    const operationId = ++this.trackingOperationId;
+    const sessionEpoch = this.authService.getSessionEpoch();
+    this.trackingStartOperationId = operationId;
     try {
       const granted = await this.geolocationService.requestPermissions();
-      if (!this.trackingEnabled) return;
+      if (
+        !this.trackingEnabled ||
+        !this.currentUser ||
+        !this.isActive ||
+        this.authService.isLoggingOut() ||
+        operationId !== this.trackingOperationId ||
+        sessionEpoch !== this.authService.getSessionEpoch()
+      ) {
+        return;
+      }
       if (!granted) {
         this.connectionStatus = "disconnected";
         this.cdr.markForCheck();
@@ -1289,14 +1445,22 @@ export class MapPage
       }
 
       const watchId = await this.geolocationService.watchPosition(
-        (position) => this.onPositionUpdate(position),
+        (position) => this.onPositionUpdate(position, sessionEpoch),
         () => {
+          if (operationId !== this.trackingOperationId) return;
           this.connectionStatus = "disconnected";
           this.cdr.markForCheck();
         }
       );
-      // The toggle may have been switched off while the prompt/watch started.
-      if (!this.trackingEnabled) {
+      // The toggle or session may have changed while the prompt/watch started.
+      if (
+        !this.trackingEnabled ||
+        !this.currentUser ||
+        !this.isActive ||
+        this.authService.isLoggingOut() ||
+        operationId !== this.trackingOperationId ||
+        sessionEpoch !== this.authService.getSessionEpoch()
+      ) {
         await this.geolocationService.clearWatch(watchId);
         return;
       }
@@ -1308,21 +1472,37 @@ export class MapPage
       this.startLocationHeartbeat();
 
       // Keep uploading after the app is backgrounded or swiped away.
-      // Android-only; no-op on web/iOS.
-      void this.backgroundTracker.start(10000);
+      // Android-only; no-op on web/iOS. Await startup so logout cannot race
+      // a native service start and revive the old session's uploader.
+      await this.backgroundTracker.start(10000);
+      if (
+        !this.trackingEnabled ||
+        !this.currentUser ||
+        !this.isActive ||
+        this.authService.isLoggingOut() ||
+        operationId !== this.trackingOperationId ||
+        sessionEpoch !== this.authService.getSessionEpoch()
+      ) {
+        return;
+      }
 
-      await this.getInitialPosition();
+      await this.getInitialPosition(sessionEpoch);
     } catch (error) {
+      if (operationId !== this.trackingOperationId) return;
       console.error("Location tracking failed:", error);
       this.connectionStatus = "disconnected";
       this.cdr.markForCheck();
     } finally {
-      this.trackingStarting = false;
+      if (this.trackingStartOperationId === operationId) {
+        this.trackingStartOperationId = null;
+      }
     }
   }
 
   /** Stop watching and uploading this device's location immediately. */
   private async stopLocationTracking(): Promise<void> {
+    this.trackingOperationId++;
+    this.trackingStartOperationId = null;
     const watchId = this.watchId;
     this.watchId = null;
     if (watchId) {
@@ -1341,10 +1521,12 @@ export class MapPage
     this.cdr.markForCheck();
   }
 
-  private async getInitialPosition(): Promise<boolean> {
+  private async getInitialPosition(
+    sessionEpoch = this.authService.getSessionEpoch()
+  ): Promise<boolean> {
     try {
       const position = await this.geolocationService.getCurrentPosition();
-      this.onPositionUpdate(position);
+      this.onPositionUpdate(position, sessionEpoch);
       return true;
     } catch (error) {
       console.debug("Initial fix unavailable:", error);
@@ -1352,9 +1534,18 @@ export class MapPage
     }
   }
 
-  private onPositionUpdate(position: Position): void {
-    // A queued callback can land just after the master switch was turned off.
-    if (!this.trackingEnabled) return;
+  private onPositionUpdate(position: Position, sessionEpoch: number): void {
+    // A queued callback can land just after logout or the master switch was
+    // turned off. Never upload account data without the active session.
+    if (
+      !this.trackingEnabled ||
+      !this.currentUser ||
+      !this.isActive ||
+      this.authService.isLoggingOut() ||
+      sessionEpoch !== this.authService.getSessionEpoch()
+    ) {
+      return;
+    }
 
     const { latitude, longitude, accuracy, altitude, speed, heading } = position.coords;
     const headingDeg = heading ?? this.geolocationService.getHeading();
@@ -1419,10 +1610,19 @@ export class MapPage
 
   /** Send the latest fix to the API; history is only written for real fixes. */
   private uploadLocation(addHistory: boolean): void {
-    if (!this.trackingEnabled) return;
+    if (
+      !this.trackingEnabled ||
+      !this.currentUser ||
+      !this.isActive ||
+      this.authService.isLoggingOut()
+    ) {
+      return;
+    }
     const fix = this.lastKnownFix;
     if (!fix || this.locationUploadInFlight) return;
 
+    const sessionEpoch = this.authService.getSessionEpoch();
+    const userId = this.currentUser.id;
     this.locationUploadInFlight = true;
     const now = Date.now();
     this.locationService
@@ -1439,22 +1639,24 @@ export class MapPage
       })
       .subscribe({
         next: () => {
+          if (!this.isSessionCurrent(sessionEpoch)) return;
           this.lastSuccessfulUploadAt = Date.now();
           this.locationUploadInFlight = false;
           this.connectionStatus = "connected";
           this.cdr.markForCheck();
         },
         error: () => {
+          if (!this.isSessionCurrent(sessionEpoch)) return;
           this.locationUploadInFlight = false;
           this.connectionStatus = "disconnected";
           this.cdr.markForCheck();
         },
       });
 
-    if (addHistory && this.currentUser) {
+    if (addHistory && this.isSessionCurrent(sessionEpoch)) {
       void this.locationService.addToHistory({
         id: now,
-        user_id: this.currentUser.id,
+        user_id: userId,
         latitude: fix.latitude,
         longitude: fix.longitude,
         accuracy: fix.accuracy,
@@ -1599,16 +1801,21 @@ export class MapPage
     if (this.circlesLoadPromise) {
       return this.circlesLoadPromise;
     }
-    this.circlesLoadPromise = this.fetchCircles().finally(() => {
-      this.circlesLoadPromise = null;
+    const promise = this.fetchCircles().finally(() => {
+      if (this.circlesLoadPromise === promise) {
+        this.circlesLoadPromise = null;
+      }
     });
-    return this.circlesLoadPromise;
+    this.circlesLoadPromise = promise;
+    return promise;
   }
 
   /** Fetch circles and keep the active selection valid. */
   private async fetchCircles(): Promise<void> {
+    const sessionEpoch = this.authService.getSessionEpoch();
     try {
       const circles = await firstValueFrom(this.circleService.getUserCircles());
+      if (!this.isSessionCurrent(sessionEpoch)) return;
       this.circles = circles ?? [];
       if (!this.circles.some((circle) => circle.id === this.activeCircleId)) {
         this.activeCircleId = this.circles[0]?.id ?? null;
@@ -1623,7 +1830,9 @@ export class MapPage
       }
       this.cdr.markForCheck();
     } catch (error) {
-      console.error("Failed to load circles:", error);
+      if (this.isSessionCurrent(sessionEpoch)) {
+        console.error("Failed to load circles:", error);
+      }
     }
   }
 
@@ -1779,26 +1988,34 @@ export class MapPage
    * dropdown), so a switch costs a single locations request.
    */
   private async loadCircleMembers(refreshCircles = true): Promise<void> {
+    if (!this.currentUser || this.authService.isLoggingOut()) return;
+    const sessionEpoch = this.authService.getSessionEpoch();
     this.isLoadingCircle = true;
     try {
       if (refreshCircles) {
         await this.loadCircles();
+        if (!this.isSessionCurrent(sessionEpoch)) return;
       }
       const members = await firstValueFrom(
         this.circleService.getCircleLocations(this.activeCircleId ?? undefined)
       );
+      if (!this.isSessionCurrent(sessionEpoch)) return;
       this.circleMembers = members;
       this.updateCircleMarkers();
       this.cdr.markForCheck();
 
-      if (this.activeCircleId) {
-        await this.loadGeofences(this.activeCircleId);
+      if (this.activeCircleId && this.isSessionCurrent(sessionEpoch)) {
+        await this.loadGeofences(this.activeCircleId, sessionEpoch);
       }
     } catch (error) {
-      console.error("Failed to load circle members:", error);
+      if (this.isSessionCurrent(sessionEpoch)) {
+        console.error("Failed to load circle members:", error);
+      }
     } finally {
-      this.isLoadingCircle = false;
-      this.cdr.markForCheck();
+      if (this.authService.getSessionEpoch() === sessionEpoch) {
+        this.isLoadingCircle = false;
+        this.cdr.markForCheck();
+      }
     }
   }
 
@@ -1807,6 +2024,14 @@ export class MapPage
    * automatic refresh stays silent; user-initiated refreshes get a toast.
    */
   async refreshCircleLocations(notify = true): Promise<boolean> {
+    if (
+      !this.isActive ||
+      !this.currentUser ||
+      this.authService.isLoggingOut()
+    ) {
+      return false;
+    }
+
     // A pull-to-refresh, a foreground retry and a poll can collide. Reuse the
     // request already in flight so every caller gets the same real outcome.
     if (this.circleRefreshPromise) {
@@ -1814,13 +2039,16 @@ export class MapPage
     }
 
     const request = this.performCircleRefresh(notify).finally(() => {
-      this.circleRefreshPromise = null;
+      if (this.circleRefreshPromise === request) {
+        this.circleRefreshPromise = null;
+      }
     });
     this.circleRefreshPromise = request;
     return request;
   }
 
   private async performCircleRefresh(notify: boolean): Promise<boolean> {
+    const sessionEpoch = this.authService.getSessionEpoch();
     if (notify) {
       this.isLoadingCircle = true;
       this.cdr.markForCheck();
@@ -1830,6 +2058,7 @@ export class MapPage
       const members = await firstValueFrom(
         this.circleService.getCircleLocations(this.activeCircleId ?? undefined)
       );
+      if (!this.isSessionCurrent(sessionEpoch)) return false;
       this.circleMembers = members;
       this.updateCircleMarkers();
       this.cdr.markForCheck();
@@ -1839,8 +2068,10 @@ export class MapPage
       }
       return true;
     } catch (error) {
-      console.error("Failed to refresh circle locations:", error);
-      if (notify) {
+      if (this.isSessionCurrent(sessionEpoch)) {
+        console.error("Failed to refresh circle locations:", error);
+      }
+      if (notify && this.isSessionCurrent(sessionEpoch)) {
         void this.showUpdateToast(
           "Couldn't refresh circle locations",
           "alert-circle-outline"
@@ -1848,8 +2079,10 @@ export class MapPage
       }
       return false;
     } finally {
-      this.isLoadingCircle = false;
-      this.cdr.markForCheck();
+      if (this.authService.getSessionEpoch() === sessionEpoch) {
+        this.isLoadingCircle = false;
+        this.cdr.markForCheck();
+      }
     }
   }
 
@@ -1965,15 +2198,22 @@ export class MapPage
   // Geofences
   // ---------------------------------------------------------------------------
 
-  private async loadGeofences(circleId: number): Promise<void> {
+  private async loadGeofences(
+    circleId: number,
+    sessionEpoch = this.authService.getSessionEpoch()
+  ): Promise<void> {
     try {
-      this.geofences = await firstValueFrom(
+      const geofences = await firstValueFrom(
         this.circleService.getGeofences(circleId)
       );
+      if (!this.isSessionCurrent(sessionEpoch)) return;
+      this.geofences = geofences;
       this.renderGeofences();
       this.checkGeofenceTransitions(this.circleMembers);
     } catch (error) {
-      console.debug("No geofences available:", error);
+      if (this.isSessionCurrent(sessionEpoch)) {
+        console.debug("No geofences available:", error);
+      }
     }
   }
 
@@ -2817,105 +3057,411 @@ export class MapPage
   /**
    * The toolbar circle chip opens a dropdown anchored to the pill itself, so it
    * appears directly under the chip instead of sliding up from the bottom.
-   * The chip expands first, then the dropdown is sized to the expanded chip so
-   * the two read as one connected card.
+   * The chip widens and the dropdown unfolds out of it in one motion: the chip
+   * keeps its collapsed width until the popover is ready, then both animate
+   * with the same duration and easing.
    */
   async presentCircleOptions(event: Event): Promise<void> {
-    if (this.circleChipOpen) return;
-
-    const anchor = event.currentTarget as HTMLElement;
-    this.circleChipOpen = true;
-    // Render the expanded chip before presenting so Ionic measures its final
-    // width (not the collapsed pill's) when it sizes the popover.
-    this.cdr.detectChanges();
-
-    // First open before the circle list has arrived: wait for it so the menu
-    // is never empty. Every later open presents instantly from cache and
-    // refreshes quietly in the background (a network round-trip here made the
-    // menu feel laggy).
-    if (!this.circlesLoaded) {
-      const previousActiveId = this.activeCircleId;
-      await this.loadCircles();
-      if (previousActiveId !== this.activeCircleId) {
-        await this.loadCircleMembers(false);
-      }
-    } else {
-      void this.refreshCirclesInBackground();
+    if (this.circleMenuPending) {
+      this.closeCircleMenu();
+      return;
+    }
+    if (this.circleChipOpen) {
+      this.closeCircleMenu();
+      return;
+    }
+    if (this.circleMenuPopover) {
+      this.closeCircleMenu();
+      return;
     }
 
-    const popover = await this.popoverCtrl.create({
-      component: CircleMenuPopoverComponent,
-      componentProps: {
-        circleName: this.activeCircleName,
-        circles: this.circles,
-        activeCircleId: this.activeCircleId,
-      },
-      // Anchor to the button itself: event.target can be the inner label span.
-      event: { target: anchor } as unknown as Event,
-      side: "bottom",
-      alignment: "center",
-      arrow: false,
-      showBackdrop: true,
-      cssClass: "circle-menu-popover",
-      // Ionic sets the popover width from the anchor's exact (sub-pixel) rect,
-      // so the dropdown lines up with the expanded chip on both edges.
-      size: "cover",
-    });
-    // The backdrop hole is a CSS variable read via ::part(backdrop) so it is
-    // already in effect on the backdrop's very first frame (no dim flash).
-    popover.style.setProperty(
-      "--circle-chip-hole",
-      this.buildBackdropHolePath(anchor)
+    const anchor = event.currentTarget as HTMLElement;
+    const operationId = ++this.circleMenuOperationId;
+    const sessionEpoch = this.authService.getSessionEpoch();
+    this.circleMenuPending = true;
+    this.circleMenuCancelRequested = false;
+    this.circleMenuAnchor = anchor;
+
+    const isCurrent = (): boolean =>
+      this.circleMenuOperationId === operationId;
+    const isCancelled = (): boolean =>
+      !isCurrent() ||
+      !anchor.isConnected ||
+      this.circleMenuCancelRequested ||
+      this.authService.isLoggingOut() ||
+      sessionEpoch !== this.authService.getSessionEpoch();
+
+    let popover: HTMLIonPopoverElement | null = null;
+    let dismissOnChipTap: ((tap: MouseEvent) => void) | null = null;
+    let followChip: (() => void) | null = null;
+    let result: CircleMenuResult | undefined;
+    const animationRef: CircleMenuAnimationRef = {};
+
+    // Measure both chip shapes before opening. Transitions are off during the
+    // measurement so the class swap cannot animate.
+    const frames = this.measureChipFrames(anchor);
+    const collapsedFrame = this.toCircleMenuFrame(
+      frames.collapsed,
+      CIRCLE_CHIP_PILL_RADIUS,
+      CIRCLE_CHIP_PILL_RADIUS
     );
-    await popover.present();
-
-    // The hole exposes the chip, but the popover host is still above it. Treat
-    // taps on the exposed chip as backdrop taps so the menu still closes.
-    const dismissOnChipTap = (tap: Event): void => {
-      if (tap.target === popover) {
-        void popover.dismiss();
-      }
+    const expandedFrame = this.toCircleMenuFrame(
+      frames.expanded,
+      CIRCLE_CHIP_CARD_RADIUS,
+      0
+    );
+    const geometry: CircleMenuGeometry = {
+      start: collapsedFrame,
+      end: expandedFrame,
+      collapsed: collapsedFrame,
     };
-    popover.addEventListener("click", dismissOnChipTap);
 
-    // Ionic measures the anchor only once, when the popover presents. If the
-    // viewport changes while the menu is open (rotation, mobile/desktop
-    // breakpoint), re-anchor it so it stays flush under the chip and the
-    // backdrop hole stays aligned.
-    const followChip = (): void => {
-      const rect = anchor.getBoundingClientRect();
-      popover.style.setProperty("--width", `${rect.width}px`);
-      const content =
-        popover.shadowRoot?.querySelector<HTMLElement>(".popover-content");
-      if (content) {
-        content.style.top = `calc(${rect.bottom}px + var(--offset-y, 0px))`;
-        content.style.left = `calc(${rect.left}px + var(--offset-x, 0px))`;
+    const removeListeners = (): void => {
+      if (followChip) {
+        window.removeEventListener("resize", followChip);
+        window.removeEventListener("orientationchange", followChip);
       }
-      popover.style.setProperty(
-        "--circle-chip-hole",
-        this.buildBackdropHolePath(anchor)
+      if (popover && dismissOnChipTap) {
+        popover.removeEventListener("click", dismissOnChipTap);
+      }
+      // Stop, rather than destroy, an enter animation that may still be
+      // holding popover.present() open during teardown.
+      try {
+        animationRef.current?.stop();
+      } catch {
+        // The animation may already be complete.
+      }
+      animationRef.current = undefined;
+    };
+    this.circleMenuTeardown = removeListeners;
+
+    // Follow viewport changes from the start of loading, not only after the
+    // popover appears. A resize stops any live enter animation, then applies
+    // one final geometry to the chip, card, and backdrop hole.
+    const updateGeometry = (): void => {
+      if (!isCurrent()) return;
+      // Stop resolves Ionic's pending present promise. Stopping first also
+      // releases the animation's fill styles before measuring the chip.
+      // Destroying the animation would leave the present promise pending.
+      try {
+        animationRef.current?.stop();
+      } catch {
+        // The animation may already be complete.
+      }
+      animationRef.current = undefined;
+
+      const resized = this.measureChipFrames(anchor);
+      geometry.start = this.toCircleMenuFrame(
+        resized.collapsed,
+        CIRCLE_CHIP_PILL_RADIUS,
+        CIRCLE_CHIP_PILL_RADIUS
       );
+      geometry.end = this.toCircleMenuFrame(
+        resized.expanded,
+        CIRCLE_CHIP_CARD_RADIUS,
+        0
+      );
+      geometry.collapsed = geometry.start;
+      anchor.style.width = `${
+        this.circleChipOpen ? geometry.end.width : geometry.collapsed.width
+      }px`;
+      if (popover) {
+        this.applyCircleMenuGeometry(popover, geometry.end);
+      }
     };
+    followChip = updateGeometry;
     window.addEventListener("resize", followChip);
     window.addEventListener("orientationchange", followChip);
 
-    // Act after the popover closes so the next alert opens on a clean backdrop.
-    const { data } = await popover.onWillDismiss<CircleMenuResult>();
-    popover.removeEventListener("click", dismissOnChipTap);
-    window.removeEventListener("resize", followChip);
-    window.removeEventListener("orientationchange", followChip);
+    try {
+      // First open before the circle list has arrived: wait for it so the menu
+      // is never empty. Every later open presents instantly from cache and
+      // refreshes quietly in the background (a network round-trip here made the
+      // menu feel laggy).
+      if (!this.circlesLoaded) {
+        const previousActiveId = this.activeCircleId;
+        await this.loadCircles();
+        if (isCancelled()) return;
+        if (previousActiveId !== this.activeCircleId) {
+          await this.loadCircleMembers(false);
+        }
+      } else {
+        void this.refreshCirclesInBackground();
+      }
+      if (isCancelled()) return;
+
+      // Loading and rotation can change the chip's available width. Measure
+      // again before creating the popover so every surface uses fresh bounds.
+      updateGeometry();
+      anchor.style.width = `${geometry.collapsed.width}px`;
+
+      popover = await this.popoverCtrl.create({
+        component: CircleMenuPopoverComponent,
+        componentProps: {
+          circleName: this.activeCircleName,
+          circles: this.circles,
+          activeCircleId: this.activeCircleId,
+        },
+        // Anchor to the button itself: event.target can be the inner label span.
+        event: { target: anchor } as unknown as Event,
+        side: "bottom",
+        alignment: "center",
+        arrow: false,
+        showBackdrop: true,
+        cssClass: "circle-menu-popover",
+        // Ionic sets the popover width from the anchor's exact (sub-pixel) rect,
+        // so the dropdown lines up with the expanded chip on both edges.
+        size: "cover",
+        enterAnimation: createCircleMenuEnterAnimation(
+          geometry,
+          anchor,
+          animationRef
+        ),
+        leaveAnimation: createCircleMenuLeaveAnimation(geometry, anchor),
+      });
+      if (isCancelled()) {
+        popover.remove();
+        return;
+      }
+
+      this.circleMenuPopover = popover;
+      popover.style.setProperty("--width", `${geometry.end.width}px`);
+      // Keep Ionic's viewport-wide max-width cap instead of overriding it.
+      popover.style.removeProperty("--max-width");
+      // The backdrop hole is a CSS variable read via ::part(backdrop) so it is
+      // already in effect on the backdrop's very first frame (no dim flash).
+      popover.style.setProperty("--circle-chip-hole", geometry.end.hole);
+
+      const dismissal = popover.onWillDismiss<CircleMenuResult>();
+      const didDismiss = popover.onDidDismiss();
+      dismissOnChipTap = (tap: MouseEvent): void => {
+        const rect = anchor.getBoundingClientRect();
+        const insideChip =
+          tap.clientX >= rect.left &&
+          tap.clientX <= rect.right &&
+          tap.clientY >= rect.top &&
+          tap.clientY <= rect.bottom;
+        if (!insideChip) return;
+        this.closeCircleMenu();
+      };
+      popover.addEventListener("click", dismissOnChipTap);
+
+      this.circleChipOpen = true;
+      this.cdr.detectChanges();
+      void anchor.offsetWidth;
+      await popover.present();
+      if (!isCurrent()) return;
+      this.circleMenuPending = false;
+
+      if (isCancelled()) {
+        await popover.dismiss();
+      }
+
+      // Act after the popover closes so the next alert opens on a clean backdrop.
+      const { data } = await dismissal;
+      result = data;
+      this.collapseChip();
+      await didDismiss;
+    } catch (error) {
+      if (isCurrent()) {
+        console.error("Failed to open circle options:", error);
+      }
+      if (popover) {
+        if (popover.classList.contains("overlay-hidden")) {
+          popover.remove();
+        } else {
+          try {
+            const dismissed = await popover.dismiss();
+            if (!dismissed && popover.isConnected) {
+              popover.remove();
+            }
+          } catch {
+            popover.remove();
+          }
+        }
+      }
+    } finally {
+      removeListeners();
+      if (this.circleMenuTeardown === removeListeners) {
+        this.circleMenuTeardown = null;
+      }
+      if (isCurrent()) {
+        this.circleMenuPending = false;
+        this.circleMenuCancelRequested = false;
+        this.circleChipOpen = false;
+        if (this.circleMenuPopover === popover) {
+          this.circleMenuPopover = null;
+        }
+        if (this.circleMenuAnchor === anchor) {
+          this.circleMenuAnchor = null;
+        }
+        anchor.style.width = "";
+        this.cdr.markForCheck();
+      }
+    }
+
+    if (
+      !result ||
+      !isCurrent() ||
+      sessionEpoch !== this.authService.getSessionEpoch() ||
+      this.authService.isLoggingOut()
+    ) {
+      return;
+    }
+
+    if (result.action === "create") {
+      void this.createCircle();
+    } else if (result.action === "join") {
+      void this.joinCircle();
+    } else if (result.action === "switch") {
+      void this.switchCircle(result.circleId);
+    }
+  }
+
+  /** Cancel menu preparation, dismiss the overlay, and restore the chip. */
+  private closeCircleMenu(): void {
+    this.circleMenuOperationId++;
+    this.circleMenuCancelRequested = true;
+
+    const teardown = this.circleMenuTeardown;
+    this.circleMenuTeardown = null;
+    teardown?.();
+
+    const popover = this.circleMenuPopover;
+    this.circleMenuPopover = null;
+    if (popover) {
+      if (popover.classList.contains("overlay-hidden")) {
+        popover.remove();
+      } else {
+        void popover
+          .dismiss()
+          .then((dismissed) => {
+            if (!dismissed && popover.isConnected) {
+              popover.remove();
+            }
+          })
+          .catch(() => popover.remove());
+      }
+    }
+
+    this.circleMenuAnchor?.style.removeProperty("width");
+    this.circleMenuAnchor = null;
+    this.circleMenuPending = false;
     this.circleChipOpen = false;
     this.cdr.markForCheck();
+  }
 
-    if (!data) return;
+  /**
+   * Measure the chip in both states without letting the swap animate.
+   * The chip is restored to the state it was in before measuring.
+   */
+  private measureChipFrames(anchor: HTMLElement): {
+    collapsed: DOMRect;
+    expanded: DOMRect;
+  } {
+    const previousTransition = anchor.style.transition;
+    const previousWidth = anchor.style.width;
+    const previousTransform = anchor.style.transform;
+    const wasOpen = anchor.classList.contains("chip-open");
 
-    if (data.action === "create") {
-      void this.createCircle();
-    } else if (data.action === "join") {
-      void this.joinCircle();
-    } else if (data.action === "switch") {
-      void this.switchCircle(data.circleId);
+    anchor.style.transition = "none";
+    // An active chip uses a scale transform. getBoundingClientRect() includes
+    // that transform, which would make the measured layout width smaller than
+    // the actual animated width.
+    anchor.style.transform = "none";
+    anchor.style.width = "";
+    anchor.classList.remove("chip-open");
+    const collapsed = anchor.getBoundingClientRect();
+    anchor.style.width = `${Math.min(
+      CIRCLE_CHIP_MAX_WIDTH,
+      Math.max(0, window.innerWidth - 24)
+    )}px`;
+    anchor.classList.add("chip-open");
+    const expanded = anchor.getBoundingClientRect();
+
+    if (wasOpen) {
+      anchor.classList.add("chip-open");
+    } else {
+      anchor.classList.remove("chip-open");
     }
+    anchor.style.width = previousWidth;
+    anchor.style.transform = previousTransform;
+    anchor.style.transition = previousTransition;
+    return { collapsed, expanded };
+  }
+
+  /** Build the backdrop hole path and the numbers the animation needs. */
+  private toCircleMenuFrame(
+    rect: DOMRect,
+    topRadius: number,
+    bottomRadius: number
+  ): CircleMenuFrame {
+    // CSS clamps border radii to half the box. Match that clamp so the
+    // backdrop hole never crosses the chip's rounded corners.
+    const radiusLimit = Math.min(rect.height / 2, rect.width / 2);
+    const safeTopRadius = Math.min(
+      Math.max(0, topRadius),
+      radiusLimit
+    );
+    const safeBottomRadius = Math.min(
+      Math.max(0, bottomRadius),
+      radiusLimit
+    );
+    return {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      bottom: rect.bottom,
+      hole: this.buildBackdropHolePath(
+        rect,
+        safeTopRadius,
+        safeBottomRadius
+      ),
+    };
+  }
+
+  /**
+   * Push a chip shape into the popover: card box, backdrop hole and the CSS
+   * variables the parts read.
+   */
+  private applyCircleMenuGeometry(
+    popover: HTMLIonPopoverElement,
+    frame: CircleMenuFrame
+  ): void {
+    const root = popover.shadowRoot;
+    const content = root?.querySelector<HTMLElement>(".popover-content");
+    if (content) {
+      const availableHeight = Math.max(
+        1,
+        window.innerHeight - frame.bottom - getCircleMenuBottomInset()
+      );
+      content.style.width = `${frame.width}px`;
+      content.style.removeProperty("min-width");
+      content.style.removeProperty("max-width");
+      content.style.maxHeight = `${availableHeight}px`;
+      content.style.overflowY = "auto";
+      content.style.top = `calc(${frame.bottom}px + var(--offset-y, 0px))`;
+      content.style.left = `calc(${frame.left}px + var(--offset-x, 0px))`;
+    }
+    const wrapper = root?.querySelector<HTMLElement>(".popover-wrapper");
+    if (wrapper) {
+      wrapper.style.opacity = "1";
+    }
+    const backdrop = root?.querySelector<HTMLElement>("ion-backdrop");
+    if (backdrop) {
+      backdrop.style.clipPath = frame.hole;
+      backdrop.style.opacity = "var(--backdrop-opacity)";
+    }
+    popover.style.setProperty("--width", `${frame.width}px`);
+    popover.style.removeProperty("--max-width");
+    popover.style.setProperty("--circle-chip-hole", frame.hole);
+  }
+
+  /** Restore the chip's closed appearance while the leave animation owns width. */
+  private collapseChip(): void {
+    this.circleChipOpen = false;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -3007,26 +3553,43 @@ export class MapPage
    * expanded chip stays crisp while everything else is still dimmed. The path
    * is set on the popover host before presenting, so the hole is already in
    * effect during the backdrop's fade-in (no dim flash).
+   *
+   * The shape uses one traversal per corner and the same command layout for
+   * every radius, so the enter animation can interpolate a pill hole into a
+   * card hole.
    */
-  private buildBackdropHolePath(anchor: HTMLElement): string {
-    const rect = anchor.getBoundingClientRect();
-    // A pixel of breathing room keeps the chip's antialiased edge clean.
-    const pad = 1;
-    const radius = 16 + pad;
-    const left = rect.left - pad;
-    const top = rect.top - pad;
-    const right = rect.right + pad;
-    const bottom = rect.bottom + pad;
+  private buildBackdropHolePath(
+    rect: DOMRect,
+    topRadius: number,
+    bottomRadius: number
+  ): string {
+    // Match the chip's DOMRect and radii exactly; padding exposes a halo
+    // around its upper corners. Cubic curves follow CSS circular
+    // border-radius and prevent dark backdrop crescents.
+    const top = rect.top;
+    const left = rect.left;
+    const right = rect.right;
+    const bottom = rect.bottom;
+    const topCorner = topRadius;
+    const bottomCorner = bottomRadius;
+    const kappa = 0.5522847498;
+    const topKappa = kappa * topCorner;
+    const bottomKappa = kappa * bottomCorner;
 
     // The backdrop covers the viewport, so viewport coordinates are also the
     // backdrop's local coordinates. Outer rect + chip shape, even-odd = hole.
     const outer = `M0 0H${window.innerWidth}V${window.innerHeight}H0Z`;
     const hole =
-      `M${left} ${top + radius}` +
-      `Q${left} ${top} ${left + radius} ${top}` +
-      `H${right - radius}` +
-      `Q${right} ${top} ${right} ${top + radius}` +
-      `V${bottom}H${left}Z`;
+      `M${left} ${top + topCorner}` +
+      `C${left} ${top + topCorner - topKappa} ${left + topCorner - topKappa} ${top} ${left + topCorner} ${top}` +
+      `H${right - topCorner}` +
+      `C${right - topCorner + topKappa} ${top} ${right} ${top + topCorner - topKappa} ${right} ${top + topCorner}` +
+      `V${bottom - bottomCorner}` +
+      `C${right} ${bottom - bottomCorner + bottomKappa} ${right - bottomCorner + bottomKappa} ${bottom} ${right - bottomCorner} ${bottom}` +
+      `H${left + bottomCorner}` +
+      `C${left + bottomCorner - bottomKappa} ${bottom} ${left} ${bottom - bottomCorner + bottomKappa} ${left} ${bottom - bottomCorner}` +
+      `V${top + topCorner}` +
+      `Z`;
 
     return `path(evenodd, "${outer} ${hole}")`;
   }
@@ -3198,6 +3761,14 @@ export class MapPage
 
   /** Wipe all per-account map state (called when a different user logs in). */
   private resetMapState(): void {
+    this.stopForegroundPolling();
+    this.closeCircleMenu();
+    this.trackingOperationId++;
+    this.trackingStartOperationId = null;
+    this.locationUploadInFlight = false;
+    this.pingPollInFlight = false;
+    this.notificationPollInFlight = false;
+
     // Stop tracking for the old user.
     if (this.watchId) {
       void this.geolocationService.clearWatch(this.watchId);
@@ -3221,6 +3792,7 @@ export class MapPage
     this.activeCircleNameCache = null;
     this.circlesLoaded = false;
     this.circlesLoadPromise = null;
+    this.circleRefreshPromise = null;
     this.clearStoredCircle();
 
     // Close any open sheets/detail.
@@ -3230,12 +3802,11 @@ export class MapPage
     // Reset connection status.
     this.connectionStatus = "connecting";
     this.isTracking = false;
+    this.lastUploadAt = 0;
+    this.lastSuccessfulUploadAt = 0;
     this.lastKnownFix = null;
     this.lastAccuracy = null;
     this.lastFixAt = null;
-
-    // Restart for the new user (ngOnInit already ran, so just re-fetch).
-    void this.loadCircleMembers();
   }
 
   private cleanup(): void {
@@ -3243,23 +3814,17 @@ export class MapPage
     this.trackingSubscription = null;
     this.authSubscription?.unsubscribe();
     this.authSubscription = null;
+    this.loggingOutSubscription?.unsubscribe();
+    this.loggingOutSubscription = null;
+    this.closeCircleMenu();
+    this.trackingOperationId++;
+    this.trackingStartOperationId = null;
     if (this.watchId) {
       void this.geolocationService.clearWatch(this.watchId);
       this.watchId = null;
     }
     this.isActive = false;
-    if (this.pollTimer) {
-      clearTimeout(this.pollTimer);
-      this.pollTimer = null;
-    }
-    if (this.pingPollTimer) {
-      clearInterval(this.pingPollTimer);
-      this.pingPollTimer = null;
-    }
-    if (this.notificationPollTimer) {
-      clearInterval(this.notificationPollTimer);
-      this.notificationPollTimer = null;
-    }
+    this.stopForegroundPolling();
     if (this.pingScrollFrame !== null) {
       cancelAnimationFrame(this.pingScrollFrame);
       this.pingScrollFrame = null;
@@ -3268,7 +3833,6 @@ export class MapPage
     this.pingPollInFlight = false;
     this.notificationPollInFlight = false;
     this.circleRefreshPromise = null;
-    document.removeEventListener("visibilitychange", this.onVisibilityChange);
     this.shownPingIds.clear();
     if (this.compassTimer) {
       clearInterval(this.compassTimer);
@@ -3309,7 +3873,7 @@ export class MapPage
       this.map.remove();
       this.map = null;
     }
-    this.zoomControl = null;
+    this.pitchToggleControl = null;
     this.attributionControl = null;
     this.circleMarkers.clear();
     this.circleMarkerEls.clear();

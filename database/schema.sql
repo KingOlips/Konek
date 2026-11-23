@@ -109,19 +109,45 @@ CREATE TABLE IF NOT EXISTS `pings` (
     INDEX `idx_ping_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Password reset tokens
--- Only a SHA-256 hash of the emailed token is stored, so a database leak cannot
--- be used to reset passwords. Each row expires 30 minutes after creation.
+-- Password verification sessions
+-- Password reset and password change both store only an Argon2id hash of the
+-- six-digit verification code. `purpose` keeps the flows separate. Five
+-- incorrect attempts invalidate the session. Reset sessions expire after 30
+-- minutes; change-password sessions expire after 10 minutes.
+CREATE TABLE IF NOT EXISTS `password_reset_sessions` (
+    `id` CHAR(64) NOT NULL,
+    `user_id` INT UNSIGNED NULL,
+    `status` ENUM('pending', 'verified') NOT NULL DEFAULT 'pending',
+    `purpose` ENUM('reset', 'change_password') NOT NULL DEFAULT 'reset',
+    `verification_code_hash` VARCHAR(255) NULL,
+    `verification_attempts` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    `desktop_token` CHAR(64) NULL,
+    `expires_at` DATETIME NOT NULL,
+    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `unique_desktop_token` (`desktop_token`),
+    INDEX `idx_session_user` (`user_id`),
+    INDEX `idx_session_purpose_user` (`purpose`, `user_id`),
+    INDEX `idx_session_expires` (`expires_at`),
+    CONSTRAINT `fk_password_reset_session_user`
+        FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Legacy password reset tokens remain supported for links sent before the
+-- verification-code rollout.
 CREATE TABLE IF NOT EXISTS `password_resets` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `user_id` INT UNSIGNED NOT NULL,
     `token_hash` CHAR(64) NOT NULL,
+    `session_id` CHAR(64) NULL,
     `expires_at` DATETIME NOT NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_token_hash` (`token_hash`),
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`session_id`) REFERENCES `password_reset_sessions`(`id`) ON DELETE CASCADE,
     INDEX `idx_reset_user` (`user_id`),
+    INDEX `idx_reset_session` (`session_id`),
     INDEX `idx_reset_expires` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -37,6 +37,8 @@ const KonekBackgroundTracker =
 export class BackgroundTrackerService {
   private readonly authService = inject(AuthService);
   private started = false;
+  /** Serializes native start/stop calls so an old start cannot revive after logout. */
+  private operationQueue: Promise<void> = Promise.resolve();
 
   /** Foreground services are an Android concept; iOS/web are unsupported. */
   get isSupported(): boolean {
@@ -45,45 +47,81 @@ export class BackgroundTrackerService {
 
   /** Start (or refresh) the native service. Returns false when unsupported. */
   async start(intervalMs = 10000): Promise<boolean> {
-    if (!this.isSupported) return false;
+    return this.enqueue(async () => {
+      if (!this.isSupported) return false;
 
-    const token = await this.authService.getAuthToken();
-    if (!token) return false;
+      const currentUser = this.authService.getCurrentUser();
+      const token =
+        currentUser?.auth_token ?? (await this.authService.getAuthToken());
+      if (!token) return false;
+      const sessionEpoch = this.authService.getSessionEpoch();
 
-    try {
-      await KonekBackgroundTracker.start({
-        apiUrl: environment.apiUrl,
-        token,
-        intervalMs,
-      });
-      this.started = true;
-      return true;
-    } catch (error) {
-      console.warn("Background tracking could not start:", error);
-      return false;
-    }
+      try {
+        await KonekBackgroundTracker.start({
+          apiUrl: environment.apiUrl,
+          token,
+          intervalMs,
+        });
+
+        const activeToken =
+          this.authService.getCurrentUser()?.auth_token ?? null;
+        if (
+          sessionEpoch !== this.authService.getSessionEpoch() ||
+          activeToken !== token
+        ) {
+          // Logout or a newer login happened while the native call was
+          // pending. Stop this old-token uploader before another start runs.
+          try {
+            await KonekBackgroundTracker.stop();
+          } catch {
+            // The queued stop call will make another best-effort attempt.
+          }
+          return false;
+        }
+
+        this.started = true;
+        return true;
+      } catch (error) {
+        console.warn("Background tracking could not start:", error);
+        return false;
+      }
+    });
   }
 
   /** Stop the service. Safe to call repeatedly and from any platform. */
   async stop(): Promise<void> {
-    if (!this.started && !this.isSupported) return;
-    try {
-      await KonekBackgroundTracker.stop();
-    } catch (error) {
-      console.warn("Background tracking could not stop:", error);
-    } finally {
-      this.started = false;
-    }
+    await this.enqueue(async () => {
+      if (!this.started && !this.isSupported) return;
+      try {
+        await KonekBackgroundTracker.stop();
+      } catch (error) {
+        console.warn("Background tracking could not stop:", error);
+      } finally {
+        this.started = false;
+      }
+    });
   }
 
   async isRunning(): Promise<boolean> {
     if (!this.isSupported) return false;
-    try {
-      const { running } = await KonekBackgroundTracker.isRunning();
-      return running;
-    } catch {
-      return false;
-    }
+    return this.enqueue(async () => {
+      try {
+        const { running } = await KonekBackgroundTracker.isRunning();
+        return running;
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  /** Queue native operations so start and stop keep their call order. */
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.operationQueue.then(operation, operation);
+    this.operationQueue = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
   }
 
   /** Send the user to app settings so they can allow background location. */

@@ -218,8 +218,8 @@ export class LoginPage implements OnInit, AfterViewInit {
     });
     await modal.present();
 
-    // The popup switches to its "Set a new password" step when the email
-    // verification link arrives; once that completes, go straight to the map.
+    // The popup verifies the emailed code and saves the new password; once
+    // that completes, go straight to the map.
     const { data, role } = await modal.onWillDismiss();
     if (role === "confirm" && data?.reset) {
       await this.navigateToMap();
